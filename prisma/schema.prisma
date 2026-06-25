@@ -1,0 +1,950 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  SUPER_ADMIN
+  COMPANY_ADMIN
+  PROJECT_MANAGER
+  SITE_ENGINEER
+  SUPERVISOR
+  ACCOUNTANT
+  PURCHASE_MANAGER
+  CLIENT
+  VENDOR
+  SUBCONTRACTOR
+}
+
+enum CompanyStatus {
+  ACTIVE
+  TRIAL
+  SUSPENDED
+  INACTIVE
+}
+
+enum SiteStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum ApprovalStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum ExpenseCategory {
+  MATERIAL
+  LABOUR
+  SUBCONTRACTOR
+  TRANSPORT
+  TOOLS_EQUIPMENT
+  SITE_PETTY_CASH
+  DIESEL
+  OFFICE_ADMIN
+  CLIENT_VARIATION
+  MISCELLANEOUS
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CREDIT
+  CHEQUE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  HALF_DAY
+  ABSENT
+}
+
+enum LabourTrade {
+  MASON
+  HELPER
+  CARPENTER
+  BAR_BENDER
+  ELECTRICIAN
+  PLUMBER
+  PAINTER
+  TILE_WORKER
+  WELDER
+  SUPERVISOR
+}
+
+enum SalaryRunStatus {
+  DRAFT
+  SUBMITTED
+  VERIFIED
+  APPROVED
+  PAID
+}
+
+enum MaterialTransactionType {
+  RECEIVED
+  USED
+  TRANSFERRED
+  WASTED
+  RETURNED
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  DELAYED
+  COMPLETED
+}
+
+enum TaskStage {
+  FOUNDATION
+  RCC
+  MASONRY
+  MEP
+  PLASTERING
+  FLOORING
+  PAINTING
+  INTERIOR
+  HANDOVER
+}
+
+enum PurchaseRequestStatus {
+  PENDING
+  PM_APPROVED
+  PO_CREATED
+  DELIVERED
+  CANCELLED
+}
+
+enum DocumentCategory {
+  AGREEMENT
+  BOQ
+  ARCHITECTURAL
+  STRUCTURAL
+  ELECTRICAL
+  PLUMBING
+  PERMIT
+  HANDOVER
+  INVOICE
+  PAYMENT_PROOF
+  OTHER
+}
+
+enum ModuleType {
+  BILL
+  EXPENSE
+  SALARY
+  PURCHASE_REQUEST
+  PURCHASE_ORDER
+  RA_BILL
+  VARIATION
+  DOCUMENT
+}
+
+enum NotificationType {
+  APPROVAL_REQUIRED
+  APPROVED
+  REJECTED
+  LOW_STOCK
+  DPR_REMINDER
+  PAYMENT_DUE
+  GENERAL
+}
+
+// ============================================================
+// SUBSCRIPTION
+// ============================================================
+
+model SubscriptionPlan {
+  id        String   @id @default(cuid())
+  name      String
+  price     Decimal  @db.Decimal(10, 2)
+  features  Json
+  maxSites  Int      @default(3)
+  maxUsers  Int      @default(10)
+  storageGb Int      @default(5)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companies CompanySubscription[]
+}
+
+model CompanySubscription {
+  id        String    @id @default(cuid())
+  companyId String
+  planId    String
+  status    String    @default("active")
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  company Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plan    SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([companyId])
+}
+
+// ============================================================
+// COMPANY & USERS
+// ============================================================
+
+model Company {
+  id          String        @id @default(cuid())
+  name        String
+  slug        String        @unique
+  logo        String?
+  gst         String?
+  phone       String?
+  email       String?
+  address     String?
+  city        String?
+  state       String?
+  pincode     String?
+  status      CompanyStatus @default(TRIAL)
+  plan        String        @default("Starter")
+  storageUsed Float         @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+
+  members          CompanyMember[]
+  sites            Site[]
+  expenses         Expense[]
+  labour           Labour[]
+  materials        Material[]
+  vendors          Vendor[]
+  subcontractors   Subcontractor[]
+  dprs             DailyProgressReport[]
+  documents        Document[]
+  clients          Client[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  mediaAssets      MediaAsset[]
+  approvals        Approval[]
+  salaryRuns       SalaryRun[]
+  purchaseRequests PurchaseRequest[]
+  purchaseOrders   PurchaseOrder[]
+  supportTickets   SupportTicket[]
+  subscription     CompanySubscription[]
+  tasks            Task[]
+  boqitems         BOQItem[]
+
+  @@index([status])
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  phone        String?
+  name         String
+  passwordHash String
+  role         Role      @default(SITE_ENGINEER)
+  avatar       String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastLoginAt  DateTime?
+  deletedAt    DateTime?
+
+  companyMembers     CompanyMember[]
+  expensesCreated    Expense[]             @relation("ExpenseCreatedBy")
+  dprsCreated        DailyProgressReport[] @relation("DPRCreatedBy")
+  mediaUploaded      MediaAsset[]          @relation("MediaUploadedBy")
+  approvalsGiven     Approval[]            @relation("ApprovalGivenBy")
+  approvalsRequested Approval[]            @relation("ApprovalRequestedBy")
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+  salaryRunsCreated  SalaryRun[]           @relation("SalaryRunCreatedBy")
+
+  @@index([email])
+}
+
+model CompanyMember {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String
+  role      Role
+  siteIds   String[] @default([])
+  isActive  Boolean  @default(true)
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@index([companyId])
+  @@index([userId])
+}
+
+// ============================================================
+// SITES
+// ============================================================
+
+model Site {
+  id           String     @id @default(cuid())
+  companyId    String
+  name         String
+  slug         String
+  location     String
+  address      String?
+  clientName   String?
+  clientId     String?
+  contractType String?
+  budget       Decimal    @default(0) @db.Decimal(14, 2)
+  spent        Decimal    @default(0) @db.Decimal(14, 2)
+  progress     Int        @default(0)
+  status       SiteStatus @default(ACTIVE)
+  currentStage String?
+  startDate    DateTime?
+  handoverDate DateTime?
+  engineerId   String?
+  managerId    String?
+  createdById  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  company          Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  expenses         Expense[]
+  labour           Labour[]
+  materials        Material[]
+  dprs             DailyProgressReport[]
+  photos           SitePhoto[]
+  tasks            Task[]
+  boqItems         BOQItem[]
+  documents        Document[]
+  purchaseRequests PurchaseRequest[]
+  mediaAssets      MediaAsset[]
+  approvals        Approval[]
+
+  @@unique([companyId, slug])
+  @@index([companyId])
+  @@index([status])
+}
+
+// ============================================================
+// EXPENSES & BILLS
+// ============================================================
+
+model Expense {
+  id             String          @id @default(cuid())
+  companyId      String
+  siteId         String
+  category       ExpenseCategory @default(MISCELLANEOUS)
+  subcategory    String?
+  description    String
+  amount         Decimal         @db.Decimal(14, 2)
+  paymentMode    PaymentMode     @default(CASH)
+  paidTo         String?
+  billNumber     String?
+  billDate       DateTime?
+  notes          String?
+  approvalStatus ApprovalStatus  @default(PENDING)
+  approvedById   String?
+  approvedAt     DateTime?
+  rejectedById   String?
+  rejectedAt     DateTime?
+  rejectionNote  String?
+  createdById    String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site            Site             @relation(fields: [siteId], references: [id])
+  createdBy       User             @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
+  billAttachments BillAttachment[]
+  approvals       Approval[]
+
+  @@index([companyId])
+  @@index([siteId])
+  @@index([approvalStatus])
+  @@index([createdAt])
+}
+
+model BillAttachment {
+  id                 String   @id @default(cuid())
+  expenseId          String
+  cloudinaryPublicId String
+  secureUrl          String
+  format             String?
+  bytes              Int?
+  width              Int?
+  height             Int?
+  originalName       String?
+  uploadedById       String
+  uploadedAt         DateTime @default(now())
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+}
+
+model MediaAsset {
+  id                 String   @id @default(cuid())
+  companyId          String
+  siteId             String?
+  module             String
+  cloudinaryPublicId String   @unique
+  secureUrl          String
+  format             String?
+  bytes              Int?
+  width              Int?
+  height             Int?
+  folder             String?
+  originalName       String?
+  uploadedById       String
+  createdAt          DateTime @default(now())
+
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site       Site?   @relation(fields: [siteId], references: [id])
+  uploadedBy User    @relation("MediaUploadedBy", fields: [uploadedById], references: [id])
+
+  @@index([companyId])
+  @@index([siteId])
+  @@index([module])
+}
+
+// ============================================================
+// LABOUR
+// ============================================================
+
+model Labour {
+  id           String      @id @default(cuid())
+  companyId    String
+  siteId       String
+  name         String
+  phone        String?
+  trade        LabourTrade @default(HELPER)
+  dailyWage    Decimal     @db.Decimal(10, 2)
+  overtimeRate Decimal?    @db.Decimal(10, 2)
+  supervisorId String?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site        Site               @relation(fields: [siteId], references: [id])
+  attendance  LabourAttendance[]
+  salaryItems SalaryRunItem[]
+
+  @@index([companyId])
+  @@index([siteId])
+}
+
+model LabourAttendance {
+  id            String           @id @default(cuid())
+  labourId      String
+  siteId        String
+  date          DateTime         @db.Date
+  status        AttendanceStatus @default(PRESENT)
+  overtimeHours Float            @default(0)
+  advance       Decimal          @default(0) @db.Decimal(10, 2)
+  deduction     Decimal          @default(0) @db.Decimal(10, 2)
+  notes         String?
+  markedById    String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  labour Labour @relation(fields: [labourId], references: [id], onDelete: Cascade)
+
+  @@unique([labourId, date])
+  @@index([labourId])
+  @@index([siteId])
+  @@index([date])
+}
+
+model SalaryRun {
+  id              String          @id @default(cuid())
+  companyId       String
+  siteId          String?
+  periodStart     DateTime        @db.Date
+  periodEnd       DateTime        @db.Date
+  runType         String          @default("WEEKLY")
+  status          SalaryRunStatus @default(DRAFT)
+  totalGross      Decimal         @default(0) @db.Decimal(14, 2)
+  totalAdvance    Decimal         @default(0) @db.Decimal(14, 2)
+  totalDeduction  Decimal         @default(0) @db.Decimal(14, 2)
+  totalNet        Decimal         @default(0) @db.Decimal(14, 2)
+  approvedById    String?
+  approvedAt      DateTime?
+  paidAt          DateTime?
+  paymentProofUrl String?
+  createdById     String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items     SalaryRunItem[]
+  createdBy User            @relation("SalaryRunCreatedBy", fields: [createdById], references: [id])
+
+  @@index([companyId])
+  @@index([siteId])
+}
+
+model SalaryRunItem {
+  id            String  @id @default(cuid())
+  salaryRunId   String
+  labourId      String
+  presentDays   Float   @default(0)
+  halfDays      Float   @default(0)
+  overtimeHours Float   @default(0)
+  grossWage     Decimal @default(0) @db.Decimal(10, 2)
+  advance       Decimal @default(0) @db.Decimal(10, 2)
+  deduction     Decimal @default(0) @db.Decimal(10, 2)
+  netPayable    Decimal @default(0) @db.Decimal(10, 2)
+  status        String  @default("PENDING")
+
+  salaryRun SalaryRun @relation(fields: [salaryRunId], references: [id], onDelete: Cascade)
+  labour    Labour    @relation(fields: [labourId], references: [id])
+
+  @@index([salaryRunId])
+  @@index([labourId])
+}
+
+// ============================================================
+// MATERIALS
+// ============================================================
+
+model Material {
+  id           String   @id @default(cuid())
+  companyId    String
+  siteId       String
+  name         String
+  brand        String?
+  unit         String
+  openingStock Decimal  @default(0) @db.Decimal(14, 3)
+  currentStock Decimal  @default(0) @db.Decimal(14, 3)
+  minStock     Decimal  @default(0) @db.Decimal(14, 3)
+  unitCost     Decimal? @db.Decimal(10, 2)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company          Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site             Site                  @relation(fields: [siteId], references: [id])
+  transactions     MaterialTransaction[]
+  purchaseRequests PurchaseRequest[]
+
+  @@index([companyId])
+  @@index([siteId])
+}
+
+model MaterialTransaction {
+  id          String                  @id @default(cuid())
+  materialId  String
+  type        MaterialTransactionType @default(RECEIVED)
+  quantity    Decimal                 @db.Decimal(14, 3)
+  notes       String?
+  vendorId    String?
+  dprId       String?
+  createdById String?
+  createdAt   DateTime                @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId])
+}
+
+// ============================================================
+// VENDORS & SUBCONTRACTORS
+// ============================================================
+
+model Vendor {
+  id            String   @id @default(cuid())
+  companyId     String
+  name          String
+  phone         String?
+  email         String?
+  gst           String?
+  category      String?
+  address       String?
+  paymentTerms  String?
+  rating        Float?
+  totalPurchase Decimal  @default(0) @db.Decimal(14, 2)
+  amountPayable Decimal  @default(0) @db.Decimal(14, 2)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  purchaseOrders PurchaseOrder[]
+
+  @@index([companyId])
+}
+
+model Subcontractor {
+  id             String   @id @default(cuid())
+  companyId      String
+  name           String
+  phone          String?
+  trade          String?
+  gst            String?
+  workOrderValue Decimal  @default(0) @db.Decimal(14, 2)
+  raBilled       Decimal  @default(0) @db.Decimal(14, 2)
+  retention      Decimal  @default(0) @db.Decimal(14, 2)
+  advance        Decimal  @default(0) @db.Decimal(14, 2)
+  status         String   @default("Active")
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+// ============================================================
+// DPR & PHOTOS
+// ============================================================
+
+model DailyProgressReport {
+  id            String   @id @default(cuid())
+  companyId     String
+  siteId        String
+  date          DateTime @db.Date
+  workDone      String
+  workPlanned   String?
+  labourCount   Int      @default(0)
+  delayReason   String?
+  qualityIssue  String?
+  safetyIssue   String?
+  weather       String?
+  clientVisible Boolean  @default(false)
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site      Site        @relation(fields: [siteId], references: [id])
+  createdBy User        @relation("DPRCreatedBy", fields: [createdById], references: [id])
+  photos    SitePhoto[]
+
+  @@unique([siteId, date])
+  @@index([companyId])
+  @@index([siteId])
+  @@index([date])
+}
+
+model SitePhoto {
+  id                 String    @id @default(cuid())
+  companyId          String
+  siteId             String
+  dprId              String?
+  cloudinaryPublicId String
+  secureUrl          String
+  category           String?
+  caption            String?
+  approvedForClient  Boolean   @default(false)
+  approvedById       String?
+  approvedAt         DateTime?
+  uploadedById       String?
+  createdAt          DateTime  @default(now())
+
+  dpr  DailyProgressReport? @relation(fields: [dprId], references: [id])
+  site Site                 @relation(fields: [siteId], references: [id])
+
+  @@index([companyId])
+  @@index([siteId])
+  @@index([dprId])
+}
+
+// ============================================================
+// TASKS & BOQ
+// ============================================================
+
+model Task {
+  id           String     @id @default(cuid())
+  companyId    String
+  siteId       String
+  name         String
+  description  String?
+  stage        TaskStage  @default(FOUNDATION)
+  status       TaskStatus @default(NOT_STARTED)
+  progress     Int        @default(0)
+  assignedToId String?
+  startDate    DateTime?
+  dueDate      DateTime?
+  completedAt  DateTime?
+  delayReason  String?
+  createdById  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id])
+
+  @@index([companyId])
+  @@index([siteId])
+  @@index([status])
+}
+
+model BOQItem {
+  id               String    @id @default(cuid())
+  companyId        String
+  siteId           String
+  version          Int       @default(1)
+  category         String
+  description      String
+  unit             String
+  quantity         Decimal   @db.Decimal(14, 3)
+  rate             Decimal   @db.Decimal(14, 2)
+  amount           Decimal   @db.Decimal(14, 2)
+  gstPercent       Float     @default(18)
+  totalWithGst     Decimal   @db.Decimal(14, 2)
+  clientApproved   Boolean   @default(false)
+  clientApprovedAt DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id])
+
+  @@index([companyId])
+  @@index([siteId])
+}
+
+// ============================================================
+// PURCHASE FLOW
+// ============================================================
+
+model PurchaseRequest {
+  id            String                @id @default(cuid())
+  companyId     String
+  siteId        String
+  materialId    String?
+  description   String
+  quantity      Decimal               @db.Decimal(14, 3)
+  unit          String?
+  status        PurchaseRequestStatus @default(PENDING)
+  urgency       String                @default("Normal")
+  notes         String?
+  requestedById String?
+  approvedById  String?
+  approvedAt    DateTime?
+  poId          String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site     Site      @relation(fields: [siteId], references: [id])
+  material Material? @relation(fields: [materialId], references: [id])
+
+  @@index([companyId])
+  @@index([siteId])
+  @@index([status])
+}
+
+model PurchaseOrder {
+  id          String   @id @default(cuid())
+  companyId   String
+  vendorId    String?
+  poNumber    String
+  totalAmount Decimal  @db.Decimal(14, 2)
+  status      String   @default("DRAFT")
+  notes       String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vendor  Vendor? @relation(fields: [vendorId], references: [id])
+
+  @@index([companyId])
+}
+
+// ============================================================
+// DOCUMENTS
+// ============================================================
+
+model Document {
+  id                 String           @id @default(cuid())
+  companyId          String
+  siteId             String?
+  name               String
+  category           DocumentCategory @default(OTHER)
+  version            String?
+  cloudinaryPublicId String
+  secureUrl          String
+  format             String?
+  bytes              Int?
+  isClientVisible    Boolean          @default(false)
+  uploadedById       String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site?   @relation(fields: [siteId], references: [id])
+
+  @@index([companyId])
+  @@index([siteId])
+}
+
+// ============================================================
+// CLIENTS & PAYMENTS
+// ============================================================
+
+model Client {
+  id            String   @id @default(cuid())
+  companyId     String
+  name          String
+  phone         String?
+  email         String?
+  siteId        String?
+  portalToken   String?  @unique
+  portalAccess  Boolean  @default(false)
+  contractValue Decimal  @default(0) @db.Decimal(14, 2)
+  amountPaid    Decimal  @default(0) @db.Decimal(14, 2)
+  amountDue     Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+  payments Payment[]
+
+  @@index([companyId])
+}
+
+model Payment {
+  id        String      @id @default(cuid())
+  companyId String?
+  clientId  String
+  siteId    String?
+  amount    Decimal     @db.Decimal(14, 2)
+  type      String
+  mode      PaymentMode @default(BANK_TRANSFER)
+  status    String      @default("PENDING")
+  notes     String?
+  paidAt    DateTime?
+  createdAt DateTime    @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+}
+
+model Invoice {
+  id            String    @id @default(cuid())
+  companyId     String?
+  clientId      String
+  siteId        String?
+  invoiceNumber String
+  amount        Decimal   @db.Decimal(14, 2)
+  milestone     String?
+  status        String    @default("DUE")
+  dueDate       DateTime?
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+}
+
+// ============================================================
+// APPROVALS & AUDIT
+// ============================================================
+
+model Approval {
+  id            String         @id @default(cuid())
+  companyId     String
+  siteId        String?
+  module        ModuleType
+  recordId      String
+  requestedById String
+  requestedAt   DateTime       @default(now())
+  status        ApprovalStatus @default(PENDING)
+  approvedById  String?
+  approvedAt    DateTime?
+  rejectedAt    DateTime?
+  comments      String?
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site        Site?    @relation(fields: [siteId], references: [id])
+  requestedBy User     @relation("ApprovalRequestedBy", fields: [requestedById], references: [id])
+  approvedBy  User?    @relation("ApprovalGivenBy", fields: [approvedById], references: [id])
+  expense     Expense? @relation(fields: [recordId], references: [id], map: "Approval_expense_fkey")
+
+  @@index([companyId])
+  @@index([status])
+  @@index([module])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  companyId String?
+  userId    String
+  action    String
+  module    String
+  recordId  String?
+  before    Json?
+  after     Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  company Company? @relation(fields: [companyId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  companyId String?
+  userId    String
+  type      NotificationType @default(GENERAL)
+  title     String
+  message   String
+  link      String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  company Company? @relation(fields: [companyId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([read])
+}
+
+// ============================================================
+// SUPPORT
+// ============================================================
+
+model SupportTicket {
+  id          String   @id @default(cuid())
+  companyId   String?
+  subject     String
+  description String
+  status      String   @default("OPEN")
+  priority    String   @default("MEDIUM")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company? @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([status])
+}
