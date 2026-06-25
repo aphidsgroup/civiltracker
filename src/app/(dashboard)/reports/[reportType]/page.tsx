@@ -5,9 +5,9 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import ExportButtons from './ExportButtons'
 
-export default async function ReportDetailPage({ params }: { params: { reportType: string } }) {
+export default async function ReportDetailPage({ params }: { params: Promise<{ reportType: string }> }) {
   await requireUser()
-  const reportType = params.reportType
+  const { reportType } = await params
 
   let title = ''
   let description = ''
@@ -68,21 +68,21 @@ export default async function ReportDetailPage({ params }: { params: { reportTyp
       </div>
 
       <div className="bg-white rounded-xl border border-line overflow-x-auto shadow-sm">
-        {data.length === 0 ? (
-          <div className="p-12 text-center text-mut">
-            <p>No data found for this report.</p>
-          </div>
-        ) : (
-          <table className="ct-table">
-            <thead>
+        <table className="ct-table">
+          <thead>
+            <tr>
+              {columns.map(col => (
+                <th key={col.key}>{col.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.length === 0 ? (
               <tr>
-                {columns.map(col => (
-                  <th key={col.key}>{col.label}</th>
-                ))}
+                <td colSpan={columns.length} className="text-center text-mut p-12">No data found for this report.</td>
               </tr>
-            </thead>
-            <tbody>
-              {data.map((row, i) => (
+            ) : (
+              data.map((row, i) => (
                 <tr key={i}>
                   {columns.map(col => (
                     <td key={col.key}>
@@ -94,10 +94,10 @@ export default async function ReportDetailPage({ params }: { params: { reportTyp
                     </td>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   )

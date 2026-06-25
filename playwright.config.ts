@@ -1,4 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Load local playwright env if exists
+dotenv.config({ path: path.resolve(__dirname, '.env.playwright.local'), override: true });
 
 export default defineConfig({
   testDir: './tests/e2e',

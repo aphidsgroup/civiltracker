@@ -3,9 +3,25 @@ import { requirePermission } from '@/lib/auth/require-permission'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Building2, MapPin, Receipt, Calendar, Users, ArrowRight, Wallet, HardHat } from 'lucide-react'
+import prisma from '@/lib/prisma'
 
 export default async function NewSitePage() {
-  await requirePermission('sites.create')
+  const user = await requirePermission('sites.create')
+
+  // Fetch Project Managers in the same company via CompanyMember join table (Phase 9)
+  const projectManagers = user.companyId
+    ? await prisma.companyMember.findMany({
+        where: {
+          companyId: user.companyId,
+          role: 'PROJECT_MANAGER',
+          isActive: true,
+        },
+        select: {
+          user: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { user: { name: 'asc' } },
+      })
+    : []
 
   async function submitAction(formData: FormData) {
     'use server'
@@ -32,7 +48,7 @@ export default async function NewSitePage() {
             Back to Sites
           </Link>
           <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 to-teal-600">
-            Create New Project
+            Create New Site
           </h1>
           <p className="text-slate-500 mt-2">Enter the details of your new construction site to get started.</p>
         </div>
@@ -155,7 +171,31 @@ export default async function NewSitePage() {
               </div>
             </div>
 
-            {/* Section 3: Client Details */}
+            {/* Section 3: Project Manager Assignment (Phase 9) */}
+            <div className="mb-10">
+              <div className="flex items-center gap-2 mb-6 border-b border-slate-200/50 pb-3">
+                <div className="p-2.5 bg-violet-100/50 rounded-xl text-violet-600 shadow-sm border border-violet-100">
+                  <HardHat className="w-5 h-5" />
+                </div>
+                <h2 className="text-xl font-semibold text-slate-800">Project Assignment</h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Assign Project Manager</label>
+                  <select
+                    name="assignedPmId"
+                    className="w-full bg-white/50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300 appearance-none"
+                  >
+                    <option value="">Select Project Manager...</option>
+                    {projectManagers.map(pm => (
+                      <option key={pm.user.id} value={pm.user.id}>{pm.user.name} ({pm.user.email})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 4: Client Details */}
             <div>
               <div className="flex items-center gap-2 mb-6 border-b border-slate-200/50 pb-3">
                 <div className="p-2.5 bg-blue-100/50 rounded-xl text-blue-600 shadow-sm border border-blue-100">

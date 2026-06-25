@@ -25,7 +25,7 @@ export default function MobileTabbar() {
       </div>
       
       <Link href="/mobile/reports" className={`tab ${pathname.includes('/reports') ? 'on' : ''}`}>
-        <svg className="svg24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg>
+        <svg className="svg24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 20h18M6 20v-6M12 20v-12M18 20v-9"/></svg>
         <div className="tablbl">Reports</div>
       </Link>
       

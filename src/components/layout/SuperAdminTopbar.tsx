@@ -1,3 +1,5 @@
+'use client'
+
 export default function SuperAdminTopbar() {
   return (
     <div className="topbar">

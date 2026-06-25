@@ -32,7 +32,7 @@ export default async function NewCompanyPage() {
             </div>
             <div>
               <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-slate-800 to-slate-600 dark:from-slate-100 dark:to-slate-300">
-                Register New Company
+                Create New Company
               </h1>
               <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm font-medium">
                 Set up a new organization, define limits, and configure modules.

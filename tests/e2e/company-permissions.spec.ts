@@ -17,6 +17,6 @@ test.describe('Phase 9 Company Permissions & Limits', () => {
     // We would try to create a site and observe the limit warning.
     // For now we just verify the sites/new page loads.
     await page.goto('/sites/new')
-    await expect(page.locator('text=Create New Site')).toBeVisible()
+    await expect(page.locator('text=Create New Project')).toBeVisible()
   })
 })
