@@ -13,12 +13,16 @@ export const ROLE_HIERARCHY: Record<Role, number> = {
   SUBCONTRACTOR: 10,
 }
 
+const APPROVER_ROLES: Role[] = [Role.SUPER_ADMIN, Role.COMPANY_ADMIN, Role.ACCOUNTANT, Role.PROJECT_MANAGER]
+const NON_UPLOAD_ROLES: Role[] = [Role.CLIENT, Role.VENDOR]
+const COMPANY_MGMT_ROLES: Role[] = [Role.SUPER_ADMIN, Role.COMPANY_ADMIN]
+
 export function canApprove(role: Role): boolean {
-  return [Role.SUPER_ADMIN, Role.COMPANY_ADMIN, Role.ACCOUNTANT, Role.PROJECT_MANAGER].includes(role)
+  return APPROVER_ROLES.includes(role)
 }
 
 export function canUpload(role: Role): boolean {
-  return ![Role.CLIENT, Role.VENDOR].includes(role)
+  return !NON_UPLOAD_ROLES.includes(role)
 }
 
 export function canAccessSuperAdmin(role: Role): boolean {
@@ -26,10 +30,10 @@ export function canAccessSuperAdmin(role: Role): boolean {
 }
 
 export function canManageCompany(role: Role): boolean {
-  return [Role.SUPER_ADMIN, Role.COMPANY_ADMIN].includes(role)
+  return COMPANY_MGMT_ROLES.includes(role)
 }
 
-export function getRoleRedirect(role: Role, companyId?: string): string {
+export function getRoleRedirect(role: Role, _companyId?: string): string {
   switch (role) {
     case Role.SUPER_ADMIN:
       return '/super-admin/dashboard'
