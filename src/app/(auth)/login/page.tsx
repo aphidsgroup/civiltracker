@@ -49,7 +49,7 @@ export default function LoginPage() {
           <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#16273a', margin: '0 0 8px', letterSpacing: '-0.02em' }}>Sign in</h2>
           <p style={{ color: '#647387', fontSize: '13px', fontWeight: 500, margin: '0 0 24px' }}>Enter your credentials to access your workspace</p>
           {error && <div style={{ background: '#fbe6e3', color: '#c4392c', borderRadius: '10px', padding: '12px 14px', fontSize: '13px', fontWeight: 600, marginBottom: '16px' }}>{error}</div>}
-          <form onSubmit={handleSubmit} action="javascript:void(0);">
+          <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: '14px' }}>
               <label className="ct-label">Email address</label>
               <input type="email" name="email" className="ct-input" placeholder="you@company.com" value={email} onChange={e => setEmail(e.target.value)} required autoFocus />
@@ -58,7 +58,7 @@ export default function LoginPage() {
               <label className="ct-label">Password</label>
               <input type="password" name="password" className="ct-input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
             </div>
-            <button type="submit" data-hydrated={hydrated ? "true" : undefined} disabled={loading} style={{ width: '100%', background: loading ? '#9aa8b6' : 'linear-gradient(135deg, #13558e, #1d6fb5)', color: '#fff', fontSize: '15px', fontWeight: 700, padding: '14px', borderRadius: '12px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', boxShadow: '0 8px 20px -8px rgba(19,85,142,0.6)' }}>
+            <button type="submit" data-hydrated={hydrated ? "true" : undefined} disabled={loading || !hydrated} style={{ width: '100%', background: (loading || !hydrated) ? '#9aa8b6' : 'linear-gradient(135deg, #13558e, #1d6fb5)', color: '#fff', fontSize: '15px', fontWeight: 700, padding: '14px', borderRadius: '12px', border: 'none', cursor: (loading || !hydrated) ? 'not-allowed' : 'pointer', boxShadow: '0 8px 20px -8px rgba(19,85,142,0.6)' }}>
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
