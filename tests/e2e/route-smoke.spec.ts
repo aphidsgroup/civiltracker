@@ -48,7 +48,8 @@ const ROUTES = [
   '/mobile/add-expense',
   '/mobile/attendance',
   '/mobile/dpr',
-  '/mobile/site-photo'
+  '/mobile/site-photo',
+  '/mobile/approvals'
 ];
 
 test.describe('Route Smoke Tests', () => {

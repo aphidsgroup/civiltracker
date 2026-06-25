@@ -42,10 +42,32 @@ enum SiteStatus {
 
 enum ApprovalStatus {
   DRAFT
+  SUBMITTED
   PENDING
+  PENDING_REVIEW
   APPROVED
   REJECTED
   PAID
+  CLOSED
+  CANCELLED
+}
+
+enum ApprovalEntityType {
+  EXPENSE
+  BILL
+  SALARY_RUN
+  MATERIAL_REQUEST
+  PURCHASE_ORDER
+  DPR
+  VARIATION
+  DOCUMENT
+}
+
+enum ApprovalPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
 }
 
 enum ExpenseCategory {
@@ -235,9 +257,11 @@ model Company {
   clients          Client[]
   notifications    Notification[]
   auditLogs        AuditLog[]
-  mediaAssets      MediaAsset[]
-  approvals        Approval[]
-  salaryRuns       SalaryRun[]
+  mediaAssets       MediaAsset[]
+  approvals         Approval[]
+  approvalComments  ApprovalComment[]
+  approvalTimelines ApprovalTimeline[]
+  salaryRuns        SalaryRun[]
   purchaseRequests PurchaseRequest[]
   purchaseOrders   PurchaseOrder[]
   supportTickets   SupportTicket[]
@@ -268,6 +292,10 @@ model User {
   mediaUploaded      MediaAsset[]          @relation("MediaUploadedBy")
   approvalsGiven     Approval[]            @relation("ApprovalGivenBy")
   approvalsRequested Approval[]            @relation("ApprovalRequestedBy")
+  approvalsReviewed  Approval[]            @relation("ApprovalReviewedBy")
+  approvalsRejected  Approval[]            @relation("ApprovalRejectedBy")
+  approvalComments   ApprovalComment[]
+  approvalTimelines  ApprovalTimeline[]
   auditLogs          AuditLog[]
   notifications      Notification[]
   salaryRunsCreated  SalaryRun[]           @relation("SalaryRunCreatedBy")
@@ -371,7 +399,6 @@ model Expense {
   site            Site             @relation(fields: [siteId], references: [id])
   createdBy       User             @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
   billAttachments BillAttachment[]
-  approvals       Approval[]
 
   @@index([companyId])
   @@index([siteId])
@@ -865,28 +892,82 @@ model Invoice {
 // ============================================================
 
 model Approval {
-  id            String         @id @default(cuid())
-  companyId     String
-  siteId        String?
-  module        ModuleType
-  recordId      String
-  requestedById String
-  requestedAt   DateTime       @default(now())
-  status        ApprovalStatus @default(PENDING)
-  approvedById  String?
-  approvedAt    DateTime?
-  rejectedAt    DateTime?
-  comments      String?
+  id              String             @id @default(cuid())
+  companyId       String
+  siteId          String?
+  entityType      ApprovalEntityType
+  entityId        String
+  approvalType    String             @default("OPERATIONAL")
+  requestedById   String
+  currentStatus   ApprovalStatus     @default(PENDING)
+  priority        ApprovalPriority   @default(NORMAL)
+  amount          Decimal?           @db.Decimal(14, 2)
+  title           String
+  description     String?
+  submittedAt     DateTime           @default(now())
+  reviewedById    String?
+  reviewedAt      DateTime?
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectedById    String?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  closedAt        DateTime?
+  metadataJson    Json?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  deletedAt       DateTime?
 
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site        Site?    @relation(fields: [siteId], references: [id])
-  requestedBy User     @relation("ApprovalRequestedBy", fields: [requestedById], references: [id])
-  approvedBy  User?    @relation("ApprovalGivenBy", fields: [approvedById], references: [id])
-  expense     Expense? @relation(fields: [recordId], references: [id], map: "Approval_expense_fkey")
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site        Site?              @relation(fields: [siteId], references: [id])
+  requestedBy User               @relation("ApprovalRequestedBy", fields: [requestedById], references: [id])
+  reviewedBy  User?              @relation("ApprovalReviewedBy", fields: [reviewedById], references: [id])
+  approvedBy  User?              @relation("ApprovalGivenBy", fields: [approvedById], references: [id])
+  rejectedBy  User?              @relation("ApprovalRejectedBy", fields: [rejectedById], references: [id])
+  comments    ApprovalComment[]
+  timelines   ApprovalTimeline[]
 
   @@index([companyId])
-  @@index([status])
-  @@index([module])
+  @@index([siteId])
+  @@index([entityType, entityId])
+  @@index([currentStatus])
+  @@index([priority])
+}
+
+model ApprovalComment {
+  id         String   @id @default(cuid())
+  companyId  String
+  approvalId String
+  userId     String
+  comment    String
+  createdAt  DateTime @default(now())
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  approval Approval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([approvalId])
+}
+
+model ApprovalTimeline {
+  id           String          @id @default(cuid())
+  companyId    String
+  approvalId   String
+  actorUserId  String
+  action       String
+  fromStatus   ApprovalStatus?
+  toStatus     ApprovalStatus
+  note         String?
+  metadataJson Json?
+  createdAt    DateTime        @default(now())
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  approval Approval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  actor    User     @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([approvalId])
 }
 
 model AuditLog {

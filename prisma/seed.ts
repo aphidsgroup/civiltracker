@@ -149,10 +149,10 @@ async function main() {
   const exp6 = await prisma.expense.create({ data: { companyId: company.id, siteId: tambaram.id, category: ExpenseCategory.SUBCONTRACTOR, description: 'Tiling work advance — Bharath Interiors', amount: 240000, paymentMode: PaymentMode.BANK_TRANSFER, paidTo: 'Bharath Interiors', billDate: new Date('2026-06-22'), approvalStatus: 'PENDING', createdById: murugan.id } })
   console.log('✅ Expenses created')
 
-  // ── Approvals ────────────────────────────────────────────────
-  await prisma.approval.create({ data: { companyId: company.id, siteId: annaNagar.id, module: 'BILL', recordId: exp1.id, requestedById: murugan.id, status: 'PENDING' } })
-  await prisma.approval.create({ data: { companyId: company.id, siteId: tambaram.id, module: 'BILL', recordId: exp6.id, requestedById: murugan.id, status: 'PENDING' } })
-  console.log('✅ Approvals created')
+  // ── Approvals (from Expenses) ────────────────────────────────
+  await prisma.approval.create({ data: { companyId: company.id, siteId: annaNagar.id, entityType: 'EXPENSE', entityId: exp1.id, title: 'Expense: ' + exp1.description, amount: exp1.amount, requestedById: murugan.id, currentStatus: 'PENDING' } })
+  await prisma.approval.create({ data: { companyId: company.id, siteId: tambaram.id, entityType: 'EXPENSE', entityId: exp6.id, title: 'Expense: ' + exp6.description, amount: exp6.amount, requestedById: murugan.id, currentStatus: 'PENDING' } })
+  console.log('✅ Expense approvals created')
 
   // ── Materials ─────────────────────────────────────────────────
   const mats = [
@@ -221,15 +221,27 @@ async function main() {
     data: { companyId: company.id, siteId: annaNagar.id, name: 'R. Subramanian', phone: '+91 98401 11100', email: 'client@annanagar.in', portalToken: 'anna-nagar-client-portal-token-2026', portalAccess: true, contractValue: 18500000, amountPaid: 11000000, amountDue: 1400000 },
   })
 
+  // ── Approvals ─────────────────────────────────────────────────
+  await prisma.approval.createMany({
+    data: [
+      { companyId: company.id, siteId: annaNagar.id, entityType: 'BILL', entityId: 'seed-bill-1', title: 'Cement Bill: 150 Bags UltraTech', amount: 64500, description: 'Invoice #UD-442 from Sree Dhanalakshmi Traders for foundation work.', priority: 'HIGH', requestedById: murugan.id, currentStatus: 'PENDING' },
+      { companyId: company.id, siteId: annaNagar.id, entityType: 'SALARY_RUN', entityId: 'seed-sal-1', title: 'Weekly Labour Wages (Week 24)', amount: 142000, description: 'Wages for 22 masons and 18 helpers across Anna Nagar site.', priority: 'URGENT', requestedById: priya.id, currentStatus: 'PENDING' },
+      { companyId: company.id, siteId: annaNagar.id, entityType: 'MATERIAL_REQUEST', entityId: 'seed-mat-1', title: 'Steel Rebar Fe500D (8MT)', amount: 480000, description: 'Required for 2nd floor roof slab reinforcement.', priority: 'NORMAL', requestedById: murugan.id, currentStatus: 'APPROVED', approvedById: arun.id, approvedAt: new Date() },
+      { companyId: company.id, siteId: porur.id, entityType: 'EXPENSE', entityId: 'seed-exp-1', title: 'Diesel for JCB Excavator', amount: 8500, description: 'Petty cash voucher for 85L diesel.', priority: 'NORMAL', requestedById: vetrivel.id, currentStatus: 'PAID', approvedById: arun.id, approvedAt: new Date() },
+      { companyId: company.id, siteId: annaNagar.id, entityType: 'DPR', entityId: 'seed-dpr-1', title: 'DPR: 2nd Floor Column Shuttering', amount: null, description: 'Work completed: Shuttering for 14 columns.\nLabour count: 18.', priority: 'NORMAL', requestedById: murugan.id, currentStatus: 'PENDING' },
+    ],
+  })
+  console.log('✅ Approvals created')
+
   // ── Notifications ─────────────────────────────────────────────
   await prisma.notification.createMany({
     data: [
-      { userId: arun.id, companyId: company.id, type: 'APPROVAL_REQUIRED', title: 'Bill pending approval', message: 'Cement bill ₹84,500 from Sree Dhanalakshmi needs approval', link: '/bills' },
+      { userId: arun.id, companyId: company.id, type: 'APPROVAL_REQUIRED', title: 'Bill pending approval', message: 'Cement bill ₹84,500 from Sree Dhanalakshmi needs approval', link: '/approvals' },
       { userId: murugan.id, companyId: company.id, type: 'DPR_REMINDER', title: 'DPR reminder', message: 'Daily Report for Anna Nagar Villa due by 7 PM', link: '/mobile/add/dpr' },
       { userId: arun.id, companyId: company.id, type: 'LOW_STOCK', title: 'Low stock alert', message: 'Cement at Anna Nagar Villa — only 12 bags (min: 50)', link: '/materials' },
     ],
   })
-  console.log('✅ Client & notifications created')
+  console.log('✅ Client, approvals & notifications created')
 
   console.log('\n🎉 Seed complete!')
   console.log('Demo accounts:')

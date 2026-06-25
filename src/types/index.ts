@@ -1,6 +1,6 @@
-import type { Role, ApprovalStatus, SiteStatus, ExpenseCategory, PaymentMode } from '@prisma/client'
+import type { Role, ApprovalStatus, ApprovalEntityType, ApprovalPriority, SiteStatus, ExpenseCategory, PaymentMode } from '@prisma/client'
 
-export type { Role, ApprovalStatus, SiteStatus, ExpenseCategory, PaymentMode }
+export type { Role, ApprovalStatus, ApprovalEntityType, ApprovalPriority, SiteStatus, ExpenseCategory, PaymentMode }
 
 export interface SessionUser {
   id: string

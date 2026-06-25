@@ -60,6 +60,9 @@ export type Permission =
   | 'vendors.view'
   | 'payments.view'
   | 'payments.manage'
+  | 'purchase.approve'
+  | 'variations.approve'
+  | 'approvals.view'
 
 const ALL_PERMISSIONS: Permission[] = [
   'company.manage', 'company.view',
@@ -76,7 +79,8 @@ const ALL_PERMISSIONS: Permission[] = [
   'documents.view', 'documents.upload', 'documents.approve',
   'uploads.sign', 'uploads.saveMetadata',
   'sitePhotos.upload', 'issues.create',
-  'vendors.view', 'payments.view', 'payments.manage'
+  'vendors.view', 'payments.view', 'payments.manage',
+  'purchase.approve', 'variations.approve', 'approvals.view'
 ]
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -89,10 +93,11 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'bills.view', 'bills.upload',
     'labour.view', 'attendance.mark',
     'materials.view', 'materials.create',
-    'dpr.view', 'dpr.create', 'dpr.update',
+    'dpr.view', 'dpr.create', 'dpr.update', 'dpr.approve',
     'tasks.manage',
     'reports.view', 'reports.project',
-    'documents.view', 'documents.upload',
+    'documents.view', 'documents.upload', 'documents.approve',
+    'purchase.approve', 'variations.approve', 'approvals.view',
     'uploads.sign', 'uploads.saveMetadata'
   ],
   ACCOUNTANT: [
@@ -102,7 +107,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'salary.view', 'salary.generate', 'salary.approve', 'salary.markPaid',
     'vendors.view', 'payments.view', 'payments.manage',
     'reports.view', 'reports.finance',
-    'documents.view',
+    'documents.view', 'documents.approve',
+    'approvals.view',
     'uploads.sign', 'uploads.saveMetadata'
   ],
   SITE_ENGINEER: [
@@ -115,6 +121,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'materials.view', 'materials.create',
     'issues.create',
     'documents.view', 'documents.upload',
+    'approvals.view',
     'uploads.sign', 'uploads.saveMetadata'
   ],
   SUPERVISOR: [
@@ -130,6 +137,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'materials.view', 'materials.create', 'materials.update', 'materials.approveRequest',
     'bills.view', 'bills.upload',
     'vendors.view',
+    'purchase.approve', 'approvals.view',
     'uploads.sign', 'uploads.saveMetadata'
   ],
   CLIENT: [
@@ -151,7 +159,16 @@ export function hasPermission(role: Role, permission: Permission): boolean {
 }
 
 export function canApprove(role: Role): boolean {
-  return hasPermission(role, 'expenses.approve') || hasPermission(role, 'bills.approve')
+  return (
+    hasPermission(role, 'expenses.approve') ||
+    hasPermission(role, 'bills.approve') ||
+    hasPermission(role, 'salary.approve') ||
+    hasPermission(role, 'dpr.approve') ||
+    hasPermission(role, 'materials.approveRequest') ||
+    hasPermission(role, 'purchase.approve') ||
+    hasPermission(role, 'variations.approve') ||
+    hasPermission(role, 'documents.approve')
+  )
 }
 
 export function canUpload(role: Role): boolean {

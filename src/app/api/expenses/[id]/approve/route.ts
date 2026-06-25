@@ -29,5 +29,10 @@ export async function POST(
     data: { approvalStatus: 'APPROVED', approvedById: session.user.id, approvedAt: new Date() },
   })
 
+  await prisma.approval.updateMany({
+    where: { entityId: id, entityType: { in: ['EXPENSE', 'BILL'] } },
+    data: { currentStatus: 'APPROVED', approvedById: session.user.id, approvedAt: new Date() },
+  })
+
   return NextResponse.json({ success: true })
 }

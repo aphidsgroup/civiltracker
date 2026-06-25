@@ -4,6 +4,7 @@ import { requirePermission, assertCanAccessSite } from '@/lib/auth/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import type { ExpenseCategory, PaymentMode } from '@/types'
+import { createApprovalAction } from './approvals'
 
 export async function createExpenseAction(data: {
   siteId: string
@@ -56,8 +57,19 @@ export async function createExpenseAction(data: {
     },
   })
 
+  await createApprovalAction({
+    siteId: data.siteId,
+    entityType: data.secureUrl ? 'BILL' : 'EXPENSE',
+    entityId: expense.id,
+    title: expense.description,
+    amount: Number(data.amount),
+    description: data.notes || `Logged by ${user.name}`,
+    priority: data.amount > 50000 ? 'HIGH' : 'NORMAL',
+    approvalType: 'FINANCIAL',
+  })
+
   revalidatePath('/dashboard')
   revalidatePath('/mobile/home')
-  
+
   return { success: true, expenseId: expense.id }
 }

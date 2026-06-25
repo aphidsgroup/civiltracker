@@ -82,9 +82,14 @@ export async function POST(request: Request) {
     data: {
       companyId: actualCompanyId,
       siteId: data.siteId,
-      module: 'BILL',
-      recordId: expense.id,
+      entityType: 'BILL',
+      entityId: expense.id,
+      title: `Expense for ${data.category}`,
+      amount: data.amount,
+      description: data.notes || null,
       requestedById: session.user.id,
+      currentStatus: 'PENDING',
+      submittedAt: new Date(),
     },
   })
 

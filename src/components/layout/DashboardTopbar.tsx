@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import type { SessionUser } from '@/types'
 import Link from 'next/link'
 
-export default function DashboardTopbar({ user, toggleMobileMenu }: { user: SessionUser, toggleMobileMenu?: () => void }) {
+export default function DashboardTopbar({ user, toggleMobileMenu, pendingApprovalsCount = 0 }: { user: SessionUser; toggleMobileMenu?: () => void; pendingApprovalsCount?: number }) {
   const pathname = usePathname()
   
   const getPageInfo = () => {
@@ -44,10 +44,10 @@ export default function DashboardTopbar({ user, toggleMobileMenu }: { user: Sess
         <input placeholder="Search..." />
       </div>
       
-      <button className="tbtn">
+      <Link href="/approvals" className="tbtn" style={{ textDecoration: 'none', position: 'relative' }}>
         <svg className="svg18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        <b></b>
-      </button>
+        {pendingApprovalsCount > 0 && <b>{pendingApprovalsCount}</b>}
+      </Link>
 
       {pathname === '/bills' && (
         <Link href="/bills/upload" className="addbtn">

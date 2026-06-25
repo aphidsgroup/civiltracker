@@ -82,5 +82,27 @@ The hardening pipeline is verified continuously via automated Playwright test su
 - `security-roles.spec.ts`: Validates role boundary redirects and approval authorization denials.
 - `client-portal-privacy.spec.ts`: Verifies absence of sensitive internal data on client endpoints.
 - `upload-security.spec.ts`: Ensures unauthenticated upload rejection and module validation.
+- `security-permission-matrix.spec.ts`: Asserts capability matrix isolation and prevention of privilege escalation.
 
-**Final Status:** GREENLIGHTED FOR PRODUCTION RELEASE.
+---
+
+## 6. Phase 6.1: Capability-Based Permission Matrix Architecture
+
+To comply with multi-company commercial construction compliance standards, Civil Tracker transitioned from pure role hierarchy rank matching (`user.role <= requiredRole`) to explicit capability-based permission matching (`hasPermission(role, permission)`).
+
+### Why Pure Role Hierarchy Fails in Construction SaaS
+In a linear hierarchy (`SUPER_ADMIN > COMPANY_ADMIN > PROJECT_MANAGER > ACCOUNTANT > SITE_ENGINEER > CLIENT`), higher rank assumes all privileges of lower rank. In civil construction:
+- **Separation of Duties (Finance vs. Execution):** A **Project Manager** oversees site progress and material requisitions but must not approve vendor payments or payroll. Conversely, an **Accountant** approves expenses and disburses salaries but must not execute site engineering tasks or submit daily progress reports (DPRs).
+- **Client & Vendor Isolation:** External stakeholders require strict portal sandboxes without access to internal operational route structures (`/expenses`, `/bills`, `/labour`).
+
+### Granular Capability Matrix
+| Role | Site Management (`sites.*`, `dpr.*`) | Expense Creation (`expenses.create`) | Finance Approval (`expenses.approve`, `salary.*`) | Financial Reports (`reports.finance`) | Client Portal (`clientPortal.view`) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Super Admin / Company Admin** | ✔ | ✔ | ✔ | ✔ | ✔ |
+| **Project Manager** | ✔ | ✔ | ✖ | ✖ | ✖ |
+| **Accountant** | ✖ | ✖ | ✔ | ✔ | ✖ |
+| **Site Engineer** | ✔ (Assigned Only) | ✔ | ✖ | ✖ | ✖ |
+| **Purchase Manager** | ✖ | ✖ | ✖ (Materials Only) | ✖ | ✖ |
+| **Client** | ✖ | ✖ | ✖ | ✖ | ✔ (Isolated) |
+
+**Production Readiness Status:** ACCEPTED AND LIVE ON PRODUCTION (`https://civiltracker.buildogram.in`).

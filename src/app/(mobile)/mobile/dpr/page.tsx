@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { hasPermission } from '@/lib/permissions'
 import { Role } from '@prisma/client'
+import { createApprovalAction } from '@/actions/approvals'
 
 export default async function MobileDprPage() {
   const session = await auth()
@@ -32,7 +33,7 @@ export default async function MobileDprPage() {
     const dateStr = formData.get('date') as string
     const date = dateStr ? new Date(dateStr) : new Date()
 
-    await prisma.dailyProgressReport.create({
+    const dpr = await prisma.dailyProgressReport.create({
       data: {
         companyId: session.user.companyId,
         siteId,
@@ -42,6 +43,16 @@ export default async function MobileDprPage() {
         date,
         createdById: session.user.id
       }
+    })
+
+    await createApprovalAction({
+      siteId,
+      entityType: 'DPR',
+      entityId: dpr.id,
+      title: `DPR: ${workDone.substring(0, 35)}...`,
+      description: `Work completed: ${workDone}\nLabour count: ${labourCount}\nDelay rationale: ${delayReason || 'None'}`,
+      priority: 'NORMAL',
+      approvalType: 'OPERATIONAL',
     })
 
     redirect('/mobile/home')

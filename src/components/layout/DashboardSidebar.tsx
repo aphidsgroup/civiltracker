@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import type { SessionUser } from '@/types'
 import { getInitials } from '@/lib/utils'
 
-export default function DashboardSidebar({ user }: { user: SessionUser }) {
+export default function DashboardSidebar({ user, pendingApprovalsCount = 0 }: { user: SessionUser; pendingApprovalsCount?: number }) {
   const pathname = usePathname()
 
   const navs = [
@@ -16,7 +16,7 @@ export default function DashboardSidebar({ user }: { user: SessionUser }) {
     { label: 'Finance', type: 'group' },
     { href: '/expenses', label: 'Expenses', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h12v4M3 7v10a2 2 0 0 0 2 2h14V9H5a2 2 0 0 1-2-2Z"/><circle cx="16" cy="13" r="1.3" fill="currentColor"/></svg> },
     { href: '/bills', label: 'Bills', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h4"/></svg> },
-    { href: '/approvals', label: 'Approvals', badge: '5', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg> },
+    { href: '/approvals', label: 'Approvals', badge: pendingApprovalsCount > 0 ? String(pendingApprovalsCount) : undefined, icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg> },
     { label: 'Workforce', type: 'group' },
     { href: '/labour', label: 'Labour & Salary', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 5.5a3 3 0 0 1 0 5M21 20a6 6 0 0 0-5-5.9"/></svg> },
     { label: 'Procurement', type: 'group' },
