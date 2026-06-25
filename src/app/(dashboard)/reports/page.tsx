@@ -1,110 +1,137 @@
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
-import { formatCurrency } from '@/lib/utils'
-import { hasPermission } from '@/lib/permissions'
-import { Role } from '@prisma/client'
+import { getFounderDashboardStats } from '@/actions/reports'
+import { Card } from '@/components/ui/card'
+import { requireUser } from '@/lib/auth/require-user'
+import { formatCompactINR } from '@/lib/reports/money'
+import { Activity, AlertTriangle, Building2, TrendingUp, Wallet, Banknote, CreditCard, Users, Landmark, Target } from 'lucide-react'
+import Link from 'next/link'
 
-export const metadata = { title: 'Reports | Civil Tracker' }
-
-export default async function ReportsPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  if (!hasPermission(session.user.role as Role, 'reports.finance') && !hasPermission(session.user.role as Role, 'reports.project')) {
-    redirect('/dashboard')
-  }
-  const { companyId } = session.user
-
-  const [sites, expenses, labour] = await Promise.all([
-    prisma.site.findMany({ where: { companyId, deletedAt: null }, include: { _count: { select: { expenses: true, dprs: true } } }, orderBy: { createdAt: 'desc' } }),
-    prisma.expense.groupBy({ by: ['category'], where: { companyId }, _sum: { amount: true }, _count: true }),
-    prisma.labour.groupBy({ by: ['trade'], where: { companyId }, _count: true }),
-  ])
-
-  const totalBudget = sites.reduce((s, site) => s + Number(site.budget), 0)
-  const totalSpent = sites.reduce((s, site) => s + Number(site.spent), 0)
-  const totalExpenses = expenses.reduce((s, e) => s + Number(e._sum.amount ?? 0), 0)
+export default async function ReportsDashboard() {
+  await requireUser()
+  const stats = await getFounderDashboardStats()
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-      <div>
-        <h1 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 3px', letterSpacing: '-0.02em' }}>Reports</h1>
-        <p style={{ color: 'var(--mut)', fontSize: '13px', margin: 0 }}>Financial and operational overview</p>
-      </div>
-
-      {/* Summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
-        {[
-          { label: 'Total Portfolio Budget', value: formatCurrency(totalBudget), color: 'var(--p)' },
-          { label: 'Total Spent', value: formatCurrency(totalSpent), color: 'var(--green)' },
-          { label: 'Budget Remaining', value: formatCurrency(totalBudget - totalSpent), color: totalBudget - totalSpent < 0 ? 'var(--red)' : 'var(--ink)' },
-          { label: 'Total Expenses', value: formatCurrency(totalExpenses), color: 'var(--amber)' },
-        ].map(s => (
-          <div key={s.label} className="ct-card" style={{ padding: '18px 20px' }}>
-            <div style={{ fontSize: '10.5px', color: 'var(--mut)', fontWeight: 700, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: s.color }}>{s.value}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-        {/* Expense by Category */}
-        <div className="ct-card" style={{ padding: '18px 20px' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 800, margin: '0 0 14px' }}>Expenses by Category</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {expenses.sort((a, b) => Number(b._sum.amount) - Number(a._sum.amount)).map(e => {
-              const amt = Number(e._sum.amount ?? 0)
-              const pct = totalExpenses > 0 ? (amt / totalExpenses) * 100 : 0
-              return (
-                <div key={e.category}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '12.5px', fontWeight: 600 }}>{e.category.replace(/_/g, ' ')}</span>
-                    <span style={{ fontSize: '12.5px', fontWeight: 800 }}>{formatCurrency(amt)}</span>
-                  </div>
-                  <div className="ct-progress">
-                    <div className="ct-progress-fill" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Financial Overview</h1>
+          <p className="text-sm text-mut">Founder's snapshot of site costs, budget usage, and liabilities.</p>
         </div>
-
-        {/* Sites overview */}
-        <div className="ct-card" style={{ padding: '18px 20px' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 800, margin: '0 0 14px' }}>Site Overview</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {sites.map(site => {
-              const spent = Number(site.spent)
-              const budget = Number(site.budget)
-              const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0
-              return (
-                <div key={site.id}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '12.5px', fontWeight: 700 }}>{site.name}</span>
-                    <span style={{ fontSize: '12px', color: 'var(--mut)', fontWeight: 600 }}>{formatCurrency(spent)} / {formatCurrency(budget)}</span>
-                  </div>
-                  <div className="ct-progress">
-                    <div className={`ct-progress-fill ${pct >= 90 ? 'red' : pct >= 70 ? 'amber' : ''}`} style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+        <div className="flex gap-2">
+          <Link href="/reports/export-history" className="btn-ghost text-sm">Export History</Link>
+          <Link href="/reports/site-cost" className="btn-primary text-sm">Detailed Reports</Link>
         </div>
       </div>
 
-      {/* Labour by Trade */}
-      <div className="ct-card" style={{ padding: '18px 20px' }}>
-        <h2 style={{ fontSize: '15px', fontWeight: 800, margin: '0 0 14px' }}>Labour by Trade</h2>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-          {labour.map(l => (
-            <div key={l.trade} className="ct-card" style={{ padding: '12px 16px', flex: '0 1 auto', minWidth: '120px' }}>
-              <div style={{ fontSize: '10.5px', color: 'var(--mut)', fontWeight: 700, marginBottom: '4px' }}>{l.trade.replace(/_/g, ' ')}</div>
-              <div style={{ fontSize: '20px', fontWeight: 800 }}>{l._count}</div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="p-4 ct-card">
+          <div className="flex items-center gap-3 mb-2 text-mut">
+            <Building2 className="w-5 h-5 text-p" />
+            <h3 className="font-semibold text-sm uppercase tracking-wider">Active Sites</h3>
+          </div>
+          <p className="text-2xl font-bold">{stats.totalActiveSites}</p>
+          <p className="text-xs text-mut mt-1">{stats.overBudgetSites} over budget</p>
+        </Card>
+
+        <Card className="p-4 ct-card">
+          <div className="flex items-center gap-3 mb-2 text-mut">
+            <Target className="w-5 h-5 text-violet" />
+            <h3 className="font-semibold text-sm uppercase tracking-wider">Total Budget</h3>
+          </div>
+          <p className="text-2xl font-bold">{formatCompactINR(stats.totalBudget)}</p>
+          <p className="text-xs text-mut mt-1">Allocated across sites</p>
+        </Card>
+
+        <Card className="p-4 ct-card">
+          <div className="flex items-center gap-3 mb-2 text-mut">
+            <TrendingUp className="w-5 h-5 text-amber" />
+            <h3 className="font-semibold text-sm uppercase tracking-wider">Actual Spend</h3>
+          </div>
+          <p className="text-2xl font-bold">{formatCompactINR(stats.totalActualSpend)}</p>
+          <p className="text-xs text-mut mt-1">Approved & paid out</p>
+        </Card>
+
+        <Card className="p-4 ct-card">
+          <div className="flex items-center gap-3 mb-2 text-mut">
+            <Wallet className="w-5 h-5 text-green" />
+            <h3 className="font-semibold text-sm uppercase tracking-wider">Budget Rem</h3>
+          </div>
+          <p className="text-2xl font-bold">{formatCompactINR(stats.budgetRemaining)}</p>
+          <p className="text-xs text-mut mt-1">Remaining to spend</p>
+        </Card>
+      </div>
+
+      <h2 className="text-lg font-bold pt-4">Liabilities & Receivables</h2>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="p-4 ct-card bg-orange-50/50">
+          <div className="flex items-center gap-3 mb-2 text-mut">
+            <AlertTriangle className="w-5 h-5 text-orange-600" />
+            <h3 className="font-semibold text-sm uppercase tracking-wider text-orange-800">Pending Appr</h3>
+          </div>
+          <p className="text-2xl font-bold text-orange-900">{formatCompactINR(stats.pendingApprovalAmount)}</p>
+        </Card>
+
+        <Card className="p-4 ct-card bg-red-50/50">
+          <div className="flex items-center gap-3 mb-2 text-mut">
+            <Banknote className="w-5 h-5 text-red-600" />
+            <h3 className="font-semibold text-sm uppercase tracking-wider text-red-800">Vendor Payable</h3>
+          </div>
+          <p className="text-2xl font-bold text-red-900">{formatCompactINR(stats.vendorPayable)}</p>
+        </Card>
+
+        <Card className="p-4 ct-card bg-blue-50/50">
+          <div className="flex items-center gap-3 mb-2 text-mut">
+            <Users className="w-5 h-5 text-blue-600" />
+            <h3 className="font-semibold text-sm uppercase tracking-wider text-blue-800">Salary Payable</h3>
+          </div>
+          <p className="text-2xl font-bold text-blue-900">{formatCompactINR(stats.salaryPayable)}</p>
+        </Card>
+
+        <Card className="p-4 ct-card bg-green-50/50">
+          <div className="flex items-center gap-3 mb-2 text-mut">
+            <Landmark className="w-5 h-5 text-green-600" />
+            <h3 className="font-semibold text-sm uppercase tracking-wider text-green-800">Client Recv.</h3>
+          </div>
+          <p className="text-2xl font-bold text-green-900">{formatCompactINR(stats.clientReceivable)}</p>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+        <Card className="p-6 ct-card">
+          <h3 className="font-bold mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5" /> Cost Breakdown</h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-line">
+              <span className="text-sm font-medium">Material Costs</span>
+              <span className="font-bold">{formatCompactINR(stats.materialCost)}</span>
             </div>
-          ))}
-        </div>
+            <div className="flex justify-between items-center pb-2 border-b border-line">
+              <span className="text-sm font-medium">Labour & Salary</span>
+              <span className="font-bold">{formatCompactINR(stats.labourCost)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium">Other Expenses</span>
+              <span className="font-bold">{formatCompactINR(stats.totalActualSpend - stats.materialCost - stats.labourCost)}</span>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6 ct-card">
+          <h3 className="font-bold mb-4 flex items-center gap-2"><Activity className="w-5 h-5" /> Risk & Profitability</h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-line">
+              <span className="text-sm font-medium">Delayed Sites w/ Cost Risk</span>
+              <span className="font-bold text-red-600">{stats.delayedSitesWithCostRisk}</span>
+            </div>
+            <div className="flex justify-between items-center pb-2 border-b border-line">
+              <span className="text-sm font-medium">Over Budget Sites</span>
+              <span className="font-bold text-orange-600">{stats.overBudgetSites}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium">Estimated Profitability Margin</span>
+              <span className="font-bold text-green-600">{stats.profitMarginPercent.toFixed(1)}%</span>
+            </div>
+          </div>
+          <p className="text-xs text-mut mt-4">* Profitability is an estimate based on recorded client contract value minus all approved material, labour, and expense payouts.</p>
+        </Card>
       </div>
     </div>
   )

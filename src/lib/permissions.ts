@@ -48,6 +48,10 @@ export type Permission =
   | 'reports.view'
   | 'reports.finance'
   | 'reports.project'
+  | 'reports.export'
+  | 'reports.profitability'
+  | 'reports.clientReceivable'
+  | 'reports.vendorPayable'
   | 'clientPortal.view'
   | 'clientPortal.manage'
   | 'documents.view'
@@ -74,7 +78,7 @@ const ALL_PERMISSIONS: Permission[] = [
   'materials.view', 'materials.create', 'materials.update', 'materials.approveRequest',
   'dpr.view', 'dpr.create', 'dpr.update', 'dpr.approve',
   'tasks.manage',
-  'reports.view', 'reports.finance', 'reports.project',
+  'reports.view', 'reports.finance', 'reports.project', 'reports.export', 'reports.profitability', 'reports.clientReceivable', 'reports.vendorPayable',
   'clientPortal.view', 'clientPortal.manage',
   'documents.view', 'documents.upload', 'documents.approve',
   'uploads.sign', 'uploads.saveMetadata',
@@ -95,7 +99,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'materials.view', 'materials.create',
     'dpr.view', 'dpr.create', 'dpr.update', 'dpr.approve',
     'tasks.manage',
-    'reports.view', 'reports.project',
+    'reports.view', 'reports.project', 'reports.export',
     'documents.view', 'documents.upload', 'documents.approve',
     'purchase.approve', 'variations.approve', 'approvals.view',
     'uploads.sign', 'uploads.saveMetadata'
@@ -106,7 +110,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'bills.view', 'bills.approve', 'bills.reject',
     'salary.view', 'salary.generate', 'salary.approve', 'salary.markPaid',
     'vendors.view', 'payments.view', 'payments.manage',
-    'reports.view', 'reports.finance',
+    'reports.view', 'reports.finance', 'reports.export', 'reports.vendorPayable', 'reports.clientReceivable',
     'documents.view', 'documents.approve',
     'approvals.view',
     'uploads.sign', 'uploads.saveMetadata'

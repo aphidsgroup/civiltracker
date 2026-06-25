@@ -268,6 +268,7 @@ model Company {
   subscription     CompanySubscription[]
   tasks            Task[]
   boqitems         BOQItem[]
+  reportExports    ReportExport[]
 
   @@index([status])
 }
@@ -299,6 +300,7 @@ model User {
   auditLogs          AuditLog[]
   notifications      Notification[]
   salaryRunsCreated  SalaryRun[]           @relation("SalaryRunCreatedBy")
+  reportExports      ReportExport[]        @relation("ReportExportedBy")
 
   @@index([email])
 }
@@ -988,6 +990,23 @@ model AuditLog {
   @@index([companyId])
   @@index([userId])
   @@index([createdAt])
+}
+
+model ReportExport {
+  id            String   @id @default(cuid())
+  companyId     String
+  reportType    String
+  format        String   // PDF, EXCEL
+  filtersJson   Json?
+  generatedById String
+  fileUrl       String?
+  createdAt     DateTime @default(now())
+
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  generatedBy User    @relation("ReportExportedBy", fields: [generatedById], references: [id])
+
+  @@index([companyId])
+  @@index([generatedById])
 }
 
 model Notification {
