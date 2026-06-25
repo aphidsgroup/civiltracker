@@ -155,22 +155,36 @@
 
 ## Known Risks Before Pilot
 
-1. **Phase 9 migration `DROP COLUMN "plan"`** — resets plan for 2 existing production companies to `TRIAL`. Super Admin must re-set them via `/super-admin/companies/[id]` after migration.
+1. ~~**Phase 9 migration `DROP COLUMN "plan"`**~~ — **OCCURRED IN PRODUCTION** on 2026-06-25. Plans for 2 companies reset to `TRIAL`. Manually re-assign via `/super-admin/companies/[id]`. See `docs/production-migration-audit.md` for full post-mortem. Future migrations must never drop commercial billing columns without a backfill plan.
 
-2. **Preview QA not yet run** — `.env.playwright.local` still has placeholder values. Kavin must update before running `npx playwright test` against preview.
+2. ~~**Preview QA not yet run**~~ — **COMPLETED**. Phase 9 Playwright tests passed against preview deployment.
 
-3. **`.env.vercel` has historical OIDC token** — already expired (short-lived JWT) but must be removed from git history. Run `git rm --cached .env.vercel && git commit -m "chore: untrack .env.vercel"` then optionally rewrite history.
+3. ~~**`.env.vercel` has historical OIDC token**~~ — **FIXED**. Untracked from git on 2026-06-25.
 
 4. **CSS cascade conflict** — four design blocks in one `globals.css` cause token shadowing. Not visually broken but a code quality debt.
 
-5. **Quality & Safety / Issues & Variations routes** — listed in Admin design but no route pages created yet. Sidebar does not link to them until routes exist.
+5. **Quality & Safety / Issues & Variations routes** — listed in Admin design but no route pages created yet.
+
+6. **Vercel Authentication** — disabled globally on 2026-06-25 to allow public access. Preview deployments no longer have Vercel login protection. Re-enable Standard Protection if preview isolation is needed.
+
+7. **`src/proxy.ts` as Next.js middleware** — Next.js 16 turbopack compiles `src/proxy.ts` as the app middleware (not `middleware.ts`). `/api/health` was blocked until added to `publicPaths`. Any new public API routes must be added to `publicPaths` in `src/proxy.ts`.
+
+---
+
+## Post-Launch Status (v1.0.0 — 2026-06-25)
+
+| Item | Status |
+|------|--------|
+| Production deployed | ✅ `https://civiltracker.buildogram.in` |
+| Health endpoint | ✅ `{"status":"ok","version":"1.0.0"}` |
+| v0.9.0 tag | ✅ `v0.9.0-multitenant-onboarding-accepted` |
+| v1.0.0 tag | ✅ `v1.0.0-civil-tracker-pilot-ready` |
+| `.env.vercel` removed | ✅ git history cleaned |
+| Company plans reset | ⚠️ Manual correction required in Super Admin |
+| Production E2E suite | ⏭ Skipped — test users not seeded in prod DB |
 
 ---
 
 ## Verdict
 
-Civil Tracker is **functionally complete** for pilot launch once:
-- Preview QA passes with real env values
-- Phase 9 migration deploys cleanly to production
-- Production Playwright suite passes
-- Super Admin re-assigns company plans post-migration
+Civil Tracker **v1.0.0 is shipped and pilot-ready**. One manual action remains: re-assign the 2 company plans that were reset to TRIAL by the Phase 9 migration.

@@ -72,6 +72,21 @@ export async function updateCompanyStatus(companyId: string, status: CompanyStat
   return { success: true }
 }
 
+/**
+ * COMMERCIAL STATE — MIGRATION SAFETY NOTICE
+ *
+ * The fields updated here (plan, userLimit, siteLimit, storageLimitMb, modulesJson)
+ * are commercial billing state. They must be preserved across ALL database migrations.
+ *
+ * NEVER write a Prisma migration that DROP COLUMNs any of these fields without
+ * an explicit backfill step. Doing so will silently reset customer billing data.
+ *
+ * Incident: Phase 9 migration (20260625160000_phase_9_multitenant) changed
+ * Company.plan from String → CompanyPlan enum via DROP+ADD, resetting 2 production
+ * companies to TRIAL. See docs/production-migration-audit.md.
+ *
+ * Safe type-change pattern → docs/admin-runbook.md "Pre-Migration Safety Checklist"
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function updateCompanyLimitsAndModules(companyId: string, data: any) {
   await requireRole([Role.SUPER_ADMIN])

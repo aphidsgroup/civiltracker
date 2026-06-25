@@ -21,10 +21,35 @@ Vercel auto-deploys on push to `main`. Monitor at https://vercel.com/dashboard.
 
 ### Deploy with Migration
 
-1. Verify migration is non-destructive:
+#### Pre-Migration Safety Checklist
+
+Before merging any migration to `main`, verify the migration SQL contains **none** of the following on protected columns:
+
+| Check | Command |
+|-------|---------|
+| No `DROP COLUMN` on `Company.plan` | `grep -i 'DROP COLUMN.*"plan"' migration.sql` → must return nothing |
+| No `DROP COLUMN` on `Company.status` | `grep -i 'DROP COLUMN.*"status"' migration.sql` → must return nothing |
+| No `DROP COLUMN` on `Company.modulesJson` | `grep -i 'DROP COLUMN.*"modulesJson"' migration.sql` → must return nothing |
+| No `DROP COLUMN` on limit fields | `grep -i 'DROP COLUMN.*"userLimit\|siteLimit\|storageLimitMb"' migration.sql` → must return nothing |
+| No destructive changes on subscription fields | No `DROP TABLE "Company"`, no `TRUNCATE`, no `DELETE FROM "Company"` |
+
+**If a type change on a protected column is unavoidable**, write an explicit backfill:
+
+```sql
+-- SAFE type change pattern (String → Enum example)
+ALTER TABLE "Company" ADD COLUMN "plan_new" "CompanyPlan" NOT NULL DEFAULT 'TRIAL';
+UPDATE "Company" SET "plan_new" = "plan"::text::"CompanyPlan";
+ALTER TABLE "Company" DROP COLUMN "plan";
+ALTER TABLE "Company" RENAME COLUMN "plan_new" TO "plan";
+```
+
+> **Why this matters:** Phase 9 migration changed `Company.plan` from String → CompanyPlan enum via a DROP+ADD sequence. This reset 2 production companies to TRIAL and required manual correction. See `docs/production-migration-audit.md`.
+
+#### Steps
+
+1. Verify migration is non-destructive using the checklist above:
    ```bash
    cat prisma/migrations/<migration_name>/migration.sql
-   # Confirm: no DROP TABLE, no DROP COLUMN (data-loss), no TRUNCATE, no DELETE
    ```
 
 2. Apply migration to production database:
@@ -39,6 +64,8 @@ Vercel auto-deploys on push to `main`. Monitor at https://vercel.com/dashboard.
    ```
 
 4. Verify: check `/api/health` returns `{"status":"ok"}` after deployment.
+
+5. If migration touches Company billing fields: **manually verify all company plans/limits are correct** at `/super-admin/companies`.
 
 ---
 
