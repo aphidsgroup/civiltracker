@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth';
+import { requireRole } from '@/lib/auth/permissions';
 import { Role } from '@prisma/client';
 import { createCompany } from '@/actions/companies';
 import { 

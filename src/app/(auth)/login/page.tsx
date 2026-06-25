@@ -13,7 +13,10 @@ export default function LoginPage() {
 
   const [hydrated, setHydrated] = useState(false)
   
-  useEffect(() => { setHydrated(true) }, [])
+  useEffect(() => {
+    const timer = setTimeout(() => setHydrated(true), 0)
+    return () => clearTimeout(timer)
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
