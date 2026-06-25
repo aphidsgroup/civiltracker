@@ -2,89 +2,72 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { signOut } from 'next-auth/react'
 import type { SessionUser } from '@/types'
-
-const NAV = [
-  { group: 'Overview', items: [
-    { href: '/dashboard', icon: '▦', label: 'Dashboard' },
-    { href: '/sites', icon: '🏗', label: 'Sites' },
-  ]},
-  { group: 'Finance', items: [
-    { href: '/expenses', icon: '💳', label: 'Expenses & Bills' },
-    { href: '/bills', icon: '🧾', label: 'Bill Approval' },
-    { href: '/payments', icon: '💰', label: 'Client Payments' },
-  ]},
-  { group: 'Labour', items: [
-    { href: '/labour', icon: '👷', label: 'Labour' },
-    { href: '/attendance', icon: '📋', label: 'Attendance' },
-    { href: '/salary', icon: '💵', label: 'Salary Runs' },
-  ]},
-  { group: 'Materials', items: [
-    { href: '/materials', icon: '🧱', label: 'Materials' },
-    { href: '/purchase', icon: '📦', label: 'Purchase' },
-    { href: '/vendors', icon: '🚛', label: 'Vendors' },
-  ]},
-  { group: 'Planning', items: [
-    { href: '/tasks', icon: '✅', label: 'Tasks' },
-    { href: '/boq', icon: '📐', label: 'BOQ' },
-    { href: '/dpr', icon: '📝', label: 'DPR' },
-  ]},
-  { group: 'Manage', items: [
-    { href: '/documents', icon: '📁', label: 'Documents' },
-    { href: '/subcontractors', icon: '🔨', label: 'Subcontractors' },
-    { href: '/clients', icon: '🤝', label: 'Clients' },
-    { href: '/reports', icon: '📊', label: 'Reports' },
-    { href: '/settings', icon: '⚙️', label: 'Settings' },
-  ]},
-]
+import { getInitials } from '@/lib/utils'
 
 export default function DashboardSidebar({ user }: { user: SessionUser }) {
   const pathname = usePathname()
 
+  const navs = [
+    { label: 'Overview', type: 'group' },
+    { href: '/dashboard', label: 'Dashboard', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg> },
+    { href: '/sites', label: 'Sites', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/></svg> },
+    { href: '/dpr', label: 'Daily Reports', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10h6M9 14h6M9 18h3"/></svg> },
+    { label: 'Finance', type: 'group' },
+    { href: '/expenses', label: 'Expenses', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h12v4M3 7v10a2 2 0 0 0 2 2h14V9H5a2 2 0 0 1-2-2Z"/><circle cx="16" cy="13" r="1.3" fill="currentColor"/></svg> },
+    { href: '/bills', label: 'Bills', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h4"/></svg> },
+    { href: '/approvals', label: 'Approvals', badge: '5', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg> },
+    { label: 'Workforce', type: 'group' },
+    { href: '/labour', label: 'Labour & Salary', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 5.5a3 3 0 0 1 0 5M21 20a6 6 0 0 0-5-5.9"/></svg> },
+    { label: 'Procurement', type: 'group' },
+    { href: '/materials', label: 'Materials & Stock', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> },
+    { href: '/purchase', label: 'Purchase Orders', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg> },
+    { label: 'Management', type: 'group' },
+    { href: '/reports', label: 'Reports', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg> },
+    { href: '/settings', label: 'Settings', icon: <svg className="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 14a1.6 1.6 0 0 0 .3 1.8 2 2 0 1 1-2.8 2.8 1.6 1.6 0 0 0-2.7 1.1 2 2 0 1 1-4 0 1.6 1.6 0 0 0-2.7-1.1 2 2 0 1 1-2.8-2.8A1.6 1.6 0 0 0 3 14a2 2 0 1 1 0-4 1.6 1.6 0 0 0 1.7-2.7 2 2 0 1 1 2.8-2.8A1.6 1.6 0 0 0 10 3.7a2 2 0 1 1 4 0 1.6 1.6 0 0 0 2.7 1.1 2 2 0 1 1 2.8 2.8A1.6 1.6 0 0 0 20.3 10a2 2 0 1 1 0 4Z"/></svg> },
+  ]
+
   return (
-    <nav className="ct-sidebar">
-      {/* Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0 4px 18px' }}>
-        <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'linear-gradient(135deg, #f3b43a, #e08a0b)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '17px', flexShrink: 0 }}>📋</div>
-        <div>
-          <div style={{ fontWeight: 800, fontSize: '14px', color: '#fff', lineHeight: 1.2 }}>Civil Tracker</div>
-          <div style={{ fontSize: '10px', color: '#6b889f', fontWeight: 600 }}>{user.companyName ?? 'Platform'}</div>
+    <div className="side">
+      <div className="brand">
+        <div className="blogo">
+          <svg className="svg22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/></svg>
         </div>
+        <div className="bname">Civil Tracker<small>Company workspace</small></div>
+      </div>
+      
+      <div className="coswitch">
+        <div className="coava">{getInitials(user.companyName || 'C')}</div>
+        <div style={{ flex: 1 }}>
+          <div className="conm">{user.companyName || 'Company'}</div>
+          <div className="coplan">Standard Plan</div>
+        </div>
+        <svg className="svg16" viewBox="0 0 24 24" fill="none" stroke="#8aa0b3" strokeWidth="2.2" strokeLinecap="round"><path d="M8 9l4 4 4-4M8 15l4-4 4 4"/></svg>
       </div>
 
-      {/* Nav */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        {NAV.map(group => (
-          <div key={group.group}>
-            <div className="ct-nav-group">{group.group}</div>
-            {group.items.map(item => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`ct-nav-item ${pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href)) ? 'active' : ''}`}
-              >
-                <span style={{ fontSize: '15px', width: '20px', textAlign: 'center' }}>{item.icon}</span>
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        ))}
+      <div className="nav">
+        {navs.map((n, idx) => {
+          if (n.type === 'group') {
+            return <div key={idx} className="ngroup">{n.label}</div>
+          }
+          const isActive = pathname === n.href || pathname.startsWith(n.href + '/')
+          return (
+            <Link key={n.href} href={n.href!} className={`navi ${isActive ? 'on' : ''}`}>
+              {n.icon}
+              {n.label}
+              {n.badge && <span className="nbadge">{n.badge}</span>}
+            </Link>
+          )
+        })}
       </div>
 
-      {/* User */}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '14px', marginTop: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)' }}>
-          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, #1d6fb5, #0c3c6a)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 800, color: '#fff' }}>
-            {user.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0,2)}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</div>
-            <div style={{ fontSize: '10.5px', color: '#6b889f', fontWeight: 600 }}>{user.role?.replace(/_/g, ' ')}</div>
-          </div>
-          <button onClick={() => signOut({ callbackUrl: '/login' })} style={{ background: 'none', border: 'none', color: '#6b889f', cursor: 'pointer', padding: '4px', fontSize: '14px' }} title="Sign out">↪</button>
+      <div className="userbox">
+        <div className="uava">{getInitials(user.name)}</div>
+        <div style={{ flex: 1 }}>
+          <div className="unm">{user.name}</div>
+          <div className="url">{user.role.replace(/_/g, ' ')}</div>
         </div>
       </div>
-    </nav>
+    </div>
   )
 }

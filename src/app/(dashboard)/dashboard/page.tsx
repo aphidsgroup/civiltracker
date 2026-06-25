@@ -1,133 +1,125 @@
 import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
-import { formatCurrency } from '@/lib/utils'
+import prisma from '@/lib/prisma'
 import Link from 'next/link'
+import { formatCurrency } from '@/lib/utils'
 
-export default async function DashboardPage() {
+export default async function CompanyDashboard() {
   const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
-
-  const [sites, expenses, pendingApprovals, totalLabour] = await Promise.all([
-    prisma.site.findMany({ where: { companyId, deletedAt: null }, select: { id: true, name: true, location: true, budget: true, spent: true, progress: true, status: true, currentStage: true }, orderBy: { createdAt: 'desc' }, take: 5 }),
-    prisma.expense.aggregate({ where: { companyId }, _sum: { amount: true } }),
-    prisma.approval.count({ where: { companyId, status: 'PENDING' } }),
-    prisma.labour.count({ where: { companyId, isActive: true } }),
-  ])
-
-  const totalBudget = sites.reduce((s, site) => s + Number(site.budget), 0)
-  const totalSpent = sites.reduce((s, site) => s + Number(site.spent), 0)
-  const activeSites = sites.filter(s => s.status === 'ACTIVE').length
-  const totalExpenses = Number(expenses._sum.amount ?? 0)
-
-  const kpis = [
-    { label: 'Active Sites', value: String(activeSites), sub: `${sites.length} total`, color: 'var(--p)', icon: '🏗' },
-    { label: 'Total Budget', value: formatCurrency(totalBudget), sub: `${formatCurrency(totalSpent)} spent`, color: '#138a4e', icon: '📊' },
-    { label: 'Total Expenses', value: formatCurrency(totalExpenses), sub: 'All time', color: '#e08a0b', icon: '💳' },
-    { label: 'Active Labour', value: String(totalLabour), sub: `${pendingApprovals} bills pending`, color: '#5b47b8', icon: '👷' },
-  ]
-
+  
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 3px', letterSpacing: '-0.02em' }}>Dashboard</h1>
-          <p style={{ color: 'var(--mut)', fontSize: '13px', margin: 0, fontWeight: 500 }}>Welcome back, {session.user.name?.split(' ')[0]} 👋</p>
+    <>
+      <div className="kpis">
+        <div className="kpi feat">
+          <div className="klbl">Total Site Spend</div>
+          <div className="knum">₹14.2 L</div>
+          <div className="ksub"><span>▲</span>+8% from last month</div>
         </div>
-        <Link href="/sites/new" className="btn-primary" style={{ textDecoration: 'none' }}>+ New Site</Link>
+        <div className="kpi">
+          <div className="klbl">Pending Approvals</div>
+          <div className="knum">12</div>
+          <div className="ksub warn"><span>●</span>5 high priority</div>
+        </div>
+        <div className="kpi">
+          <div className="klbl">Active Labourers</div>
+          <div className="knum">184</div>
+          <div className="ksub up"><span>●</span>Across 4 sites</div>
+        </div>
+        <div className="kpi">
+          <div className="klbl">Upcoming Bills</div>
+          <div className="knum">₹3.8 L</div>
+          <div className="ksub down"><span>●</span>Due this week</div>
+        </div>
       </div>
-
-      {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
-        {kpis.map(kpi => (
-          <div key={kpi.label} className="ct-card" style={{ padding: '18px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--mut)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{kpi.label}</span>
-              <span style={{ fontSize: '20px' }}>{kpi.icon}</span>
+      
+      <div className="dgrid">
+        <div className="colL">
+          <div className="card">
+            <div className="chead">
+              <div>
+                <div className="ctitle">Active Sites</div>
+                <div className="csub">Sorted by highest spend</div>
+              </div>
+              <Link href="/sites" className="clink">View all</Link>
             </div>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: kpi.color, letterSpacing: '-0.02em', marginBottom: '4px' }}>{kpi.value}</div>
-            <div style={{ fontSize: '12px', color: 'var(--mut)', fontWeight: 500 }}>{kpi.sub}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Sites Table */}
-      <div className="ct-card" style={{ overflow: 'hidden' }}>
-        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 800, margin: 0, letterSpacing: '-0.01em' }}>All Sites</h2>
-          <Link href="/sites" style={{ fontSize: '12.5px', color: 'var(--p)', fontWeight: 700, textDecoration: 'none' }}>View all →</Link>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="ct-table">
-            <thead>
-              <tr>
-                <th>Site</th>
-                <th>Budget</th>
-                <th>Spent</th>
-                <th>Progress</th>
-                <th>Stage</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sites.map(site => {
-                const pct = Math.round(Number(site.progress))
-                const statusColor: Record<string, string> = { ACTIVE: 'green', PLANNING: 'mut', COMPLETED: 'blue', ON_HOLD: 'amber', CANCELLED: 'red' }
-                return (
-                  <tr key={site.id}>
-                    <td>
-                      <Link href={`/sites/${site.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                        <div style={{ fontWeight: 700 }}>{site.name}</div>
-                        <div style={{ fontSize: '11.5px', color: 'var(--mut)', fontWeight: 500 }}>{site.location}</div>
-                      </Link>
-                    </td>
-                    <td style={{ fontWeight: 700 }}>{formatCurrency(Number(site.budget))}</td>
-                    <td style={{ fontWeight: 700 }}>{formatCurrency(Number(site.spent))}</td>
-                    <td style={{ minWidth: '120px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div className="ct-progress" style={{ flex: 1 }}>
-                          <div className={`ct-progress-fill ${pct >= 80 ? '' : pct >= 50 ? '' : 'amber'}`} style={{ width: `${pct}%` }} />
-                        </div>
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--mut)', width: '32px', textAlign: 'right' }}>{pct}%</span>
-                      </div>
-                    </td>
-                    <td><span style={{ fontSize: '12px', fontWeight: 600 }}>{site.currentStage ?? '-'}</span></td>
-                    <td><span className={`chip chip-${statusColor[site.status] ?? 'mut'}`}><span className="chip-dot" />{site.status.replace(/_/g, ' ')}</span></td>
+            <div className="cbody" style={{ padding: 0 }}>
+              <table className="ct-table">
+                <thead>
+                  <tr>
+                    <th>Site Name</th>
+                    <th>Manager</th>
+                    <th>Progress</th>
+                    <th>Spend</th>
+                    <th>Status</th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <div className="conm">Anna Nagar Metro</div>
+                      <div className="csub">Chennai, TN</div>
+                    </td>
+                    <td>Ramesh K.</td>
+                    <td>
+                      <div className="ct-progress" style={{ width: '100px' }}><div className="ct-progress-fill" style={{ width: '68%' }}></div></div>
+                      <div className="csub" style={{ marginTop: '4px' }}>68% complete</div>
+                    </td>
+                    <td className="conm">₹8.4 L</td>
+                    <td><span className="chip chip-green"><span className="chip-dot"></span>Active</span></td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <div className="conm">Tidel Park Extension</div>
+                      <div className="csub">Taramani, TN</div>
+                    </td>
+                    <td>Suresh M.</td>
+                    <td>
+                      <div className="ct-progress" style={{ width: '100px' }}><div className="ct-progress-fill amber" style={{ width: '32%' }}></div></div>
+                      <div className="csub" style={{ marginTop: '4px' }}>32% complete</div>
+                    </td>
+                    <td className="conm">₹4.2 L</td>
+                    <td><span className="chip chip-amber"><span className="chip-dot"></span>Delayed</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        
+        <div className="colR">
+          <div className="card">
+            <div className="chead">
+              <div>
+                <div className="ctitle">Recent Activity</div>
+                <div className="csub">Latest expenses and updates</div>
+              </div>
+            </div>
+            <div className="cbody">
+              <div className="dgrid" style={{ gap: '14px', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e2f3ea', color: '#0f7a45', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg className="svg16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 600 }}>Bill Approved</div>
+                    <div style={{ fontSize: '12px', color: 'var(--mut)', marginTop: '2px' }}>₹45,000 to Sri Ram Traders</div>
+                    <div style={{ fontSize: '10.5px', color: '#8aa0b3', marginTop: '4px' }}>2 hours ago</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e7f0fb', color: '#13558e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg className="svg16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 600 }}>New Expense Uploaded</div>
+                    <div style={{ fontSize: '12px', color: 'var(--mut)', marginTop: '2px' }}>Cement bags at Anna Nagar</div>
+                    <div style={{ fontSize: '10.5px', color: '#8aa0b3', marginTop: '4px' }}>5 hours ago</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Recent Expenses */}
-      <div className="ct-card" style={{ overflow: 'hidden' }}>
-        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 800, margin: 0 }}>Quick Links</h2>
-        </div>
-        <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
-          {[
-            { href: '/bills', label: '🧾 Approve Bills', count: pendingApprovals },
-            { href: '/labour', label: '👷 Labour', count: totalLabour },
-            { href: '/materials', label: '🧱 Materials', count: null },
-            { href: '/dpr', label: '📝 DPR', count: null },
-            { href: '/reports', label: '📊 Reports', count: null },
-            { href: '/documents', label: '📁 Documents', count: null },
-          ].map(link => (
-            <Link
-              key={link.href}
-              href={link.href}
-              style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '14px', borderRadius: '14px', background: '#f5f8fc', border: '1px solid var(--line)', textDecoration: 'none', color: 'inherit', transition: 'all 0.15s' }}
-            >
-              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)' }}>{link.label}</span>
-              {link.count !== null && link.count > 0 && <span className="chip chip-amber">{link.count} pending</span>}
-            </Link>
-          ))}
-        </div>
-      </div>
-    </div>
+    </>
   )
 }
