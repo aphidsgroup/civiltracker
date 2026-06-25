@@ -85,7 +85,7 @@ export async function generatePDFBuffer(
     try {
       const pdfDoc = printer.createPdfKitDocument(docDefinition)
       const chunks: Buffer[] = []
-      pdfDoc.on('data', chunk => chunks.push(chunk))
+      pdfDoc.on('data', (chunk: Buffer) => chunks.push(chunk))
       pdfDoc.on('end', () => resolve(Buffer.concat(chunks)))
       pdfDoc.on('error', reject)
       pdfDoc.end()
