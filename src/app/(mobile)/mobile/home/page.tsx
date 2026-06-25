@@ -29,9 +29,9 @@ export default async function MobileHomePage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.75, marginBottom: '2px' }}>Welcome back,</div>
-            <div style={{ fontSize: '20px', fontWeight: 800 }}>{name?.split(' ')[0]} \u{1F44B}</div>
+            <div style={{ fontSize: '20px', fontWeight: 800 }}>{name?.split(' ')[0]} 👋</div>
           </div>
-          <Link href="/dashboard" style={{ padding: '7px 12px', background: 'rgba(255,255,255,0.12)', borderRadius: '9px', fontSize: '11.5px', fontWeight: 700, color: '#fff', textDecoration: 'none' }}>\u{1F4BB} Desktop</Link>
+          <Link href="/dashboard" style={{ padding: '7px 12px', background: 'rgba(255,255,255,0.12)', borderRadius: '9px', fontSize: '11.5px', fontWeight: 700, color: '#fff', textDecoration: 'none' }}>💻 Desktop</Link>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
           <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '12px', padding: '11px 12px' }}>
@@ -52,10 +52,10 @@ export default async function MobileHomePage() {
       {/* Quick actions */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '18px' }}>
         {[
-          { href: '/mobile/add/expense', icon: '\u{1F4B3}', label: 'Add Expense', color: '#13558e' },
-          { href: '/mobile/attendance', icon: '\u{1F4CB}', label: 'Attendance', color: '#138a4e' },
-          { href: '/mobile/add/dpr', icon: '\u{1F4DD}', label: 'Add DPR', color: '#5b47b8' },
-          { href: '/mobile/add/material', icon: '\u{1F9F1}', label: 'Materials', color: '#e08a0b' },
+          { href: '/mobile/add/expense', icon: '💳', label: 'Add Expense', color: '#13558e' },
+          { href: '/mobile/attendance', icon: '📋', label: 'Attendance', color: '#138a4e' },
+          { href: '/mobile/add/dpr', icon: '📝', label: 'Add DPR', color: '#5b47b8' },
+          { href: '/mobile/add/material', icon: '🧱', label: 'Materials', color: '#e08a0b' },
         ].map(a => (
           <Link key={a.href} href={a.href} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px', background: '#fff', borderRadius: '14px', border: '1px solid var(--line)', textDecoration: 'none', color: 'inherit' }}>
             <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: a.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>{a.icon}</div>
@@ -79,7 +79,7 @@ export default async function MobileHomePage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                     <div>
                       <div style={{ fontSize: '13.5px', fontWeight: 800 }}>{site.name}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--mut)', fontWeight: 500 }}>{site.location} \u00b7 {site.currentStage}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--mut)', fontWeight: 500 }}>{site.location} · {site.currentStage}</div>
                     </div>
                     <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--p)' }}>{pct}%</span>
                   </div>

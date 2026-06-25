@@ -132,3 +132,17 @@ html, body {
 
 /* Responsive */
 @media (max-width: 768px) { .ct-sidebar { display: none; } .ct-main { margin-left: 0 !important; } }
+
+/* Mobile form elements */
+.mobile-inp { width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 13px 15px; font-size: 15px; font-weight: 500; font-family: inherit; color: var(--ink); outline: none; appearance: none; -webkit-appearance: none; }
+.mobile-inp:focus { border-color: var(--p); box-shadow: 0 0 0 3px rgba(19,85,142,0.1); }
+.mobile-chip { padding: 8px 14px; border-radius: 22px; border: 1.5px solid var(--line); background: #fff; font-size: 13px; font-weight: 700; color: var(--mut); cursor: pointer; transition: all 0.15s; font-family: inherit; }
+.mobile-chip.selected { background: #e7f0fb; border-color: var(--p); color: var(--p); }
+.mobile-btn-primary { width: 100%; background: linear-gradient(135deg, var(--p), var(--p3)); color: #fff; border: none; border-radius: 14px; padding: 15px; font-size: 15px; font-weight: 800; font-family: inherit; cursor: pointer; box-shadow: 0 8px 20px -8px rgba(19,85,142,0.6); transition: opacity 0.15s; }
+.mobile-btn-primary:hover { opacity: 0.92; }
+.mobile-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+.mobile-amt-wrap { display: flex; align-items: center; background: #fff; border: 1.5px solid var(--line); border-radius: 14px; overflow: hidden; }
+.mobile-rupee { padding: 13px 4px 13px 16px; font-size: 22px; font-weight: 700; color: var(--p); line-height: 1; }
+.mobile-amt-in { flex: 1; border: none; outline: none; padding: 13px 16px 13px 8px; font-size: 28px; font-weight: 800; color: var(--ink); font-family: inherit; background: transparent; }
+.mobile-amt-in:focus { outline: none; }
+.ct-hero { background: linear-gradient(135deg, var(--p2), var(--p3)); border-radius: 20px; padding: 20px; color: #fff; }
