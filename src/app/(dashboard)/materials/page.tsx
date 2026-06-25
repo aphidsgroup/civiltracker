@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
+import ResponsiveTable from '@/components/responsive/ResponsiveTable'
+import MobileCardList from '@/components/responsive/MobileCardList'
 
 export const metadata = { title: 'Materials | Civil Tracker' }
 
@@ -48,50 +50,77 @@ export default async function MaterialsPage() {
         <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--line)' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 800, margin: 0 }}>All Materials</h2>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="ct-table">
-            <thead>
-              <tr>
-                <th>Material</th>
-                <th>Site</th>
-                <th>Unit</th>
-                <th>Stock</th>
-                <th>Min Level</th>
-                <th>Unit Cost</th>
-                <th>Value</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {materials.map(m => {
-                const stock = Number(m.currentStock)
-                const minLevel = Number(m.minStock)
-                const cost = Number(m.unitCost ?? 0)
-                const isLow = stock <= minLevel
-                return (
-                  <tr key={m.id}>
-                    <td>
-                      <div style={{ fontWeight: 700 }}>{m.name}</div>
-                      {m.brand && <div style={{ fontSize: '11px', color: 'var(--mut)' }}>{m.brand}</div>}
-                    </td>
-                    <td style={{ fontSize: '12.5px', color: 'var(--mut)', fontWeight: 600 }}>{m.site?.name ?? '-'}</td>
-                    <td style={{ fontSize: '12.5px', fontWeight: 600 }}>{m.unit}</td>
-                    <td style={{ fontWeight: 800, color: isLow ? 'var(--red)' : 'inherit' }}>{stock.toLocaleString('en-IN')}</td>
-                    <td style={{ fontSize: '12.5px', color: 'var(--mut)', fontWeight: 600 }}>{minLevel.toLocaleString('en-IN')}</td>
-                    <td style={{ fontWeight: 600 }}>{formatCurrency(cost)}</td>
-                    <td style={{ fontWeight: 700 }}>{formatCurrency(stock * cost)}</td>
-                    <td>
-                      <span className={`chip chip-${isLow ? 'amber' : 'green'}`}>
-                        <span className="chip-dot" />
-                        {isLow ? 'Low Stock' : 'OK'}
-                      </span>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+          <div style={{ overflowX: 'auto' }}>
+            <ResponsiveTable
+              desktopView={
+                <table className="ct-table">
+                  <thead>
+                    <tr>
+                      <th>Material</th>
+                      <th>Site</th>
+                      <th>Unit</th>
+                      <th>Stock</th>
+                      <th>Min Level</th>
+                      <th>Unit Cost</th>
+                      <th>Value</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {materials.map(m => {
+                      const stock = Number(m.currentStock)
+                      const min = Number(m.minStock)
+                      const val = stock * Number(m.unitCost ?? 0)
+                      const isLow = stock <= min
+                      return (
+                        <tr key={m.id}>
+                          <td><div style={{ fontWeight: 700 }}>{m.name}</div></td>
+                          <td style={{ fontSize: '12px', color: 'var(--mut)', fontWeight: 600 }}>{m.site.name}</td>
+                          <td><span className="chip chip-mut">{m.unit}</span></td>
+                          <td style={{ fontWeight: 800, color: isLow ? 'var(--red)' : 'var(--ink)' }}>{stock}</td>
+                          <td style={{ fontSize: '12.5px', color: 'var(--mut)' }}>{min}</td>
+                          <td style={{ fontSize: '12.5px', color: 'var(--mut)', fontWeight: 600 }}>{m.unitCost ? formatCurrency(Number(m.unitCost)) : '-'}</td>
+                          <td style={{ fontWeight: 700 }}>{formatCurrency(val)}</td>
+                          <td>
+                            <span className={`chip chip-${isLow ? 'red' : 'green'}`}>
+                              <span className="chip-dot" />
+                              {isLow ? 'Low Stock' : 'Good'}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              }
+              mobileView={
+                <MobileCardList
+                  items={materials.map(m => {
+                    const stock = Number(m.currentStock)
+                    const min = Number(m.minStock)
+                    const val = stock * Number(m.unitCost ?? 0)
+                    const isLow = stock <= min
+                    return {
+                      id: m.id,
+                      title: m.name,
+                      subtitle: m.site.name,
+                      meta: (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 800 }}>{stock} {m.unit}</span>
+                          <span style={{ fontSize: '13px', color: 'var(--mut)' }}>{formatCurrency(val)}</span>
+                        </div>
+                      ),
+                      statusNode: (
+                        <span className={`chip chip-${isLow ? 'red' : 'green'}`} style={{ fontSize: '10px' }}>
+                          {isLow ? 'Low Stock' : 'Good'}
+                        </span>
+                      )
+                    }
+                  })}
+                />
+              }
+            />
+          </div>
       </div>
     </div>
   )

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { EXPENSE_CATEGORIES, PAYMENT_MODES } from '@/lib/constants'
+import { ExpenseCategory, PaymentMode } from '@prisma/client'
 
 export default async function NewExpensePage() {
   const session = await auth()
@@ -19,8 +20,8 @@ export default async function NewExpensePage() {
     if (!session?.user?.companyId) throw new Error('Unauthorized')
 
     const siteId = formData.get('siteId') as string
-    const category = formData.get('category') as any
-    const paymentMode = formData.get('paymentMode') as any
+    const category = formData.get('category') as ExpenseCategory
+    const paymentMode = formData.get('paymentMode') as PaymentMode
     const amount = Number(formData.get('amount'))
     const description = formData.get('description') as string
     const date = new Date(formData.get('date') as string)

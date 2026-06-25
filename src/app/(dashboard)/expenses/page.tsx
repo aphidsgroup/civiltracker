@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
+import ResponsiveTable from '@/components/responsive/ResponsiveTable'
+import MobileCardList from '@/components/responsive/MobileCardList'
 
 export default async function ExpensesPage() {
   const session = await auth()
@@ -56,37 +58,52 @@ export default async function ExpensesPage() {
         <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--line)' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 800, margin: 0 }}>Expense Records</h2>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="ct-table">
-            <thead>
-              <tr>
-                <th>Description</th>
-                <th>Site</th>
-                <th>Category</th>
-                <th>Amount</th>
-                <th>Date</th>
-                <th>By</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {expenses.map(e => (
-                <tr key={e.id}>
-                  <td>
-                    <div style={{ fontWeight: 700, maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.description}</div>
-                    {e.billNumber && <div style={{ fontSize: '11px', color: 'var(--mut)', fontWeight: 500 }}>#{e.billNumber}</div>}
-                  </td>
-                  <td style={{ fontSize: '12.5px', color: 'var(--mut)', fontWeight: 600 }}>{e.site.name}</td>
-                  <td><span className="chip chip-blue" style={{ fontSize: '10px' }}>{categoryLabels[e.category] ?? e.category}</span></td>
-                  <td style={{ fontWeight: 800, fontSize: '14px' }}>{formatCurrency(Number(e.amount))}</td>
-                  <td style={{ fontSize: '12px', color: 'var(--mut)', fontWeight: 500, whiteSpace: 'nowrap' }}>{formatDate(e.billDate ?? e.createdAt)}</td>
-                  <td style={{ fontSize: '12px', color: 'var(--mut)', fontWeight: 600 }}>{e.createdBy.name}</td>
-                  <td><span className={`chip chip-${statusColor[e.approvalStatus] ?? 'mut'}`}>{e.approvalStatus}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          <div style={{ overflowX: 'auto' }}>
+            <ResponsiveTable
+              desktopView={
+                <table className="ct-table">
+                  <thead>
+                    <tr>
+                      <th>Description</th>
+                      <th>Site</th>
+                      <th>Category</th>
+                      <th>Amount</th>
+                      <th>Date</th>
+                      <th>By</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expenses.map(e => (
+                      <tr key={e.id}>
+                        <td>
+                          <div style={{ fontWeight: 700, maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.description}</div>
+                          {e.billNumber && <div style={{ fontSize: '11px', color: 'var(--mut)', fontWeight: 500 }}>#{e.billNumber}</div>}
+                        </td>
+                        <td style={{ fontSize: '12.5px', color: 'var(--mut)', fontWeight: 600 }}>{e.site.name}</td>
+                        <td><span className="chip chip-blue" style={{ fontSize: '10px' }}>{categoryLabels[e.category] ?? e.category}</span></td>
+                        <td style={{ fontWeight: 800, color: 'var(--ink)' }}>{formatCurrency(Number(e.amount))}</td>
+                        <td style={{ fontSize: '12px', color: 'var(--mut)', fontWeight: 600 }}>{formatDate(e.billDate ?? e.createdAt)}</td>
+                        <td style={{ fontSize: '12px', color: 'var(--mut)', fontWeight: 600 }}>{e.createdBy.name}</td>
+                        <td><span className={`chip chip-${statusColor[e.approvalStatus] ?? 'mut'}`}>{e.approvalStatus}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              }
+              mobileView={
+                <MobileCardList
+                  items={expenses.map(e => ({
+                    id: e.id,
+                    title: e.description || 'Expense',
+                    subtitle: `${e.site.name} • ${formatDate(e.billDate ?? e.createdAt)}`,
+                    meta: <div style={{ fontSize: '14px', fontWeight: 800, marginTop: '4px' }}>{formatCurrency(Number(e.amount))}</div>,
+                    statusNode: <span className={`chip chip-${statusColor[e.approvalStatus] ?? 'mut'}`} style={{ fontSize: '10px' }}>{e.approvalStatus}</span>
+                  }))}
+                />
+              }
+            />
+          </div>
       </div>
     </div>
   )

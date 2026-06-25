@@ -2,12 +2,15 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { getInitials, formatDateTime } from '@/lib/utils'
+import { getInitials } from '@/lib/utils'
+import ResponsiveTable from '@/components/responsive/ResponsiveTable'
+import MobileCardList from '@/components/responsive/MobileCardList'
+import { CompanyStatus } from '@prisma/client'
 
 export default async function CompaniesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ [key: string]: string | undefined }>
 }) {
   const session = await auth()
   if (session?.user?.role !== 'SUPER_ADMIN') redirect('/dashboard')
@@ -16,7 +19,7 @@ export default async function CompaniesPage({
   const tab = resolvedSearchParams.tab || 'all'
 
   const companies = await prisma.company.findMany({
-    where: tab === 'all' ? {} : { status: tab.toUpperCase() as any },
+    where: tab === 'all' ? {} : { status: tab.toUpperCase() as CompanyStatus },
     include: {
       members: { where: { role: 'COMPANY_ADMIN' }, include: { user: true } },
       sites: true,
@@ -83,98 +86,135 @@ export default async function CompaniesPage({
         </div>
 
         <div className="ct-card" style={{ overflowX: 'auto' }}>
-          <table className="ct-table">
-            <thead>
-              <tr>
-                <th>Company</th>
-                <th>Owner</th>
-                <th>Plan</th>
-                <th>Sites</th>
-                <th>Users</th>
-                <th>Storage</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companies.map(c => {
-                const owner = c.members[0]?.user
-                const maxUsers = 50 // Mock max users based on plan
-                const maxSites = 10 // Mock max sites
-                
-                const sitePct = Math.min((c._count.sites / maxSites) * 100, 100)
-                const userPct = Math.min((c._count.members / maxUsers) * 100, 100)
-                
-                let stCls = 'chip-green'
-                if (c.status === 'TRIAL') stCls = 'chip-amber'
-                if (c.status === 'SUSPENDED') stCls = 'chip-red'
-
-                return (
-                  <tr key={c.id}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ 
-                          width: '40px', height: '40px', borderRadius: '10px', 
-                          background: `linear-gradient(135deg, var(--p), var(--p3))`,
-                          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '14px', fontWeight: 700
-                        }}>
-                          {getInitials(c.name)}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--ink)' }}>{c.name}</div>
-                          <div style={{ fontSize: '12px', color: 'var(--mut)', marginTop: '2px' }}>
-                            {c.city} • since {new Date(c.createdAt).getFullYear()}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 600, fontSize: '13px' }}>{owner?.name || 'No Owner'}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--mut)', marginTop: '2px' }}>{owner?.phone || owner?.email || '-'}</div>
-                    </td>
-                    <td>
-                      <div className="chip chip-blue">{c.plan || 'PRO'}</div>
-                    </td>
-                    <td>
-                      <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>{c._count.sites} of {maxSites} used</div>
-                      <div className="ct-progress">
-                        <div className={`ct-progress-fill ${sitePct > 90 ? 'red' : sitePct > 75 ? 'amber' : ''}`} style={{ width: `${sitePct}%` }}></div>
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>{c._count.members} of {maxUsers} active</div>
-                      <div className="ct-progress">
-                        <div className={`ct-progress-fill ${userPct > 90 ? 'red' : userPct > 75 ? 'amber' : ''}`} style={{ width: `${userPct}%` }}></div>
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 600, fontSize: '13px' }}>{(Number(c.storageUsed) / (1024 * 1024)).toFixed(1)} MB</div>
-                    </td>
-                    <td>
-                      <div className={`chip ${stCls}`}>
-                        <span className="chip-dot"></span>
-                        {c.status}
-                      </div>
-                    </td>
-                    <td>
-                      <Link href={`/super-admin/companies/${c.id}`} style={{ textDecoration: 'none' }}>
-                        <div className="btn-ghost" style={{ padding: '6px 12px', fontSize: '12px' }}>Manage</div>
-                      </Link>
-                    </td>
+          <ResponsiveTable
+            desktopView={
+              <table className="ct-table">
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th>Owner</th>
+                    <th>Plan</th>
+                    <th>Sites</th>
+                    <th>Users</th>
+                    <th>Storage</th>
+                    <th>Status</th>
+                    <th>Action</th>
                   </tr>
-                )
-              })}
-              
-              {companies.length === 0 && (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--mut)' }}>
-                    No companies found for this status.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {companies.map(c => {
+                    const owner = c.members[0]?.user
+                    const maxUsers = 50 // Mock max users based on plan
+                    const maxSites = 10 // Mock max sites
+                    
+                    const sitePct = Math.min((c._count.sites / maxSites) * 100, 100)
+                    const userPct = Math.min((c._count.members / maxUsers) * 100, 100)
+                    
+                    let stCls = 'chip-green'
+                    if (c.status === 'TRIAL') stCls = 'chip-amber'
+                    if (c.status === 'SUSPENDED') stCls = 'chip-red'
+
+                    return (
+                      <tr key={c.id}>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ 
+                              width: '40px', height: '40px', borderRadius: '10px', 
+                              background: `linear-gradient(135deg, var(--p), var(--p3))`,
+                              color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '14px', fontWeight: 700
+                            }}>
+                              {getInitials(c.name)}
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--ink)' }}>{c.name}</div>
+                              <div style={{ fontSize: '12px', color: 'var(--mut)', marginTop: '2px' }}>
+                                {c.city} • since {new Date(c.createdAt).getFullYear()}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600, fontSize: '13px' }}>{owner?.name || 'No Owner'}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--mut)', marginTop: '2px' }}>{owner?.phone || owner?.email || '-'}</div>
+                        </td>
+                        <td>
+                          <div className="chip chip-blue">{c.plan || 'PRO'}</div>
+                        </td>
+                        <td>
+                          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>{c._count.sites} of {maxSites} used</div>
+                          <div className="ct-progress">
+                            <div className={`ct-progress-fill ${sitePct > 90 ? 'red' : sitePct > 75 ? 'amber' : ''}`} style={{ width: `${sitePct}%` }}></div>
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>{c._count.members} of {maxUsers} active</div>
+                          <div className="ct-progress">
+                            <div className={`ct-progress-fill ${userPct > 90 ? 'red' : userPct > 75 ? 'amber' : ''}`} style={{ width: `${userPct}%` }}></div>
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600, fontSize: '13px' }}>{(Number(c.storageUsed) / (1024 * 1024)).toFixed(1)} MB</div>
+                        </td>
+                        <td>
+                          <div className={`chip ${stCls}`}>
+                            <span className="chip-dot"></span>
+                            {c.status}
+                          </div>
+                        </td>
+                        <td>
+                          <Link href={`/super-admin/companies/${c.id}`} style={{ textDecoration: 'none' }}>
+                            <div className="btn-ghost" style={{ padding: '6px 12px', fontSize: '12px' }}>Manage</div>
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  
+                  {companies.length === 0 && (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--mut)' }}>
+                        No companies found for this status.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            }
+            mobileView={
+              <MobileCardList
+                items={companies.map(c => {
+                  const owner = c.members[0]?.user
+                  let stCls = 'chip-green'
+                  if (c.status === 'TRIAL') stCls = 'chip-amber'
+                  if (c.status === 'SUSPENDED') stCls = 'chip-red'
+
+                  return {
+                    id: c.id,
+                    title: c.name,
+                    subtitle: owner ? owner.email : 'No owner',
+                    meta: (
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                        <span className="chip chip-blue" style={{ fontSize: '9px' }}>{c.plan || 'PRO'}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--mut)', fontWeight: 600 }}>{c._count.sites} sites</span>
+                      </div>
+                    ),
+                    statusNode: <span className={`chip ${stCls}`} style={{ fontSize: '10px' }}><span className="chip-dot"></span>{c.status}</span>,
+                    avatar: (
+                      <div style={{ 
+                        width: '40px', height: '40px', borderRadius: '10px', 
+                        background: `linear-gradient(135deg, var(--p), var(--p3))`,
+                        color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '14px', fontWeight: 700
+                      }}>
+                        {getInitials(c.name)}
+                      </div>
+                    )
+                  }
+                })}
+              />
+            }
+          />
         </div>
       </div>
     </>

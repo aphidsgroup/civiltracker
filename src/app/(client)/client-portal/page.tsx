@@ -27,7 +27,7 @@ export default async function ClientPortal() {
           <svg className="svg28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
         </div>
         <div className="modt">No projects found</div>
-        <div className="mods">You haven't been assigned to any active projects yet. Please contact your builder.</div>
+        <div className="mods">You haven&apos;t been assigned to any active projects yet. Please contact your builder.</div>
       </div>
     )
   }

@@ -2,20 +2,19 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import DashboardSidebar from '@/components/layout/DashboardSidebar'
 import DashboardTopbar from '@/components/layout/DashboardTopbar'
+import ResponsiveShell from '@/components/responsive/ResponsiveShell'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
   return (
-    <div className="ct app admin-layout">
-      <DashboardSidebar user={session.user} />
-      <div className="main">
-        <DashboardTopbar user={session.user} />
-        <div className="content">
-          {children}
-        </div>
-      </div>
-    </div>
+    <ResponsiveShell
+      layoutClass="admin-layout"
+      sidebar={<DashboardSidebar user={session.user} />}
+      topbar={({ toggleMobileMenu }) => <DashboardTopbar user={session.user} toggleMobileMenu={toggleMobileMenu} />}
+    >
+      {children}
+    </ResponsiveShell>
   )
 }

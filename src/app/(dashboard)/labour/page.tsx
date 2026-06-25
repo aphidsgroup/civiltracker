@@ -2,6 +2,9 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import ResponsiveTable from '@/components/responsive/ResponsiveTable'
+import MobileCardList from '@/components/responsive/MobileCardList'
+import { formatCurrency } from '@/lib/utils'
 
 export const metadata = { title: 'Labour | Civil Tracker' }
 
@@ -54,40 +57,59 @@ export default async function LabourPage() {
         <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--line)' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 800, margin: 0 }}>All Workers</h2>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="ct-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Trade</th>
-                <th>Site</th>
-                <th>Daily Wage</th>
-                <th>Phone</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {labour.map(l => (
-                <tr key={l.id}>
-                  <td>
-                    <div style={{ fontWeight: 700 }}>{l.name}</div>
-                    {l.phone && <div style={{ fontSize: '11px', color: 'var(--mut)' }}>{l.phone}</div>}
-                  </td>
-                  <td><span className={`chip chip-${tradeColors[l.trade] ?? 'mut'}`}>{l.trade.replace(/_/g, ' ')}</span></td>
-                  <td style={{ fontSize: '12.5px', color: 'var(--mut)', fontWeight: 600 }}>{l.site.name}</td>
-                  <td style={{ fontWeight: 700 }}>₹{Number(l.dailyWage).toLocaleString('en-IN')}</td>
-                  <td style={{ fontSize: '12.5px', color: 'var(--mut)' }}>{l.phone ?? '-'}</td>
-                  <td>
-                    <span className={`chip chip-${l.isActive ? 'green' : 'mut'}`}>
-                      <span className="chip-dot" />
-                      {l.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          <div style={{ overflowX: 'auto' }}>
+            <ResponsiveTable
+              desktopView={
+                <table className="ct-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Trade</th>
+                      <th>Site</th>
+                      <th>Daily Wage</th>
+                      <th>Phone</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {labour.map(l => (
+                      <tr key={l.id}>
+                        <td>
+                          <div style={{ fontWeight: 700 }}>{l.name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--mut)', fontWeight: 600 }}>{l._count.attendance} days logged</div>
+                        </td>
+                        <td><span className={`chip chip-${tradeColors[l.trade] ?? 'mut'}`} style={{ fontSize: '10px' }}>{l.trade.replace('_', ' ')}</span></td>
+                        <td style={{ fontSize: '12px', color: 'var(--mut)', fontWeight: 600 }}>{l.site?.name || 'Unassigned'}</td>
+                        <td style={{ fontWeight: 700 }}>{formatCurrency(Number(l.dailyWage))}</td>
+                        <td style={{ fontSize: '12px', color: 'var(--mut)', fontWeight: 500 }}>{l.phone || '-'}</td>
+                        <td>
+                          <span className={`chip chip-${l.isActive ? 'green' : 'mut'}`}>
+                            {l.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              }
+              mobileView={
+                <MobileCardList
+                  items={labour.map(l => ({
+                    id: l.id,
+                    title: l.name,
+                    subtitle: `${l.site?.name || 'Unassigned'} • ${l._count.attendance} days logged`,
+                    meta: <div style={{ fontSize: '14px', fontWeight: 800, marginTop: '4px' }}>Wage: {formatCurrency(Number(l.dailyWage))}</div>,
+                    statusNode: (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                        <span className={`chip chip-${l.isActive ? 'green' : 'mut'}`} style={{ fontSize: '9px' }}>{l.isActive ? 'Active' : 'Inactive'}</span>
+                        <span className={`chip chip-${tradeColors[l.trade] ?? 'mut'}`} style={{ fontSize: '9px' }}>{l.trade.replace('_', ' ')}</span>
+                      </div>
+                    )
+                  }))}
+                />
+              }
+            />
+          </div>
       </div>
     </div>
   )

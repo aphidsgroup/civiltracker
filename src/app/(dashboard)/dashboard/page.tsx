@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { formatCurrency } from '@/lib/utils'
 import { redirect } from 'next/navigation'
+import ResponsiveTable from '@/components/responsive/ResponsiveTable'
+import MobileCardList from '@/components/responsive/MobileCardList'
 
 export default async function CompanyDashboard() {
   const session = await auth()
@@ -94,32 +96,47 @@ export default async function CompanyDashboard() {
               {sites.length === 0 ? (
                 <div style={{ padding: '20px', textAlign: 'center', color: 'var(--mut)' }}>No active sites</div>
               ) : (
-                <table className="ct-table">
-                  <thead>
-                    <tr>
-                      <th>Site Name</th>
-                      <th>Progress</th>
-                      <th>Spend</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sites.map(site => (
-                      <tr key={site.id}>
-                        <td>
-                          <div className="conm">{site.name}</div>
-                          <div className="csub">{site.location}</div>
-                        </td>
-                        <td>
-                          <div className="ct-progress" style={{ width: '100px' }}><div className={`ct-progress-fill ${site.progress < 50 ? 'amber' : ''}`} style={{ width: `${site.progress}%` }}></div></div>
-                          <div className="csub" style={{ marginTop: '4px' }}>{site.progress}% complete</div>
-                        </td>
-                        <td className="conm">{formatCurrency(Number(site.spent))}</td>
-                        <td><span className="chip chip-green"><span className="chip-dot"></span>{site.status}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <ResponsiveTable
+                  desktopView={
+                    <table className="ct-table">
+                      <thead>
+                        <tr>
+                          <th>Site Name</th>
+                          <th>Progress</th>
+                          <th>Spend</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sites.map(site => (
+                          <tr key={site.id}>
+                            <td>
+                              <div className="conm">{site.name}</div>
+                              <div className="csub">{site.location}</div>
+                            </td>
+                            <td>
+                              <div className="ct-progress" style={{ width: '100px' }}><div className={`ct-progress-fill ${site.progress < 50 ? 'amber' : ''}`} style={{ width: `${site.progress}%` }}></div></div>
+                              <div className="csub" style={{ marginTop: '4px' }}>{site.progress}% complete</div>
+                            </td>
+                            <td className="conm">{formatCurrency(Number(site.spent))}</td>
+                            <td><span className="chip chip-green"><span className="chip-dot"></span>{site.status}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  }
+                  mobileView={
+                    <MobileCardList
+                      items={sites.map(site => ({
+                        id: site.id,
+                        title: site.name,
+                        subtitle: site.location,
+                        meta: <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '8px' }}>Spend: {formatCurrency(Number(site.spent))}</div>,
+                        statusNode: <span className="chip chip-green"><span className="chip-dot"></span>{site.status}</span>
+                      }))}
+                    />
+                  }
+                />
               )}
             </div>
           </div>

@@ -84,7 +84,7 @@ export default async function SiteDetailPage({
           
           <div className="card">
             <div className="chead">
-              <div className="ctitle">Today's site update</div>
+              <div className="ctitle">Today&apos;s site update</div>
               <div className="csub">
                 {latestDpr ? `From DPR • ${formatDateTime(latestDpr.createdAt)}` : 'No recent updates'}
               </div>

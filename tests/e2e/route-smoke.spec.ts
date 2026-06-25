@@ -53,14 +53,14 @@ const ROUTES = [
 
 test.describe('Route Smoke Tests', () => {
   // Login first to set cookie state so protected routes don't redirect to login
-  test.beforeEach(async ({ page }) => {
-    // We will bypass full login UI for speed and use a mocked session cookie or just login once
-    await page.goto('/login');
-    await page.fill('input[type="email"]', 'admin@aphids.com');
-    await page.fill('input[type="password"]', 'password123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL('**/super-admin/dashboard*');
-  });
+    test.beforeEach(async ({ page }) => {
+      // We will bypass full login UI for speed and use a mocked session cookie or just login once
+      await page.goto('/login');
+      await page.fill('input[type="email"]', 'admin@civiltracker.in');
+      await page.fill('input[type="password"]', 'Admin@123456');
+      await page.click('button[type="submit"]');
+      await page.waitForURL('**/super-admin/dashboard*');
+    });
 
   for (const route of ROUTES) {
     test(`Route ${route} should render without 404 or 500 errors`, async ({ page }) => {

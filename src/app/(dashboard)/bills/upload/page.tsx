@@ -12,7 +12,7 @@ export default async function UploadBillPage() {
     orderBy: { name: 'asc' }
   })
 
-  async function uploadBill(formData: FormData) {
+  async function uploadBill(_formData: FormData) {
     'use server'
     const session = await auth()
     if (!session?.user?.companyId) throw new Error('Unauthorized')
