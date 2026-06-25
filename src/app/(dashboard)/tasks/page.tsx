@@ -1,15 +1,98 @@
-export default function Page() {
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { redirect } from 'next/navigation'
+
+const STATUS_COLOR: Record<string, string> = {
+  NOT_STARTED: '', IN_PROGRESS: 'chip-blue', DELAYED: 'chip-red', COMPLETED: 'chip-green',
+}
+
+export default async function TasksPage() {
+  const session = await auth()
+  if (!session?.user?.companyId) redirect('/login')
+  const { companyId } = session.user
+
+  const tasks = await prisma.task.findMany({
+    where: { companyId },
+    include: { site: { select: { name: true } } },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  const notStarted = tasks.filter(t => t.status === 'NOT_STARTED').length
+  const inProgress = tasks.filter(t => t.status === 'IN_PROGRESS').length
+  const completed  = tasks.filter(t => t.status === 'COMPLETED').length
+  const delayed    = tasks.filter(t => t.status === 'DELAYED').length
+
   return (
-    <div className="module">
-      <div className="modic">
-        <svg className="svg28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+    <>
+      <div className="topbar">
+        <div className="title">Tasks</div>
       </div>
-      <div className="modt">TASKS Module</div>
-      <div className="mods">This module is currently being configured for your workspace. It will be available shortly.</div>
-      <button className="modbtn">
-        <svg className="svg18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        Return to Dashboard
-      </button>
-    </div>
+
+      <div style={{ padding: '20px' }}>
+        <div className="kpis" style={{ marginBottom: '20px' }}>
+          {[
+            { label: 'Not Started', value: notStarted },
+            { label: 'In Progress', value: inProgress },
+            { label: 'Completed',   value: completed },
+            { label: 'Delayed',     value: delayed },
+          ].map(k => (
+            <div key={k.label} className="kpi">
+              <div className="klbl">{k.label}</div>
+              <div className="knum">{k.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {tasks.length === 0 ? (
+          <div className="ct-card" style={{ padding: '60px 20px', textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+            <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 6 }}>No tasks yet</div>
+            <div style={{ fontSize: 13, color: 'var(--mut)' }}>Tasks are created per site to track work items and milestones.</div>
+          </div>
+        ) : (
+          <div className="ct-card" style={{ overflowX: 'auto' }}>
+            <table className="ct-table">
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Site</th>
+                  <th>Stage</th>
+                  <th>Progress</th>
+                  <th>Due Date</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.map(t => (
+                  <tr key={t.id}>
+                    <td>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{t.name}</div>
+                      {t.description && <div style={{ fontSize: 12, color: 'var(--mut)', marginTop: 2 }}>{t.description.substring(0, 60)}{t.description.length > 60 ? '…' : ''}</div>}
+                    </td>
+                    <td style={{ fontSize: 13, color: 'var(--mut)' }}>{t.site.name}</td>
+                    <td style={{ fontSize: 12, fontWeight: 600 }}>{String(t.stage).replace(/_/g, ' ')}</td>
+                    <td>
+                      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}>{t.progress}%</div>
+                      <div className="ct-progress" style={{ width: 80 }}>
+                        <div className="ct-progress-fill" style={{ width: `${t.progress}%` }}></div>
+                      </div>
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--mut)' }}>
+                      {t.dueDate ? new Date(t.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}
+                    </td>
+                    <td>
+                      <span className={`chip ${STATUS_COLOR[t.status] ?? ''}`}
+                        style={{ fontSize: 11, fontWeight: 700, ...(!STATUS_COLOR[t.status] ? { background: '#eef2f6', color: 'var(--mut)' } : {}) }}>
+                        <span className="chip-dot"></span>{String(t.status).replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
