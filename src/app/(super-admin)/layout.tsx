@@ -12,7 +12,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
     <ResponsiveShell
       layoutClass="sa-layout"
       sidebar={<SuperAdminSidebar />}
-      topbar={({ toggleMobileMenu }) => <SuperAdminTopbar toggleMobileMenu={toggleMobileMenu} />}
+      topbar={<SuperAdminTopbar />}
     >
       {children}
     </ResponsiveShell>
