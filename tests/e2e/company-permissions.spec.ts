@@ -10,6 +10,7 @@ test.describe('Phase 9 Company Permissions & Limits', () => {
     await page.fill('input[name="email"]', 'arun@madras-crafters.in')
     await page.fill('input[name="password"]', 'Admin@123456')
     await page.waitForSelector('button[data-hydrated="true"]'); await page.click('button:has-text("Sign in")')
+    await page.waitForURL('**/dashboard')
 
     await page.waitForURL(/\/dashboard/)
     

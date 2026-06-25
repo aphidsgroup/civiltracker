@@ -6,6 +6,7 @@ test.describe('Phase 9 Multi-Tenant Onboarding', () => {
     await page.fill('input[name="email"]', 'admin@civiltracker.in')
     await page.fill('input[name="password"]', 'Admin@123456')
     await page.waitForSelector('button[data-hydrated="true"]'); await page.click('button:has-text("Sign in")')
+    await page.waitForURL('**/super-admin/dashboard')
 
     
     // Dashboard should load
