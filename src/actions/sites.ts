@@ -73,7 +73,10 @@ export async function createSite(data: any) {
 export async function updateSite(siteId: string, data: any) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const user = await requirePermission('sites.update')
-  await requireCompanyAccess(siteId, 'site')
+  
+  const existingSite = await prisma.site.findUnique({ where: { id: siteId } })
+  if (!existingSite) throw new Error('Site not found')
+  await requireCompanyAccess(existingSite.companyId)
 
   await prisma.site.update({
     where: { id: siteId },
