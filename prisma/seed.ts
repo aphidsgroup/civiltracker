@@ -60,13 +60,13 @@ async function main() {
 
   // ── Company ──────────────────────────────────────────────────
   const company = await prisma.company.create({
-    data: { name: 'Madras Crafters', slug: 'madras-crafters', gst: '33ABCMC1234F1Z5', phone: '+91 44 4000 5000', email: 'info@madrascrafters.in', address: '14, Anna Salai', city: 'Chennai', state: 'Tamil Nadu', pincode: '600002', status: 'ACTIVE', plan: 'Growth' },
+    data: { name: 'Madras Crafters', slug: 'madras-crafters', gst: '33ABCMC1234F1Z5', phone: '+91 44 4000 5000', email: 'info@madrascrafters.in', address: '14, Anna Salai', city: 'Chennai', state: 'Tamil Nadu', pincode: '600002', status: 'ACTIVE', plan: 'GROWTH' },
   })
   await prisma.companySubscription.create({ data: { companyId: company.id, planId: growthPlan.id } })
 
   // 2nd company for Super Admin demo
   const company2 = await prisma.company.create({
-    data: { name: 'SKB Constructions', slug: 'skb-constructions', gst: '29ABCSK4321H1Z1', phone: '+91 80 2200 3300', email: 'info@skbconstructions.in', city: 'Bangalore', state: 'Karnataka', status: 'TRIAL', plan: 'Starter' },
+    data: { name: 'SKB Constructions', slug: 'skb-constructions', gst: '29ABCSK4321H1Z1', phone: '+91 80 2200 3300', email: 'info@skbconstructions.in', city: 'Bangalore', state: 'Karnataka', status: 'ACTIVE', plan: 'STARTER' },
   })
   await prisma.companySubscription.create({ data: { companyId: company2.id, planId: starterPlan.id } })
 
@@ -150,8 +150,8 @@ async function main() {
   console.log('✅ Expenses created')
 
   // ── Approvals (from Expenses) ────────────────────────────────
-  await prisma.approval.create({ data: { companyId: company.id, siteId: annaNagar.id, entityType: 'EXPENSE', entityId: exp1.id, title: 'Expense: ' + exp1.description, amount: exp1.amount, requestedById: murugan.id, currentStatus: 'PENDING' } })
-  await prisma.approval.create({ data: { companyId: company.id, siteId: tambaram.id, entityType: 'EXPENSE', entityId: exp6.id, title: 'Expense: ' + exp6.description, amount: exp6.amount, requestedById: murugan.id, currentStatus: 'PENDING' } })
+  await prisma.approval.create({ data: { companyId: company.id, siteId: annaNagar.id, module: 'EXPENSE', entityType: 'EXPENSE', entityId: exp1.id, title: 'Expense: ' + exp1.description, amount: exp1.amount, requestedById: murugan.id, currentStatus: 'PENDING' } })
+  await prisma.approval.create({ data: { companyId: company.id, siteId: tambaram.id, module: 'EXPENSE', entityType: 'EXPENSE', entityId: exp6.id, title: 'Expense: ' + exp6.description, amount: exp6.amount, requestedById: murugan.id, currentStatus: 'PENDING' } })
   console.log('✅ Expense approvals created')
 
   // ── Materials ─────────────────────────────────────────────────
@@ -224,11 +224,11 @@ async function main() {
   // ── Approvals ─────────────────────────────────────────────────
   await prisma.approval.createMany({
     data: [
-      { companyId: company.id, siteId: annaNagar.id, entityType: 'BILL', entityId: 'seed-bill-1', title: 'Cement Bill: 150 Bags UltraTech', amount: 64500, description: 'Invoice #UD-442 from Sree Dhanalakshmi Traders for foundation work.', priority: 'HIGH', requestedById: murugan.id, currentStatus: 'PENDING' },
-      { companyId: company.id, siteId: annaNagar.id, entityType: 'SALARY_RUN', entityId: 'seed-sal-1', title: 'Weekly Labour Wages (Week 24)', amount: 142000, description: 'Wages for 22 masons and 18 helpers across Anna Nagar site.', priority: 'URGENT', requestedById: priya.id, currentStatus: 'PENDING' },
-      { companyId: company.id, siteId: annaNagar.id, entityType: 'MATERIAL_REQUEST', entityId: 'seed-mat-1', title: 'Steel Rebar Fe500D (8MT)', amount: 480000, description: 'Required for 2nd floor roof slab reinforcement.', priority: 'NORMAL', requestedById: murugan.id, currentStatus: 'APPROVED', approvedById: arun.id, approvedAt: new Date() },
-      { companyId: company.id, siteId: porur.id, entityType: 'EXPENSE', entityId: 'seed-exp-1', title: 'Diesel for JCB Excavator', amount: 8500, description: 'Petty cash voucher for 85L diesel.', priority: 'NORMAL', requestedById: vetrivel.id, currentStatus: 'PAID', approvedById: arun.id, approvedAt: new Date() },
-      { companyId: company.id, siteId: annaNagar.id, entityType: 'DPR', entityId: 'seed-dpr-1', title: 'DPR: 2nd Floor Column Shuttering', amount: null, description: 'Work completed: Shuttering for 14 columns.\nLabour count: 18.', priority: 'NORMAL', requestedById: murugan.id, currentStatus: 'PENDING' },
+      { companyId: company.id, siteId: annaNagar.id, module: 'BILL', entityType: 'BILL', entityId: 'seed-bill-1', title: 'Cement Bill: 150 Bags UltraTech', amount: 64500, description: 'Invoice #UD-442 from Sree Dhanalakshmi Traders for foundation work.', priority: 'HIGH', requestedById: murugan.id, currentStatus: 'PENDING' },
+      { companyId: company.id, siteId: annaNagar.id, module: 'SALARY', entityType: 'SALARY_RUN', entityId: 'seed-sal-1', title: 'Weekly Labour Wages (Week 24)', amount: 142000, description: 'Wages for 22 masons and 18 helpers across Anna Nagar site.', priority: 'URGENT', requestedById: priya.id, currentStatus: 'PENDING' },
+      { companyId: company.id, siteId: annaNagar.id, module: 'PURCHASE_REQUEST', entityType: 'MATERIAL_REQUEST', entityId: 'seed-mat-1', title: 'Steel Rebar Fe500D (8MT)', amount: 480000, description: 'Required for 2nd floor roof slab reinforcement.', priority: 'NORMAL', requestedById: murugan.id, currentStatus: 'APPROVED', approvedById: arun.id, approvedAt: new Date() },
+      { companyId: company.id, siteId: porur.id, module: 'EXPENSE', entityType: 'EXPENSE', entityId: 'seed-exp-1', title: 'Diesel for JCB Excavator', amount: 8500, description: 'Petty cash voucher for 85L diesel.', priority: 'NORMAL', requestedById: vetrivel.id, currentStatus: 'PAID', approvedById: arun.id, approvedAt: new Date() },
+      { companyId: company.id, siteId: annaNagar.id, module: 'DOCUMENT', entityType: 'DPR', entityId: 'seed-dpr-1', title: 'DPR: 2nd Floor Column Shuttering', amount: null, description: 'Work completed: Shuttering for 14 columns.\nLabour count: 18.', priority: 'NORMAL', requestedById: murugan.id, currentStatus: 'PENDING' },
     ],
   })
   console.log('✅ Approvals created')

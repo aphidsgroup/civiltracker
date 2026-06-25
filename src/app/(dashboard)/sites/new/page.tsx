@@ -1,89 +1,214 @@
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { createSite } from '@/actions/sites'
+import { requirePermission } from '@/lib/auth/require-permission'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { Building2, MapPin, Receipt, Calendar, Users, ArrowRight, Wallet, HardHat } from 'lucide-react'
 
-export default async function CreateSitePage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+export default async function NewSitePage() {
+  await requirePermission('sites.create')
 
-  const clients = await prisma.user.findMany({
-    where: { 
-      role: 'CLIENT',
-      companyMembers: { some: { companyId: session.user.companyId } }
-    },
-    orderBy: { name: 'asc' }
-  })
-
-  async function createSite(formData: FormData) {
+  async function submitAction(formData: FormData) {
     'use server'
-    const session = await auth()
-    if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-    const name = formData.get('name') as string
-    const location = formData.get('location') as string
-    const budget = Number(formData.get('budget'))
-    const clientId = formData.get('clientId') as string || null
-    
-    await prisma.site.create({
-      data: {
-        name,
-        slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-        location,
-        budget,
-        clientId,
-        companyId: session.user.companyId,
-        status: 'PLANNING',
-      }
-    })
-
-    redirect('/sites')
+    const data = Object.fromEntries(formData.entries())
+    const res = await createSite(data)
+    if (res?.success) {
+      redirect(`/sites`)
+    }
   }
 
   return (
-    <>
-      <div className="topbar">
-        <div className="title">Create Project Site</div>
+    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-slate-50 via-indigo-50/30 to-slate-50 p-6 md:p-8 relative overflow-hidden rounded-tl-3xl border-t border-l border-white/50">
+      {/* Background Decorative Elements */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none -z-10">
+        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 rounded-full bg-indigo-500/10 blur-[100px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[30rem] h-[30rem] rounded-full bg-teal-500/10 blur-[100px]" />
       </div>
-      
-      <div style={{ padding: '24px' }}>
-        <form action={createSite} className="formcard">
-          <div className="fgrid">
-            <div className="field span2">
-              <label className="flabel">Project name</label>
-              <input name="name" className="inp" placeholder="e.g. Marina Bay Sands Extension" required />
-            </div>
+
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <Link href="/sites" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors mb-2">
+            <ArrowRight className="w-4 h-4 mr-1 rotate-180" />
+            Back to Sites
+          </Link>
+          <h1 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 to-teal-600">
+            Create New Project
+          </h1>
+          <p className="text-slate-500 mt-2">Enter the details of your new construction site to get started.</p>
+        </div>
+
+        {/* Form Container */}
+        <form action={submitAction} className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-150 fill-mode-both">
+          {/* Glassmorphic Panel */}
+          <div className="bg-white/60 backdrop-blur-xl border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl p-6 md:p-8">
             
-            <div className="field span2">
-              <label className="flabel">Location</label>
-              <input name="location" className="inp" placeholder="e.g. 10 Bayfront Ave, Singapore" required />
+            {/* Section 1: Project Details */}
+            <div className="mb-10">
+              <div className="flex items-center gap-2 mb-6 border-b border-slate-200/50 pb-3">
+                <div className="p-2.5 bg-indigo-100/50 rounded-xl text-indigo-600 shadow-sm border border-indigo-100">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <h2 className="text-xl font-semibold text-slate-800">Project Details</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2 col-span-1 md:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">Project Name *</label>
+                  <input name="name" required placeholder="e.g. Skyline Towers" className="w-full bg-white/50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300" />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Location *</label>
+                  <div className="relative group">
+                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                    <input name="location" required placeholder="City, Region" className="w-full bg-white/50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Detailed Address</label>
+                  <div className="relative group">
+                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                    <input name="address" placeholder="Full street address" className="w-full bg-white/50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Project Type</label>
+                  <div className="relative group">
+                    <HardHat className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                    <select name="projectType" className="w-full bg-white/50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300 appearance-none">
+                      <option value="">Select type...</option>
+                      <option value="RESIDENTIAL">Residential</option>
+                      <option value="COMMERCIAL">Commercial</option>
+                      <option value="INDUSTRIAL">Industrial</option>
+                      <option value="INFRASTRUCTURE">Infrastructure</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Contract Type</label>
+                  <div className="relative group">
+                    <Receipt className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                    <select name="contractType" className="w-full bg-white/50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300 appearance-none">
+                      <option value="">Select type...</option>
+                      <option value="LUMPSUM">Lumpsum</option>
+                      <option value="ITEM_RATE">Item Rate</option>
+                      <option value="TURNKEY">Turnkey</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Total Area (Sqft)</label>
+                  <input name="areaSqft" type="number" placeholder="e.g. 15000" className="w-full bg-white/50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300" />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Number of Floors</label>
+                  <input name="floors" type="number" placeholder="e.g. 5" className="w-full bg-white/50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300" />
+                </div>
+              </div>
             </div>
-            
-            <div className="field">
-              <label className="flabel">Project budget (₹)</label>
-              <input name="budget" type="number" className="inp" placeholder="10000000" required />
+
+            {/* Section 2: Financials & Dates */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-10">
+              {/* Financials */}
+              <div className="bg-slate-50/50 rounded-2xl p-6 border border-slate-100 shadow-sm">
+                <div className="flex items-center gap-2 mb-6 border-b border-slate-200/50 pb-3">
+                  <div className="p-2.5 bg-emerald-100/50 rounded-xl text-emerald-600 shadow-sm border border-emerald-100">
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-slate-800">Financials</h2>
+                </div>
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Budget (₹) *</label>
+                    <input name="budget" required type="number" placeholder="e.g. 50000000" className="w-full bg-white/70 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Contract Value (₹)</label>
+                    <input name="contractValue" type="number" placeholder="e.g. 55000000" className="w-full bg-white/70 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Dates */}
+              <div className="bg-slate-50/50 rounded-2xl p-6 border border-slate-100 shadow-sm">
+                <div className="flex items-center gap-2 mb-6 border-b border-slate-200/50 pb-3">
+                  <div className="p-2.5 bg-amber-100/50 rounded-xl text-amber-600 shadow-sm border border-amber-100">
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-slate-800">Timeline</h2>
+                </div>
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Start Date</label>
+                    <input name="startDate" type="date" className="w-full bg-white/70 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">Target End Date</label>
+                    <input name="targetEndDate" type="date" className="w-full bg-white/70 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300" />
+                  </div>
+                </div>
+              </div>
             </div>
-            
-            <div className="field">
-              <label className="flabel">Assign Client (Optional)</label>
-              <select name="clientId" className="inp" defaultValue="">
-                <option value="">No client assigned yet</option>
-                {clients.map(c => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.email})</option>
-                ))}
-              </select>
+
+            {/* Section 3: Client Details */}
+            <div>
+              <div className="flex items-center gap-2 mb-6 border-b border-slate-200/50 pb-3">
+                <div className="p-2.5 bg-blue-100/50 rounded-xl text-blue-600 shadow-sm border border-blue-100">
+                  <Users className="w-5 h-5" />
+                </div>
+                <h2 className="text-xl font-semibold text-slate-800">Client Details</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Client Name</label>
+                  <input name="clientName" placeholder="John Doe" className="w-full bg-white/50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Client Phone</label>
+                  <input name="clientPhone" placeholder="+91 9876543210" className="w-full bg-white/50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Client Email</label>
+                  <input name="clientEmail" type="email" placeholder="john@example.com" className="w-full bg-white/50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 focus:bg-white shadow-sm transition-all duration-300 hover:border-slate-300" />
+                </div>
+              </div>
             </div>
+
           </div>
-          
-          <div className="formfoot">
-            <Link href="/sites" className="btnG" style={{ textDecoration: 'none' }}>Cancel</Link>
-            <button type="submit" className="btnP" style={{ border: 'none', fontFamily: 'inherit' }}>
-              <svg className="svg18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l4 4 10-10"/></svg>
-              Create Project
+
+          {/* Form Actions */}
+          <div className="flex items-center justify-end gap-4 mt-8 pb-10">
+            <Link 
+              href="/sites" 
+              className="px-6 py-3 rounded-xl text-slate-600 font-medium hover:bg-slate-200/50 transition-colors duration-300 hover:text-slate-900"
+            >
+              Cancel
+            </Link>
+            <button 
+              type="submit" 
+              className="group relative px-8 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-indigo-600 to-teal-500 hover:from-indigo-500 hover:to-teal-400 shadow-[0_8px_20px_rgb(79,70,229,0.3)] hover:shadow-[0_8px_25px_rgb(79,70,229,0.4)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 transition-all duration-300 overflow-hidden"
+            >
+              <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
+              <span className="relative flex items-center gap-2">
+                Create Project
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </span>
             </button>
           </div>
         </form>
       </div>
-    </>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes shimmer {
+          100% { transform: translateX(100%); }
+        }
+      `}} />
+    </div>
   )
 }
