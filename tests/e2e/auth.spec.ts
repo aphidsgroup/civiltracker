@@ -18,7 +18,8 @@ test.describe('Authentication', () => {
     if (await emailInput.count() > 0 && await emailInput.isVisible()) {
       await emailInput.fill('test@example.com');
       await page.locator('input[type="password"], input[name="password"]').fill('password123');
-      await page.locator('button[type="submit"]').click();
+      await page.waitForTimeout(1000); await page.locator('button:has-text("Sign in")').click()
+;
     }
   });
 });

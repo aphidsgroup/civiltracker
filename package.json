@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "eslint",
     "db:push": "prisma db push",
@@ -72,5 +72,8 @@
     "typescript": "^5",
     "vite": "^8.1.0",
     "vitest": "^4.1.9"
+  },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
   }
 }

@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 interface ResponsiveShellProps {
   children: React.ReactNode
   sidebar: React.ReactNode
-  topbar: (props: { toggleMobileMenu: () => void }) => React.ReactNode
+  topbar: React.ReactNode
   layoutClass: string
 }
 
@@ -19,6 +19,13 @@ export default function ResponsiveShell({ children, sidebar, topbar, layoutClass
     // eslint-disable-next-line
     setIsMobileMenuOpen(false)
   }, [pathname])
+
+  // Listen for custom toggle event from topbars
+  useEffect(() => {
+    const handleToggle = () => setIsMobileMenuOpen(prev => !prev)
+    document.addEventListener('toggle-mobile-menu', handleToggle)
+    return () => document.removeEventListener('toggle-mobile-menu', handleToggle)
+  }, [])
 
   return (
     <div className={`ct app ${layoutClass}`}>
@@ -40,7 +47,7 @@ export default function ResponsiveShell({ children, sidebar, topbar, layoutClass
       )}
 
       <div className="main">
-        {topbar({ toggleMobileMenu: () => setIsMobileMenuOpen(!isMobileMenuOpen) })}
+        {topbar}
         <div className="content">
           {children}
         </div>

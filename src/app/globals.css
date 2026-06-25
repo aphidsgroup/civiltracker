@@ -460,7 +460,7 @@
 
 /* Source: Civil Tracker Super Admin.dc.html */
 .ct{--p:#13558e;--p2:#0e3e69;--ink:#16273a;--mut:#647387;--bg:#f2f5f8;--line:#e4eaf0;--amber:#e08a0b;--green:#138a4e;--red:#d9483b;--violet:#5b47b8;font-family:'Inter',system-ui,sans-serif;color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased;letter-spacing:-.01em}
-.sa-layout {
+.sa-layout{}
 .ct *{box-sizing:border-box}
 .app{display:flex;height:100vh;width:100%;background:var(--bg);overflow:hidden}
 .side{width:248px;flex-shrink:0;background:linear-gradient(180deg,#0a1d33,#08172a);color:#cdd9e6;display:flex;flex-direction:column;padding:18px 14px 14px}
@@ -693,9 +693,6 @@
 .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:60;background:#16273a;color:#fff;border-radius:13px;padding:13px 18px;font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:10px;box-shadow:0 16px 34px -10px rgba(0,0,0,.5)}
 .toast .tk{width:22px;height:22px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .svg{width:20px;height:20px}.svg22{width:22px;height:22px}.svg16{width:16px;height:16px}.svg18{width:18px;height:18px}.svg14{width:14px;height:14px}
-
-
-}
 
 /* =========================================
    PHASE 5: RESPONSIVE LAYOUT SYSTEM

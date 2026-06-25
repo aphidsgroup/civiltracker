@@ -14,7 +14,7 @@ export default async function ReportsDashboard() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Financial Overview</h1>
-          <p className="text-sm text-mut">Founder's snapshot of site costs, budget usage, and liabilities.</p>
+          <p className="text-sm text-mut">Founder&apos;s snapshot of site costs, budget usage, and liabilities.</p>
         </div>
         <div className="flex gap-2">
           <Link href="/reports/export-history" className="btn-ghost text-sm">Export History</Link>

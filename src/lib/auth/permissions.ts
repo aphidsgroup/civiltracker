@@ -4,3 +4,6 @@ export * from './require-role'
 export * from './require-permission'
 export * from './require-company-access'
 export * from './tenant-scope'
+export * from './require-module'
+ 
+ 

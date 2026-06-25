@@ -1,4 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Load local playwright env if exists
+dotenv.config({ path: path.resolve(__dirname, '.env.playwright.local'), override: true });
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -11,6 +16,10 @@ export default defineConfig({
     baseURL: process.env.BASE_URL || 'http://127.0.0.1:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    extraHTTPHeaders: (process.env.BASE_URL?.includes('vercel.app') && process.env.VERCEL_AUTOMATION_BYPASS_SECRET) ? {
+      'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+      'x-vercel-set-bypass-cookie': 'true',
+    } : undefined,
   },
   projects: [
     {
@@ -35,8 +44,9 @@ export default defineConfig({
     },
   ],
   webServer: process.env.BASE_URL ? undefined : {
-    command: 'npm run dev',
+    command: 'npm run build && npm run start',
     url: 'http://127.0.0.1:3000',
     reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
   },
 });

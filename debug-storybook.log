@@ -1,0 +1,343 @@
+[11:08:59.350] [DEBUG] Command "yarn.cmd" not found, trying next variation...
+[11:08:59.434] [DEBUG] Command "yarn.exe" not found, trying next variation...
+[11:08:59.534] [DEBUG] Command "yarn.ps1" not found, trying next variation...
+[11:09:01.717] [INFO] [36mInitializing Storybook[39m
+[11:09:01.836] [DEBUG] Command "yarn.cmd" not found, trying next variation...
+[11:09:01.922] [DEBUG] Command "yarn.exe" not found, trying next variation...
+[11:09:02.040] [DEBUG] Command "yarn.ps1" not found, trying next variation...
+[11:09:03.366] [DEBUG] Getting package.json info for D:/Civil Tracker/app/package.json...
+[11:09:03.366] [INFO] Package manager: npm
+[11:09:03.369] [DEBUG] Getting CLI versions from NPM for storybook...
+[11:09:03.370] [DEBUG] Executing command: npm info storybook version
+[11:09:03.370] [DEBUG] Resolved command variation: npm.cmd
+[11:09:05.591] [INFO] Adding Storybook version 10.4.6 to your project
+[11:09:05.593] [DEBUG] Executing command: npm config get min-release-age --workspaces=false --include-workspace-root
+[11:09:05.594] [DEBUG] Resolved command variation: npm.cmd
+[11:09:06.328] [DEBUG] Using cached package.json for D:\Civil Tracker\app\package.json...
+[11:09:06.329] [DEBUG] Project type detected: nextjs
+[11:09:06.330] [DEBUG] Using cached package.json for D:\Civil Tracker\app\package.json...
+[11:09:06.345] [INFO] Framework detected: nextjs-vite
+[11:09:06.347] [DEBUG] Getting installed version for vitest...
+[11:09:06.351] [DEBUG] Executing command: npm ls --json --depth=99 2>NUL
+[11:09:06.352] [DEBUG] Resolved command variation: npm.cmd
+[11:09:08.685] [DEBUG] Executing command: npm ls --json --depth=0 2>NUL
+[11:09:08.686] [DEBUG] Resolved command variation: npm.cmd
+[11:09:10.283] [DEBUG] Error finding installations for vitest: ExecaError: Command failed with exit code 1: npm.cmd ls --json "--depth=0" "2>NUL"
+
+npm error code EINVALIDTAGNAME
+npm error Invalid tag name "2>NUL" of package "2>NUL": Tags may not have any characters that encodeURIComponent encodes.
+npm error A complete log of this run can be found in: C:\Users\Kawinfinite PC 32\AppData\Local\npm-cache\_logs\2026-06-25T05_39_09_185Z-debug-0.log
+
+{
+  "error": {
+    "code": "EINVALIDTAGNAME",
+    "summary": "Invalid tag name \"2>NUL\" of package \"2>NUL\": Tags may not have any characters that encodeURIComponent encodes.",
+    "detail": ""
+  }
+}
+[11:09:10.283] [DEBUG] No installations found for vitest
+[11:09:10.283] [DEBUG] Getting installed version for msw...
+[11:09:10.283] [DEBUG] Executing command: npm ls --json --depth=99 2>NUL
+[11:09:10.283] [DEBUG] Resolved command variation: npm.cmd
+[11:09:11.592] [DEBUG] Executing command: npm ls --json --depth=0 2>NUL
+[11:09:11.593] [DEBUG] Resolved command variation: npm.cmd
+[11:09:12.972] [DEBUG] Error finding installations for msw: ExecaError: Command failed with exit code 1: npm.cmd ls --json "--depth=0" "2>NUL"
+
+npm error code EINVALIDTAGNAME
+npm error Invalid tag name "2>NUL" of package "2>NUL": Tags may not have any characters that encodeURIComponent encodes.
+npm error A complete log of this run can be found in: C:\Users\Kawinfinite PC 32\AppData\Local\npm-cache\_logs\2026-06-25T05_39_11_968Z-debug-0.log
+
+{
+  "error": {
+    "code": "EINVALIDTAGNAME",
+    "summary": "Invalid tag name \"2>NUL\" of package \"2>NUL\": Tags may not have any characters that encodeURIComponent encodes.",
+    "detail": ""
+  }
+}
+[11:09:12.973] [DEBUG] No installations found for msw
+[11:09:12.984] [INFO] Storybook collects completely anonymous usage telemetry. We use it to shape Storybook's roadmap and prioritize features. You can learn more, including how to opt out, at https://storybook.js.org/telemetry
+[11:09:13.733] [DEBUG] Using cached package.json for D:\Civil Tracker\app\package.json...
+[11:09:13.733] [DEBUG] Using cached package.json for D:\Civil Tracker\app\package.json...
+[11:09:13.733] [DEBUG] Using cached package.json for D:\Civil Tracker\app\package.json...
+[11:09:13.734] [INFO] - Configuring ESLint plugin
+[11:09:13.734] [DEBUG] Detected flat config at D:\Civil Tracker\app\eslint.config.mjs
+[11:09:13.785] [DEBUG] Using cached version for storybook...
+[11:09:13.785] [DEBUG] Getting CLI versions from NPM for @storybook/nextjs-vite...
+[11:09:13.785] [DEBUG] Executing command: npm info @storybook/nextjs-vite version
+[11:09:13.786] [DEBUG] Resolved command variation: npm.cmd
+[11:09:13.807] [DEBUG] Getting CLI versions from NPM for @chromatic-com/storybook...
+[11:09:13.807] [DEBUG] Executing command: npm info @chromatic-com/storybook version
+[11:09:13.808] [DEBUG] Resolved command variation: npm.cmd
+[11:09:13.834] [DEBUG] Getting CLI versions from NPM for @storybook/addon-vitest...
+[11:09:13.834] [DEBUG] Executing command: npm info @storybook/addon-vitest version
+[11:09:13.835] [DEBUG] Resolved command variation: npm.cmd
+[11:09:13.868] [DEBUG] Getting CLI versions from NPM for @storybook/addon-a11y...
+[11:09:13.868] [DEBUG] Executing command: npm info @storybook/addon-a11y version
+[11:09:13.869] [DEBUG] Resolved command variation: npm.cmd
+[11:09:13.903] [DEBUG] Getting CLI versions from NPM for @storybook/addon-docs...
+[11:09:13.903] [DEBUG] Executing command: npm info @storybook/addon-docs version
+[11:09:13.904] [DEBUG] Resolved command variation: npm.cmd
+[11:09:13.939] [DEBUG] Getting CLI versions from NPM for @storybook/addon-mcp...
+[11:09:13.939] [DEBUG] Executing command: npm info @storybook/addon-mcp version
+[11:09:13.940] [DEBUG] Resolved command variation: npm.cmd
+[11:09:13.982] [DEBUG] Getting CLI versions from NPM for vite...
+[11:09:13.982] [DEBUG] Executing command: npm info vite version
+[11:09:13.982] [DEBUG] Resolved command variation: npm.cmd
+[11:09:14.020] [DEBUG] Getting CLI versions from NPM for eslint-plugin-storybook...
+[11:09:14.020] [DEBUG] Executing command: npm info eslint-plugin-storybook version
+[11:09:14.021] [DEBUG] Resolved command variation: npm.cmd
+[11:09:18.012] [INFO] - Configuring main.ts
+[11:09:18.015] [INFO] - Configuring preview.ts
+[11:09:18.018] [INFO] - Adding Storybook command to package.json
+[11:09:18.019] [DEBUG] Getting package.json info for D:/Civil Tracker/app/package.json...
+[11:09:18.019] [DEBUG] Using cached package.json for D:\Civil Tracker\app\package.json...
+[11:09:18.019] [DEBUG] Using cached package.json for D:\Civil Tracker\app\package.json...
+[11:09:18.020] [INFO] - Copying framework templates
+[11:09:18.071] [DEBUG] Executing command: npm config get registry --workspaces=false --include-workspace-root
+[11:09:18.072] [DEBUG] Resolved command variation: npm.cmd
+[11:09:19.315] [INFO] Storybook configuration generated
+[11:09:19.316] [DEBUG] Using cached package.json for D:\Civil Tracker\app\package.json...
+[11:09:19.316] [DEBUG] Using cached installed version for vitest...
+[11:09:19.316] [DEBUG] Getting installed version for @vitest/coverage-v8...
+[11:09:19.317] [DEBUG] Executing command: npm ls --json --depth=99 2>NUL
+[11:09:19.317] [DEBUG] Resolved command variation: npm.cmd
+[11:09:21.754] [DEBUG] Executing command: npm ls --json --depth=0 2>NUL
+[11:09:21.755] [DEBUG] Resolved command variation: npm.cmd
+[11:09:23.072] [DEBUG] Error finding installations for @vitest/coverage-v8: ExecaError: Command failed with exit code 1: npm.cmd ls --json "--depth=0" "2>NUL"
+
+npm error code EINVALIDTAGNAME
+npm error Invalid tag name "2>NUL" of package "2>NUL": Tags may not have any characters that encodeURIComponent encodes.
+npm error A complete log of this run can be found in: C:\Users\Kawinfinite PC 32\AppData\Local\npm-cache\_logs\2026-06-25T05_39_22_123Z-debug-0.log
+
+{
+  "error": {
+    "code": "EINVALIDTAGNAME",
+    "summary": "Invalid tag name \"2>NUL\" of package \"2>NUL\": Tags may not have any characters that encodeURIComponent encodes.",
+    "detail": ""
+  }
+}
+[11:09:23.072] [DEBUG] No installations found for @vitest/coverage-v8
+[11:09:23.072] [DEBUG] Getting installed version for @vitest/coverage-istanbul...
+[11:09:23.072] [DEBUG] Executing command: npm ls --json --depth=99 2>NUL
+[11:09:23.073] [DEBUG] Resolved command variation: npm.cmd
+[11:09:24.330] [DEBUG] Executing command: npm ls --json --depth=0 2>NUL
+[11:09:24.330] [DEBUG] Resolved command variation: npm.cmd
+[11:09:25.605] [DEBUG] Error finding installations for @vitest/coverage-istanbul: ExecaError: Command failed with exit code 1: npm.cmd ls --json "--depth=0" "2>NUL"
+
+npm error code EINVALIDTAGNAME
+npm error Invalid tag name "2>NUL" of package "2>NUL": Tags may not have any characters that encodeURIComponent encodes.
+npm error A complete log of this run can be found in: C:\Users\Kawinfinite PC 32\AppData\Local\npm-cache\_logs\2026-06-25T05_39_24_686Z-debug-0.log
+
+{
+  "error": {
+    "code": "EINVALIDTAGNAME",
+    "summary": "Invalid tag name \"2>NUL\" of package \"2>NUL\": Tags may not have any characters that encodeURIComponent encodes.",
+    "detail": ""
+  }
+}
+[11:09:25.605] [DEBUG] No installations found for @vitest/coverage-istanbul
+[11:09:25.605] [INFO] Adding devDependencies:
+- storybook@^10.4.6
+- @storybook/nextjs-vite@^10.4.6
+- @chromatic-com/storybook@^5.2.1
+- @storybook/addon-vitest@^10.4.6
+- @storybook/addon-a11y@^10.4.6
+- @storybook/addon-docs@^10.4.6
+- @storybook/addon-mcp@^0.6.0
+- vite@^8.1.0
+- eslint-plugin-storybook@^10.4.6
+- vitest
+- playwright
+- @vitest/browser-playwright
+- @vitest/coverage-v8
+[11:09:25.607] [DEBUG] Using cached package.json for D:\Civil Tracker\app\package.json...
+[11:09:25.608] [DEBUG] Using cached version for storybook...
+[11:09:25.608] [DEBUG] Using cached version for @storybook/nextjs-vite...
+[11:09:25.608] [DEBUG] Using cached version for @chromatic-com/storybook...
+[11:09:25.608] [DEBUG] Using cached version for @storybook/addon-vitest...
+[11:09:25.608] [DEBUG] Using cached version for @storybook/addon-a11y...
+[11:09:25.608] [DEBUG] Using cached version for @storybook/addon-docs...
+[11:09:25.608] [DEBUG] Using cached version for @storybook/addon-mcp...
+[11:09:25.608] [DEBUG] Using cached version for vite...
+[11:09:25.608] [DEBUG] Using cached version for eslint-plugin-storybook...
+[11:09:25.608] [DEBUG] Getting CLI versions from NPM for vitest...
+[11:09:25.608] [DEBUG] Executing command: npm info vitest version
+[11:09:25.609] [DEBUG] Resolved command variation: npm.cmd
+[11:09:26.817] [DEBUG] Getting CLI versions from NPM for playwright...
+[11:09:26.817] [DEBUG] Executing command: npm info playwright version
+[11:09:26.817] [DEBUG] Resolved command variation: npm.cmd
+[11:09:28.243] [DEBUG] Getting CLI versions from NPM for @vitest/browser-playwright...
+[11:09:28.243] [DEBUG] Executing command: npm info @vitest/browser-playwright version
+[11:09:28.243] [DEBUG] Resolved command variation: npm.cmd
+[11:09:29.316] [DEBUG] Getting CLI versions from NPM for @vitest/coverage-v8...
+[11:09:29.316] [DEBUG] Executing command: npm info @vitest/coverage-v8 version
+[11:09:29.317] [DEBUG] Resolved command variation: npm.cmd
+[11:09:30.397] [DEBUG] Using cached package.json for D:\Civil Tracker\app\package.json...
+[11:09:30.397] [INFO] Dependencies added to package.json
+[11:09:30.398] [INFO] Installing dependencies...
+[11:09:30.398] [INFO] Installing dependencies...
+[11:09:30.399] [DEBUG] Executing command: npm install
+[11:09:30.400] [DEBUG] Resolved command variation: npm.cmd
+[11:09:59.200] [INFO] Installing dependencies...: 
+> civil-tracker@1.0.0 postinstall
+> prisma generate
+
+
+[11:09:59.200] [INFO] Installing dependencies...: > civil-tracker@1.0.0 pos
+[11:10:00.059] [INFO] Installing dependencies...: Environment variables loaded from .env
+
+[11:10:00.059] [INFO] Installing dependencies...: Environment variables loa
+[11:10:00.065] [INFO] Installing dependencies...: Prisma schema loaded from prisma\schema.prisma
+
+[11:10:00.065] [INFO] Installing dependencies...: Prisma schema loaded from
+[11:10:01.358] [INFO] Installing dependencies...: 
+✔ Generated Prisma Client (v5.22.0) to .\node_modules\@prisma\client in 516ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Want to react to database changes in your app as they happen? Discover how with Pulse: https://pris.ly/tip-1-pulse
+
+
+[11:10:01.358] [INFO] Installing dependencies...: ✔ Generated Prisma Client
+[11:10:01.569] [INFO] Installing dependencies...: 
+added 178 packages, and audited 900 packages in 31s
+
+[11:10:01.569] [INFO] Installing dependencies...: added 178 packages, and a
+[11:10:01.570] [INFO] Installing dependencies...: 
+220 packages are looking for funding
+  run `npm fund` for details
+
+[11:10:01.570] [INFO] Installing dependencies...: 220 packages are looking 
+[11:10:01.630] [INFO] Installing dependencies...: 
+10 vulnerabilities (5 moderate, 5 high)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues possible (including breaking changes), run:
+  npm audit fix --force
+
+Some issues need review, and may require choosing
+a different dependency.
+
+Run `npm audit` for details.
+
+[11:10:01.630] [INFO] Installing dependencies...: 10 vulnerabilities (5 mod
+[11:10:01.693] [INFO] Dependencies installed
+[11:10:01.693] [INFO] Dependencies installed
+[11:10:01.727] [INFO] Configuring @chromatic-com/storybook...
+[11:10:01.750] [INFO] @chromatic-com/storybook configured
+
+[11:10:01.750] [INFO] Configuring @storybook/addon-vitest...
+[11:10:01.753] [DEBUG] Getting package.json info for D:/Civil Tracker/app/package.json...
+[11:10:01.753] [DEBUG] Using cached package.json for D:\Civil Tracker\app\package.json...
+[11:10:01.753] [DEBUG] Getting installed version for vitest...
+[11:10:01.753] [DEBUG] Executing command: npm ls --json --depth=99 2>NUL
+[11:10:01.754] [DEBUG] Resolved command variation: npm.cmd
+[11:10:03.108] [DEBUG] Executing command: npm ls --json --depth=0 2>NUL
+[11:10:03.109] [DEBUG] Resolved command variation: npm.cmd
+[11:10:04.619] [DEBUG] Error finding installations for vitest: ExecaError: Command failed with exit code 1: npm.cmd ls --json "--depth=0" "2>NUL"
+
+npm error code EINVALIDTAGNAME
+npm error Invalid tag name "2>NUL" of package "2>NUL": Tags may not have any characters that encodeURIComponent encodes.
+npm error A complete log of this run can be found in: C:\Users\Kawinfinite PC 32\AppData\Local\npm-cache\_logs\2026-06-25T05_40_03_481Z-debug-0.log
+
+{
+  "error": {
+    "code": "EINVALIDTAGNAME",
+    "summary": "Invalid tag name \"2>NUL\" of package \"2>NUL\": Tags may not have any characters that encodeURIComponent encodes.",
+    "detail": ""
+  }
+}
+[11:10:04.619] [DEBUG] No installations found for vitest
+[11:10:04.619] [DEBUG] Vitest version specifier: 4.1.9
+[11:10:04.842] [DEBUG] Using cached installed version for vitest...
+[11:10:04.842] [DEBUG] Getting installed version for msw...
+[11:10:04.842] [DEBUG] Executing command: npm ls --json --depth=99 2>NUL
+[11:10:04.843] [DEBUG] Resolved command variation: npm.cmd
+[11:10:06.467] [DEBUG] Executing command: npm ls --json --depth=0 2>NUL
+[11:10:06.468] [DEBUG] Resolved command variation: npm.cmd
+[11:10:08.158] [DEBUG] Error finding installations for msw: ExecaError: Command failed with exit code 1: npm.cmd ls --json "--depth=0" "2>NUL"
+
+npm error code EINVALIDTAGNAME
+npm error Invalid tag name "2>NUL" of package "2>NUL": Tags may not have any characters that encodeURIComponent encodes.
+npm error A complete log of this run can be found in: C:\Users\Kawinfinite PC 32\AppData\Local\npm-cache\_logs\2026-06-25T05_40_06_929Z-debug-0.log
+
+{
+  "error": {
+    "code": "EINVALIDTAGNAME",
+    "summary": "Invalid tag name \"2>NUL\" of package \"2>NUL\": Tags may not have any characters that encodeURIComponent encodes.",
+    "detail": ""
+  }
+}
+[11:10:08.158] [DEBUG] No installations found for msw
+[11:10:08.194] [INFO] Creating a Vitest config file:
+[11:10:08.195] [INFO] D:/Civil Tracker/app/vitest.config.ts
+[11:10:08.206] [INFO] Setting up a11y addon for @storybook/addon-vitest
+[11:10:08.206] [INFO] Setting up a11y addon for @storybook/addon-vitest
+[11:10:08.207] [DEBUG] Executing command: npx storybook@10.4.6 automigrate addon-a11y-addon-test --loglevel silent --yes --skip-doctor --package-manager npm --skip-install
+[11:10:08.208] [DEBUG] Resolved command variation: npx.cmd
+[11:10:40.306] [INFO] a11y addon setup successfully
+[11:10:40.306] [INFO] [32ma11y addon setup successfully[39m
+[11:10:40.307] [INFO] [32m@storybook/addon-vitest setup completed successfully[39m
+[11:10:40.308] [INFO] @storybook/addon-vitest is now configured and you're ready to run your tests!
+Here are a couple of tips to get you started:
+
+• You can run tests with "[36mnpx vitest[39m"
+• Vitest IDE extension shows all stories as tests in your editor!
+
+Check the documentation for more information about its features and options at:
+https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
+[11:10:40.317] [INFO] @storybook/addon-vitest configured
+
+[11:10:40.317] [INFO] Configuring @storybook/addon-a11y...
+[11:10:40.318] [DEBUG] Executing command: npx storybook@10.4.6 automigrate addon-a11y-addon-test --loglevel silent --skip-doctor --yes --package-manager npm --config-dir .storybook
+[11:10:40.319] [DEBUG] Resolved command variation: npx.cmd
+[11:10:54.752] [DEBUG] {
+  "shortMessage": "Command failed with exit code 1: npx.cmd \"storybook@10.4.6\" automigrate addon-a11y-addon-test --loglevel silent --skip-doctor --yes --package-manager npm --config-dir .storybook",
+  "command": "npx.cmd storybook@10.4.6 automigrate addon-a11y-addon-test --loglevel silent --skip-doctor --yes --package-manager npm --config-dir .storybook",
+  "escapedCommand": "npx.cmd \"storybook@10.4.6\" automigrate addon-a11y-addon-test --loglevel silent --skip-doctor --yes --package-manager npm --config-dir .storybook",
+  "cwd": "D:\\Civil Tracker\\app",
+  "durationMs": 14433.2643,
+  "failed": true,
+  "timedOut": false,
+  "isCanceled": false,
+  "isGracefullyCanceled": false,
+  "isTerminated": false,
+  "isMaxBuffer": false,
+  "isForcefullyTerminated": false,
+  "exitCode": 1,
+  "stdout": "",
+  "stderr": "",
+  "stdio": [
+    null,
+    "",
+    ""
+  ],
+  "ipcOutput": [],
+  "pipedFrom": []
+}
+[11:10:54.753] [INFO] Configuring @storybook/addon-docs...
+[11:10:54.758] [INFO] @storybook/addon-docs configured
+
+[11:10:54.758] [INFO] Configuring @storybook/addon-mcp...
+[11:10:54.764] [INFO] @storybook/addon-mcp configured
+
+[11:10:54.765] [INFO] Failed to configure addons
+[11:10:54.765] [INFO] [2m✅ @chromatic-com/storybook[22m
+[11:10:54.766] [INFO] [2m✅ @storybook/addon-vitest[22m
+[11:10:54.766] [INFO] [2m❌ @storybook/addon-a11y[22m
+[11:10:54.766] [INFO] [2m✅ @storybook/addon-docs[22m
+[11:10:54.766] [INFO] [2m✅ @storybook/addon-mcp[22m
+[11:10:54.767] [INFO] Installing Playwright browser binaries (press "c" to abort)
+[11:10:54.767] [INFO] Installing Playwright browser binaries (press "c" to abort)
+[11:10:54.769] [DEBUG] Executing command: npx playwright install chromium --with-deps
+[11:10:54.770] [DEBUG] Resolved command variation: npx.cmd
+[11:10:57.882] [INFO] Playwright browser binaries installed successfully
+[11:10:57.882] [INFO] Playwright browser binaries installed successfully
+[11:10:59.316] [WARN] Storybook setup completed, but some non-blocking errors occurred. Please check the log file below for details.
+[11:10:59.317] [INFO] To run Storybook, run [36mnpm run storybook[39m. CTRL+C to stop.
+[11:10:59.319] [INFO] Official documentation reference: [36mhttps://storybook.js.org/llms.txt[39m
+[11:10:59.320] [INFO] To finalize setting up with AI, paste this prompt to your AI agent:
+
+[38;2;255;71;133mRun `npx storybook ai setup` and follow its instructions precisely.[39m

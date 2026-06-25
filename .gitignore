@@ -32,9 +32,11 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 .env.production
+.env.playwright.local
 
 # vercel
 .vercel
+.env.vercel
 
 # typescript
 *.tsbuildinfo

@@ -18,7 +18,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <ResponsiveShell
       layoutClass="admin-layout"
       sidebar={<DashboardSidebar user={session.user} pendingApprovalsCount={pendingApprovalsCount} />}
-      topbar={({ toggleMobileMenu }) => <DashboardTopbar user={session.user} toggleMobileMenu={toggleMobileMenu} pendingApprovalsCount={pendingApprovalsCount} />}
+      topbar={<DashboardTopbar user={session.user} pendingApprovalsCount={pendingApprovalsCount} />}
     >
       {children}
     </ResponsiveShell>

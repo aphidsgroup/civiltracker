@@ -29,7 +29,15 @@ enum CompanyStatus {
   ACTIVE
   TRIAL
   SUSPENDED
-  INACTIVE
+  CANCELLED
+}
+
+enum CompanyPlan {
+  TRIAL
+  STARTER
+  GROWTH
+  ENTERPRISE
+  CUSTOM
 }
 
 enum SiteStatus {
@@ -239,36 +247,41 @@ model Company {
   state       String?
   pincode     String?
   status      CompanyStatus @default(TRIAL)
-  plan        String        @default("Starter")
+  plan        CompanyPlan   @default(TRIAL)
+  userLimit   Int           @default(5)
+  siteLimit   Int           @default(1)
+  storageLimitMb Int        @default(100)
   storageUsed Float         @default(0)
+  modulesJson Json?         
+  createdById String?       
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   deletedAt   DateTime?
 
-  members          CompanyMember[]
-  sites            Site[]
-  expenses         Expense[]
-  labour           Labour[]
-  materials        Material[]
-  vendors          Vendor[]
-  subcontractors   Subcontractor[]
-  dprs             DailyProgressReport[]
-  documents        Document[]
-  clients          Client[]
-  notifications    Notification[]
-  auditLogs        AuditLog[]
+  members           CompanyMember[]
+  sites             Site[]
+  expenses          Expense[]
+  labour            Labour[]
+  materials         Material[]
+  vendors           Vendor[]
+  subcontractors    Subcontractor[]
+  dprs              DailyProgressReport[]
+  documents         Document[]
+  clients           Client[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
   mediaAssets       MediaAsset[]
   approvals         Approval[]
   approvalComments  ApprovalComment[]
   approvalTimelines ApprovalTimeline[]
   salaryRuns        SalaryRun[]
-  purchaseRequests PurchaseRequest[]
-  purchaseOrders   PurchaseOrder[]
-  supportTickets   SupportTicket[]
-  subscription     CompanySubscription[]
-  tasks            Task[]
-  boqitems         BOQItem[]
-  reportExports    ReportExport[]
+  purchaseRequests  PurchaseRequest[]
+  purchaseOrders    PurchaseOrder[]
+  supportTickets    SupportTicket[]
+  subscription      CompanySubscription[]
+  tasks             Task[]
+  boqitems          BOQItem[]
+  reportExports     ReportExport[]
 
   @@index([status])
 }
@@ -335,15 +348,26 @@ model Site {
   location     String
   address      String?
   clientName   String?
+  clientPhone  String?
+  clientEmail  String?
   clientId     String?
+  mapLink      String?
+  projectType  String?
   contractType String?
+  areaSqft     Decimal?   @db.Decimal(10, 2)
+  floors       Int?
   budget       Decimal    @default(0) @db.Decimal(14, 2)
+  contractValue Decimal?  @db.Decimal(14, 2)
   spent        Decimal    @default(0) @db.Decimal(14, 2)
   progress     Int        @default(0)
   status       SiteStatus @default(ACTIVE)
   currentStage String?
   startDate    DateTime?
+  targetEndDate DateTime?
   handoverDate DateTime?
+  assignedPmId       String?
+  assignedEngineerId String?
+  clientUserId       String?
   engineerId   String?
   managerId    String?
   createdById  String?
@@ -916,6 +940,14 @@ model Approval {
   rejectionReason String?
   closedAt        DateTime?
   metadataJson    Json?
+  
+  // Legacy fields preserved to prevent destructive migration
+  status          String?
+  module          ModuleType?
+  recordId        String?
+  requestedAt     DateTime?
+  legacyComments  String?            @map("comments")
+  
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
   deletedAt       DateTime?
@@ -996,7 +1028,7 @@ model ReportExport {
   id            String   @id @default(cuid())
   companyId     String
   reportType    String
-  format        String   // PDF, EXCEL
+  format        String // PDF, EXCEL
   filtersJson   Json?
   generatedById String
   fileUrl       String?

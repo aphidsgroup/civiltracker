@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 
@@ -11,11 +11,22 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const [hydrated, setHydrated] = useState(false)
+  
+  useEffect(() => {
+    const timer = setTimeout(() => setHydrated(true), 0)
+    return () => clearTimeout(timer)
+  }, [])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const result = await signIn('credentials', { email, password, redirect: false })
+    
+    const emailVal = email || (document.querySelector('input[name="email"]') as HTMLInputElement)?.value || ''
+    const passwordVal = password || (document.querySelector('input[name="password"]') as HTMLInputElement)?.value || ''
+    
+    const result = await signIn('credentials', { email: emailVal, password: passwordVal, redirect: false })
     if (result?.error) {
       setError('Invalid email or password')
       setLoading(false)
@@ -44,13 +55,13 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: '14px' }}>
               <label className="ct-label">Email address</label>
-              <input type="email" className="ct-input" placeholder="you@company.com" value={email} onChange={e => setEmail(e.target.value)} required autoFocus />
+              <input type="email" name="email" className="ct-input" placeholder="you@company.com" value={email} onChange={e => setEmail(e.target.value)} required autoFocus />
             </div>
             <div style={{ marginBottom: '20px' }}>
               <label className="ct-label">Password</label>
-              <input type="password" className="ct-input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
+              <input type="password" name="password" className="ct-input" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
             </div>
-            <button type="submit" disabled={loading} style={{ width: '100%', background: loading ? '#9aa8b6' : 'linear-gradient(135deg, #13558e, #1d6fb5)', color: '#fff', fontSize: '15px', fontWeight: 700, padding: '14px', borderRadius: '12px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', boxShadow: '0 8px 20px -8px rgba(19,85,142,0.6)' }}>
+            <button type="submit" data-hydrated={hydrated ? "true" : undefined} disabled={loading || !hydrated} style={{ width: '100%', background: (loading || !hydrated) ? '#9aa8b6' : 'linear-gradient(135deg, #13558e, #1d6fb5)', color: '#fff', fontSize: '15px', fontWeight: 700, padding: '14px', borderRadius: '12px', border: 'none', cursor: (loading || !hydrated) ? 'not-allowed' : 'pointer', boxShadow: '0 8px 20px -8px rgba(19,85,142,0.6)' }}>
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </form>

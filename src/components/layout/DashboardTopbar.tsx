@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import type { SessionUser } from '@/types'
 import Link from 'next/link'
 
-export default function DashboardTopbar({ user, toggleMobileMenu, pendingApprovalsCount = 0 }: { user: SessionUser; toggleMobileMenu?: () => void; pendingApprovalsCount?: number }) {
+export default function DashboardTopbar({ user, pendingApprovalsCount = 0 }: { user: SessionUser; pendingApprovalsCount?: number }) {
   const pathname = usePathname()
   
   const getPageInfo = () => {
@@ -26,8 +26,8 @@ export default function DashboardTopbar({ user, toggleMobileMenu, pendingApprova
   return (
     <div className="topbar">
       <div style={{ display: 'flex', alignItems: 'center' }}>
-        {toggleMobileMenu && (
-          <button className="hamburger-btn" onClick={toggleMobileMenu}>
+        {true && (
+          <button className="hamburger-btn" onClick={() => document.dispatchEvent(new CustomEvent('toggle-mobile-menu'))}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" width="20" height="20">
               <path d="M4 6h16M4 12h16M4 18h16"/>
             </svg>
