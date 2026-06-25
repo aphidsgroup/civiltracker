@@ -26,7 +26,7 @@ async function main() {
 
   console.log('--- RECENT AUDIT LOGS ---');
   for (const log of audits) {
-    console.log(`[${log.createdAt.toISOString()}] Action: ${log.action}, Details: ${log.details}`);
+    console.log(`[${log.createdAt.toISOString()}] Action: ${log.action}, Details: ${JSON.stringify(log.after)}`);
   }
 
   if (exports.length > 0 && audits.length > 0) {

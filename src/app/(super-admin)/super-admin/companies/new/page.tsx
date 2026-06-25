@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 export default async function NewCompanyPage() {
-  await requireRole(Role.SUPER_ADMIN);
+  await requireRole([Role.SUPER_ADMIN]);
 
   return (
     <div className="min-h-screen p-6 sm:p-10 lg:p-12 bg-gradient-to-br from-slate-50 via-slate-100 to-blue-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
@@ -42,7 +42,8 @@ export default async function NewCompanyPage() {
         </div>
 
         {/* Main Form */}
-        <form action={createCompany} className="space-y-8">
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <form action={createCompany as any} className="space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             
             {/* Company Details Card */}

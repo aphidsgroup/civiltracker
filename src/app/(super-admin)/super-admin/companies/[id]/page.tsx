@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 export default async function CompanyDetailsPage({ params }: { params: { id: string } }) {
-  await requireRole(Role.SUPER_ADMIN);
+  await requireRole([Role.SUPER_ADMIN]);
   const company = await prisma.company.findUnique({
     where: { id: params.id },
     include: {
