@@ -3,17 +3,15 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { Role } from '@prisma/client'
 
-const publicPaths = ['/login', '/api/auth', '/offline', '/client-portal']
+const publicPaths = ['/login', '/api/auth', '/offline']
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public paths
   if (publicPaths.some((p) => pathname.startsWith(p))) {
     return NextResponse.next()
   }
 
-  // Allow static files
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
@@ -27,17 +25,28 @@ export async function proxy(request: NextRequest) {
   const session = await auth()
 
   if (!session?.user) {
+    if (pathname.startsWith('/api')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
   const role = session.user.role as Role
 
-  // Super admin route protection
+  if (role === Role.CLIENT && !pathname.startsWith('/client-portal')) {
+    if (pathname.startsWith('/api')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    return NextResponse.redirect(new URL('/client-portal', request.url))
+  }
+
   if (pathname.startsWith('/super-admin') && role !== Role.SUPER_ADMIN) {
+    if (pathname.startsWith('/api')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // Mobile route — accessible to field staff and above
   if (pathname.startsWith('/mobile')) {
     const mobileRoles: Role[] = [
       Role.SUPER_ADMIN,
@@ -49,7 +58,7 @@ export async function proxy(request: NextRequest) {
       Role.PURCHASE_MANAGER,
     ]
     if (!mobileRoles.includes(role)) {
-      return NextResponse.redirect(new URL('/login', request.url))
+      return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   }
 

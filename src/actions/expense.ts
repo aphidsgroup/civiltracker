@@ -1,6 +1,6 @@
 'use server'
 
-import { auth } from '@/lib/auth'
+import { requireUser, assertCanAccessSite } from '@/lib/auth/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import type { ExpenseCategory, PaymentMode } from '@/types'
@@ -18,14 +18,19 @@ export async function createExpenseAction(data: {
   format?: string
   bytes?: number
 }) {
-  const session = await auth()
-  if (!session?.user?.companyId) {
-    throw new Error('Unauthorized')
+  const user = await requireUser()
+  if (!user.companyId && user.role !== 'SUPER_ADMIN') {
+    throw new Error('Unauthorized: No active company context')
   }
+
+  await assertCanAccessSite(data.siteId)
+
+  const site = await prisma.site.findUnique({ where: { id: data.siteId }, select: { companyId: true } })
+  const companyId = site?.companyId || user.companyId!
 
   const expense = await prisma.expense.create({
     data: {
-      companyId: session.user.companyId,
+      companyId,
       siteId: data.siteId,
       category: data.category,
       amount: data.amount,
@@ -34,7 +39,7 @@ export async function createExpenseAction(data: {
       billNumber: data.billNumber,
       notes: data.notes,
       description: data.notes ? data.notes.substring(0, 50) : `Expense for ${data.category}`,
-      createdById: session.user.id,
+      createdById: user.id,
       ...(data.secureUrl && data.cloudinaryPublicId
         ? {
             billAttachments: {
@@ -43,7 +48,7 @@ export async function createExpenseAction(data: {
                 secureUrl: data.secureUrl,
                 format: data.format,
                 bytes: data.bytes,
-                uploadedById: session.user.id,
+                uploadedById: user.id,
               },
             },
           }

@@ -16,8 +16,10 @@ export async function POST(
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
   }
 
+  const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : { companyId: session.user.companyId }
+
   const expense = await prisma.expense.findFirst({
-    where: { id, companyId: session.user.companyId },
+    where: { id, ...companyFilter },
   })
 
   if (!expense) return NextResponse.json({ error: 'Not found' }, { status: 404 })

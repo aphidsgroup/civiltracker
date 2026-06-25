@@ -17,13 +17,19 @@ const schema = z.object({
 
 export async function GET(request: Request) {
   const session = await auth()
-  if (!session?.user?.companyId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.user.role === 'CLIENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!session.user.companyId && session.user.role !== 'SUPER_ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized: No active company context' }, { status: 401 })
+  }
 
   const { searchParams } = new URL(request.url)
   const siteId = searchParams.get('siteId')
 
+  const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : { companyId: session.user.companyId }
+
   const expenses = await prisma.expense.findMany({
-    where: { companyId: session.user.companyId, ...(siteId ? { siteId } : {}), deletedAt: null },
+    where: { ...companyFilter, ...(siteId ? { siteId } : {}), deletedAt: null },
     include: { site: { select: { name: true } }, createdBy: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
     take: 100,
@@ -34,7 +40,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const session = await auth()
-  if (!session?.user?.companyId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.user.role === 'CLIENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!session.user.companyId && session.user.role !== 'SUPER_ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized: No active company context' }, { status: 401 })
+  }
 
   const body = await request.json()
   const parsed = schema.safeParse(body)
@@ -42,13 +52,18 @@ export async function POST(request: Request) {
 
   const data = parsed.data
 
-  // Verify site belongs to company
-  const site = await prisma.site.findFirst({ where: { id: data.siteId, companyId: session.user.companyId } })
-  if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 })
+  const companyId = session.user.companyId!
+
+  const site = await prisma.site.findFirst({
+    where: { id: data.siteId, ...(session.user.role === 'SUPER_ADMIN' ? {} : { companyId }) }
+  })
+  if (!site) return NextResponse.json({ error: 'Forbidden: Site not found or access denied' }, { status: 404 })
+
+  const actualCompanyId = site.companyId || companyId
 
   const expense = await prisma.expense.create({
     data: {
-      companyId: session.user.companyId,
+      companyId: actualCompanyId,
       siteId: data.siteId,
       category: data.category as 'MATERIAL',
       description: data.description,
@@ -63,10 +78,9 @@ export async function POST(request: Request) {
     },
   })
 
-  // Create approval request
   await prisma.approval.create({
     data: {
-      companyId: session.user.companyId,
+      companyId: actualCompanyId,
       siteId: data.siteId,
       module: 'BILL',
       recordId: expense.id,

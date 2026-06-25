@@ -4,15 +4,22 @@ import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
   const session = await auth()
-  if (!session?.user?.companyId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.user.role === 'CLIENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!session.user.companyId && session.user.role !== 'SUPER_ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized: No active company context' }, { status: 401 })
+  }
 
   const { attendance } = await request.json()
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
+  const companyId = session.user.companyId
+
   const results = await Promise.all(
     attendance.map(async ({ labourId, status }: { labourId: string; status: string }) => {
-      // Verify labour belongs to company
-      const labour = await prisma.labour.findFirst({ where: { id: labourId, companyId: session.user.companyId } })
+      const labour = await prisma.labour.findFirst({
+        where: { id: labourId, companyId: session.user.role === 'SUPER_ADMIN' ? undefined : companyId }
+      })
       if (!labour || !status) return null
 
       return prisma.labourAttendance.upsert({

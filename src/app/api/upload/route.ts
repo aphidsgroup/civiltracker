@@ -4,16 +4,36 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getCloudinaryFolder } from '@/lib/cloudinary'
 
+const VALID_MODULES = ['BILL', 'SITE_PHOTO', 'DOCUMENT', 'SALARY_PROOF', 'DELIVERY_CHALLAN', 'QUALITY_PHOTO', 'SAFETY_PHOTO', 'PAYMENT_PROOF', 'general']
+
 export async function POST(request: Request) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session.user.companyId && session.user.role !== 'SUPER_ADMIN') {
+    return NextResponse.json({ error: 'Forbidden: No active company context' }, { status: 403 })
+  }
 
   const formData = await request.formData()
   const file = formData.get('file') as File
   const moduleName = formData.get('module') as string ?? 'general'
   const siteId = formData.get('siteId') as string | null
 
+  if (!VALID_MODULES.includes(moduleName)) {
+    return NextResponse.json({ error: 'Forbidden: Invalid upload module' }, { status: 403 })
+  }
+
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+
+  const companyId = session.user.companyId!
+
+  if (siteId && session.user.role !== 'SUPER_ADMIN') {
+    const site = await prisma.site.findFirst({
+      where: { id: siteId, companyId, deletedAt: null }
+    })
+    if (!site) {
+      return NextResponse.json({ error: 'Forbidden: Site not found or access denied' }, { status: 403 })
+    }
+  }
 
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
@@ -36,10 +56,9 @@ export async function POST(request: Request) {
     })
   })
 
-  // Save to MediaAsset
   await prisma.mediaAsset.create({
     data: {
-      companyId: session.user.companyId!,
+      companyId: siteId ? (await prisma.site.findUnique({ where: { id: siteId } }))?.companyId || companyId : companyId,
       siteId: siteId ?? null,
       module: moduleName,
       cloudinaryPublicId: result.public_id,
