@@ -13,16 +13,149 @@ export const ROLE_HIERARCHY: Record<Role, number> = {
   SUBCONTRACTOR: 10,
 }
 
-const APPROVER_ROLES: Role[] = [Role.SUPER_ADMIN, Role.COMPANY_ADMIN, Role.ACCOUNTANT, Role.PROJECT_MANAGER]
-const NON_UPLOAD_ROLES: Role[] = [Role.CLIENT, Role.VENDOR]
-const COMPANY_MGMT_ROLES: Role[] = [Role.SUPER_ADMIN, Role.COMPANY_ADMIN]
+export type Permission =
+  | 'company.manage'
+  | 'company.view'
+  | 'sites.view'
+  | 'sites.create'
+  | 'sites.update'
+  | 'sites.delete'
+  | 'expenses.view'
+  | 'expenses.create'
+  | 'expenses.update'
+  | 'expenses.approve'
+  | 'expenses.reject'
+  | 'bills.view'
+  | 'bills.upload'
+  | 'bills.approve'
+  | 'bills.reject'
+  | 'labour.view'
+  | 'labour.manage'
+  | 'attendance.mark'
+  | 'salary.view'
+  | 'salary.generate'
+  | 'salary.approve'
+  | 'salary.markPaid'
+  | 'materials.view'
+  | 'materials.create'
+  | 'materials.update'
+  | 'materials.approveRequest'
+  | 'dpr.view'
+  | 'dpr.create'
+  | 'dpr.update'
+  | 'dpr.approve'
+  | 'tasks.manage'
+  | 'reports.view'
+  | 'reports.finance'
+  | 'reports.project'
+  | 'clientPortal.view'
+  | 'clientPortal.manage'
+  | 'documents.view'
+  | 'documents.upload'
+  | 'documents.approve'
+  | 'uploads.sign'
+  | 'uploads.saveMetadata'
+  | 'sitePhotos.upload'
+  | 'issues.create'
+  | 'vendors.view'
+  | 'payments.view'
+  | 'payments.manage'
+
+const ALL_PERMISSIONS: Permission[] = [
+  'company.manage', 'company.view',
+  'sites.view', 'sites.create', 'sites.update', 'sites.delete',
+  'expenses.view', 'expenses.create', 'expenses.update', 'expenses.approve', 'expenses.reject',
+  'bills.view', 'bills.upload', 'bills.approve', 'bills.reject',
+  'labour.view', 'labour.manage', 'attendance.mark',
+  'salary.view', 'salary.generate', 'salary.approve', 'salary.markPaid',
+  'materials.view', 'materials.create', 'materials.update', 'materials.approveRequest',
+  'dpr.view', 'dpr.create', 'dpr.update', 'dpr.approve',
+  'tasks.manage',
+  'reports.view', 'reports.finance', 'reports.project',
+  'clientPortal.view', 'clientPortal.manage',
+  'documents.view', 'documents.upload', 'documents.approve',
+  'uploads.sign', 'uploads.saveMetadata',
+  'sitePhotos.upload', 'issues.create',
+  'vendors.view', 'payments.view', 'payments.manage'
+]
+
+export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
+  SUPER_ADMIN: ALL_PERMISSIONS,
+  COMPANY_ADMIN: ALL_PERMISSIONS,
+  PROJECT_MANAGER: [
+    'company.view',
+    'sites.view', 'sites.update',
+    'expenses.view', 'expenses.create',
+    'bills.view', 'bills.upload',
+    'labour.view', 'attendance.mark',
+    'materials.view', 'materials.create',
+    'dpr.view', 'dpr.create', 'dpr.update',
+    'tasks.manage',
+    'reports.view', 'reports.project',
+    'documents.view', 'documents.upload',
+    'uploads.sign', 'uploads.saveMetadata'
+  ],
+  ACCOUNTANT: [
+    'company.view',
+    'expenses.view', 'expenses.approve', 'expenses.reject',
+    'bills.view', 'bills.approve', 'bills.reject',
+    'salary.view', 'salary.generate', 'salary.approve', 'salary.markPaid',
+    'vendors.view', 'payments.view', 'payments.manage',
+    'reports.view', 'reports.finance',
+    'documents.view',
+    'uploads.sign', 'uploads.saveMetadata'
+  ],
+  SITE_ENGINEER: [
+    'sites.view',
+    'expenses.create',
+    'bills.upload',
+    'attendance.mark',
+    'dpr.view', 'dpr.create',
+    'sitePhotos.upload',
+    'materials.view', 'materials.create',
+    'issues.create',
+    'documents.view', 'documents.upload',
+    'uploads.sign', 'uploads.saveMetadata'
+  ],
+  SUPERVISOR: [
+    'sites.view',
+    'attendance.mark',
+    'dpr.view', 'dpr.create',
+    'sitePhotos.upload',
+    'materials.view', 'materials.create',
+    'uploads.sign', 'uploads.saveMetadata'
+  ],
+  PURCHASE_MANAGER: [
+    'company.view',
+    'materials.view', 'materials.create', 'materials.update', 'materials.approveRequest',
+    'bills.view', 'bills.upload',
+    'vendors.view',
+    'uploads.sign', 'uploads.saveMetadata'
+  ],
+  CLIENT: [
+    'clientPortal.view'
+  ],
+  VENDOR: [
+    'bills.upload',
+    'uploads.sign'
+  ],
+  SUBCONTRACTOR: [
+    'attendance.mark'
+  ],
+}
+
+export function hasPermission(role: Role, permission: Permission): boolean {
+  if (role === Role.SUPER_ADMIN) return true
+  const perms = ROLE_PERMISSIONS[role] || []
+  return perms.includes(permission)
+}
 
 export function canApprove(role: Role): boolean {
-  return APPROVER_ROLES.includes(role)
+  return hasPermission(role, 'expenses.approve') || hasPermission(role, 'bills.approve')
 }
 
 export function canUpload(role: Role): boolean {
-  return !NON_UPLOAD_ROLES.includes(role)
+  return hasPermission(role, 'bills.upload') || hasPermission(role, 'documents.upload') || hasPermission(role, 'sitePhotos.upload') || hasPermission(role, 'uploads.sign')
 }
 
 export function canAccessSuperAdmin(role: Role): boolean {
@@ -30,7 +163,7 @@ export function canAccessSuperAdmin(role: Role): boolean {
 }
 
 export function canManageCompany(role: Role): boolean {
-  return COMPANY_MGMT_ROLES.includes(role)
+  return hasPermission(role, 'company.manage') || role === Role.SUPER_ADMIN
 }
 
 export function getRoleRedirect(role: Role, _companyId?: string): string {

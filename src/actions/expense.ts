@@ -1,6 +1,6 @@
 'use server'
 
-import { requireUser, assertCanAccessSite } from '@/lib/auth/permissions'
+import { requirePermission, assertCanAccessSite } from '@/lib/auth/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import type { ExpenseCategory, PaymentMode } from '@/types'
@@ -18,7 +18,7 @@ export async function createExpenseAction(data: {
   format?: string
   bytes?: number
 }) {
-  const user = await requireUser()
+  const user = await requirePermission('expenses.create')
   if (!user.companyId && user.role !== 'SUPER_ADMIN') {
     throw new Error('Unauthorized: No active company context')
   }

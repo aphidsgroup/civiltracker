@@ -2,12 +2,17 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { formatCurrency } from '@/lib/utils'
+import { hasPermission } from '@/lib/permissions'
+import { Role } from '@prisma/client'
 
 export const metadata = { title: 'Reports | Civil Tracker' }
 
 export default async function ReportsPage() {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
+  if (!hasPermission(session.user.role as Role, 'reports.finance') && !hasPermission(session.user.role as Role, 'reports.project')) {
+    redirect('/dashboard')
+  }
   const { companyId } = session.user
 
   const [sites, expenses, labour] = await Promise.all([

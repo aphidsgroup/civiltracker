@@ -2,6 +2,8 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { hasPermission } from '@/lib/permissions'
+import { Role } from '@prisma/client'
 
 export default async function MobileDprPage() {
   const session = await auth()
@@ -19,6 +21,9 @@ export default async function MobileDprPage() {
     'use server'
     const session = await auth()
     if (!session?.user?.companyId) return
+    if (!hasPermission(session.user.role as Role, 'dpr.create')) {
+      throw new Error('FORBIDDEN: Missing required permission "dpr.create"')
+    }
 
     const siteId = formData.get('siteId') as string
     const workDone = formData.get('workDone') as string

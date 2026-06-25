@@ -1,5 +1,6 @@
 export * from '@/lib/permissions'
 export * from './require-user'
 export * from './require-role'
+export * from './require-permission'
 export * from './require-company-access'
 export * from './tenant-scope'
