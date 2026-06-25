@@ -7,7 +7,7 @@ export default async function MobileLayout({ children }: { children: React.React
   if (!session?.user) redirect('/login')
 
   return (
-    <div className="mobile-app-wrapper">
+    <div className="mobile-app-wrapper mobile-layout">
       <div className="ct screen">
         <div className="sScroll">
           {children}

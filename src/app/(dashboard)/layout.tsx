@@ -8,7 +8,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!session?.user) redirect('/login')
 
   return (
-    <div className="ct app">
+    <div className="ct app admin-layout">
       <DashboardSidebar user={session.user} />
       <div className="main">
         <DashboardTopbar user={session.user} />

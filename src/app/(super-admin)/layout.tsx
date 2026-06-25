@@ -7,7 +7,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   if (!session?.user || session.user.role !== 'SUPER_ADMIN') redirect('/login')
 
   return (
-    <div className="ct app">
+    <div className="ct app sa-layout">
       <div className="side" style={{ background: 'linear-gradient(180deg, #0a1d33, #08172a)' }}>
         <div className="brand">
           <div className="blogo" style={{ background: 'linear-gradient(135deg, #f3b43a, #e08a0b)', color: '#3a2a05' }}>

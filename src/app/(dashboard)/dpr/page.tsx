@@ -27,7 +27,7 @@ export default async function DprPage() {
           <h1 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 3px', letterSpacing: '-0.02em' }}>Daily Progress Reports</h1>
           <p style={{ color: 'var(--mut)', fontSize: '13px', margin: 0 }}>{dprs.length} reports</p>
         </div>
-        <a href="/mobile/add/dpr" className="btn-primary" style={{ textDecoration: 'none' }}>+ Add DPR</a>
+        <a href="/mobile/dpr" className="btn-primary" style={{ textDecoration: 'none' }}>+ Add DPR</a>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

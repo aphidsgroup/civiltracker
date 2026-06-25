@@ -1,0 +1,1 @@
+export default function ClientLayout({ children }: { children: React.ReactNode }) { return <div className="ct client-layout">{children}</div> }
