@@ -44,7 +44,7 @@ export default async function MobileHome() {
 
       <div className="hero">
         <div className="herotop">
-          <div className="herolbl">TODAY'S SUMMARY</div>
+          <div className="herolbl">TODAY&apos;S SUMMARY</div>
           <div className="herochip">Pending sync: 0</div>
         </div>
         <div className="herorow">

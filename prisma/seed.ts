@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { PrismaClient, Role, SiteStatus, ExpenseCategory, PaymentMode, LabourTrade } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 

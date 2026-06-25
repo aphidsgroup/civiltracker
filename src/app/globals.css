@@ -13,6 +13,7 @@
 .sbr{display:flex;align-items:center;gap:6px}
 .batt{width:24px;height:12px;border:1.6px solid var(--ink);border-radius:3px;padding:1.6px;display:flex}.batt i{flex:1;background:var(--ink);border-radius:1px}
 .stagebody{flex:1;position:relative;overflow:hidden}
+.mobile-app-wrapper{max-width:430px;margin:0 auto;height:100vh;height:100dvh;position:relative;background:var(--bg);overflow:hidden;box-shadow:0 0 20px rgba(0,0,0,.08)}
 .screen{position:absolute;inset:0;display:flex;flex-direction:column}
 .sScroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:0 18px 26px}
 .sScroll::-webkit-scrollbar{display:none}

@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/nextjs';
 import React from 'react';
 import '../app/globals.css';
 import DashboardSidebar from '../components/layout/DashboardSidebar';
@@ -16,15 +16,25 @@ export default meta;
 type Story = StoryObj;
 
 export const CompanyAdminShell: Story = {
-  render: () => (
-    <div className="ct">
-      <DashboardSidebar companySlug="demo" />
-      <div className="main">
-        <DashboardTopbar userName="John Doe" companyName="Demo Construction" />
-        <div style={{ padding: '24px' }}>Dashboard Content Here</div>
+  render: () => {
+    const mockUser = {
+      id: '1',
+      email: 'john@example.com',
+      name: 'John Doe',
+      role: 'COMPANY_ADMIN' as const,
+      companyId: 'comp1',
+      companyName: 'Demo Construction',
+    };
+    return (
+      <div className="ct">
+        <DashboardSidebar user={mockUser} />
+        <div className="main">
+          <DashboardTopbar user={mockUser} />
+          <div style={{ padding: '24px' }}>Dashboard Content Here</div>
+        </div>
       </div>
-    </div>
-  ),
+    );
+  },
 };
 
 export const MobilePWAShell: Story = {

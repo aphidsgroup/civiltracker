@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
+
 import { useRouter } from 'next/navigation'
 import { createExpenseAction } from '@/actions/expense'
 import type { ExpenseCategory, PaymentMode } from '@/types'
@@ -84,8 +84,8 @@ export default function MobileUploadBill() {
       })
 
       router.push('/mobile/home')
-    } catch (err: any) {
-      setError(err.message || 'Failed to submit bill')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to submit bill')
     } finally {
       setLoading(false)
     }

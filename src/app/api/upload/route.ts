@@ -10,7 +10,7 @@ export async function POST(request: Request) {
 
   const formData = await request.formData()
   const file = formData.get('file') as File
-  const module = formData.get('module') as string ?? 'general'
+  const moduleName = formData.get('module') as string ?? 'general'
   const siteId = formData.get('siteId') as string | null
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   const base64 = `data:${file.type};base64,${buffer.toString('base64')}`
 
   const companySlug = session.user.companySlug ?? 'company'
-  const folder = getCloudinaryFolder(companySlug, siteId ?? 'general', module)
+  const folder = getCloudinaryFolder(companySlug, siteId ?? 'general', moduleName)
 
   const result = await new Promise<{
     public_id: string; secure_url: string; format: string; bytes: number; width?: number; height?: number
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     data: {
       companyId: session.user.companyId!,
       siteId: siteId ?? null,
-      module,
+      module: moduleName,
       cloudinaryPublicId: result.public_id,
       secureUrl: result.secure_url,
       format: result.format,
