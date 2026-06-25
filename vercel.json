@@ -1,0 +1,15 @@
+{
+  "buildCommand": "npx prisma generate && next build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["sin1"],
+  "env": {
+    "DATABASE_URL": "@civil-tracker-database-url",
+    "DIRECT_URL": "@civil-tracker-direct-url",
+    "NEXTAUTH_SECRET": "@civil-tracker-nextauth-secret",
+    "CLOUDINARY_CLOUD_NAME": "@civil-tracker-cloudinary-cloud-name",
+    "CLOUDINARY_API_KEY": "@civil-tracker-cloudinary-api-key",
+    "CLOUDINARY_API_SECRET": "@civil-tracker-cloudinary-api-secret"
+  }
+}
