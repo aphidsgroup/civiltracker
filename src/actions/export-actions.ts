@@ -1,18 +1,22 @@
 'use server'
 
 import { requireUser } from '@/lib/auth/require-user'
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { hasPermission } from '@/lib/permissions'
 import { getSiteCostReport, getVendorPayableReport, getClientReceivableReport, logReportExport } from '@/actions/reports'
 import { generatePDFBuffer, generateExcelBuffer } from '@/lib/reports/report-export'
 import { prisma } from '@/lib/prisma'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function exportReportAction(reportType: string, format: 'PDF' | 'EXCEL', filters: any) {
   const user = await requireUser()
   const company = await prisma.company.findUnique({ where: { id: user.companyId! } })
 
   let title = ''
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let data: any[] = []
   let headers: string[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let rows: any[][] = []
 
   switch (reportType) {

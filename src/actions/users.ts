@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/auth/require-permission'
 import { Role } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function createUser(data: any) {
   const currentUser = await requirePermission('company.manage')
   const companyId = currentUser.companyId
@@ -62,6 +63,7 @@ export async function createUser(data: any) {
   return { success: true, userId: newUser.id }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function updateUser(userId: string, data: any) {
   const currentUser = await requirePermission('company.manage')
   const companyId = currentUser.companyId

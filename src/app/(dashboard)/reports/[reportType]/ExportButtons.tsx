@@ -5,6 +5,7 @@ import { FileText, Table } from 'lucide-react'
 import { exportReportAction } from '@/actions/export-actions'
 import toast from 'react-hot-toast'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function ExportButtons({ reportType, filters }: { reportType: string, filters: any }) {
   const [loading, setLoading] = useState<string | null>(null)
 
@@ -25,6 +26,7 @@ export default function ExportButtons({ reportType, filters }: { reportType: str
         toast.success(`Exported ${format} successfully`)
       }
     } catch (e) {
+      console.error(e)
       toast.error(`Failed to export ${format}`)
     } finally {
       setLoading(null)

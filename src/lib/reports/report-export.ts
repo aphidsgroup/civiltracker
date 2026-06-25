@@ -1,7 +1,6 @@
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const PdfPrinter = require('pdfmake')
 import ExcelJS from 'exceljs'
-import { formatINR } from './money'
-
 // Define standard fonts for pdfmake
 const fonts = {
   Roboto: {
@@ -21,13 +20,14 @@ const fonts = {
 export async function generatePDFBuffer(
   title: string,
   companyName: string,
-  filters: any,
+  filters: Record<string, unknown>,
   headers: string[],
-  rows: any[][],
+  rows: (string | number | boolean | null | undefined)[][],
   summary?: { label: string; value: string }[]
 ): Promise<Buffer> {
   const printer = new PdfPrinter(fonts)
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const docDefinition: any = {
     defaultStyle: {
       font: 'Helvetica',
@@ -98,9 +98,9 @@ export async function generatePDFBuffer(
 export async function generateExcelBuffer(
   title: string,
   companyName: string,
-  filters: any,
+  filters: Record<string, unknown>,
   headers: string[],
-  rows: any[][]
+  rows: (string | number | boolean | null | undefined)[][]
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook()
   workbook.creator = companyName

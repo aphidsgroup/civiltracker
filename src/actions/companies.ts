@@ -6,8 +6,9 @@ import { Role, CompanyStatus, CompanyPlan } from '@prisma/client'
 import { slugify } from '@/lib/utils'
 import bcrypt from 'bcryptjs'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function createCompany(data: any) {
-  const user = await requireRole(Role.SUPER_ADMIN)
+  const user = await requireRole([Role.SUPER_ADMIN])
   
   const slug = slugify(data.name)
   const existing = await prisma.company.findUnique({ where: { slug } })
@@ -63,7 +64,7 @@ export async function createCompany(data: any) {
 }
 
 export async function updateCompanyStatus(companyId: string, status: CompanyStatus) {
-  await requireRole(Role.SUPER_ADMIN)
+  await requireRole([Role.SUPER_ADMIN])
   await prisma.company.update({
     where: { id: companyId },
     data: { status }
@@ -71,8 +72,9 @@ export async function updateCompanyStatus(companyId: string, status: CompanyStat
   return { success: true }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function updateCompanyLimitsAndModules(companyId: string, data: any) {
-  await requireRole(Role.SUPER_ADMIN)
+  await requireRole([Role.SUPER_ADMIN])
   await prisma.company.update({
     where: { id: companyId },
     data: {

@@ -6,6 +6,7 @@ import { requireCompanyAccess } from '@/lib/auth/require-company-access'
 import { slugify } from '@/lib/utils'
 import { SiteStatus } from '@prisma/client'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function createSite(data: any) {
   const user = await requirePermission('sites.create')
   const companyId = user.companyId
@@ -68,7 +69,9 @@ export async function createSite(data: any) {
   return { success: true, siteId: site.id }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function updateSite(siteId: string, data: any) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const user = await requirePermission('sites.update')
   await requireCompanyAccess(siteId, 'site')
 

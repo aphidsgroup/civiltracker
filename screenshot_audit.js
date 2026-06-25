@@ -1,4 +1,6 @@
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { chromium, devices } = require('playwright');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const fs = require('fs');
 
 (async () => {

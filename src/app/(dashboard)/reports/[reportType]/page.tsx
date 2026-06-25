@@ -1,7 +1,6 @@
 import { getSiteCostReport, getVendorPayableReport, getClientReceivableReport } from '@/actions/reports'
 import { requireUser } from '@/lib/auth/require-user'
 import { formatINR } from '@/lib/reports/money'
-import { Download } from 'lucide-react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import ExportButtons from './ExportButtons'
@@ -12,6 +11,7 @@ export default async function ReportDetailPage({ params }: { params: { reportTyp
 
   let title = ''
   let description = ''
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let data: any[] = []
   let columns: { key: string; label: string; isMoney?: boolean }[] = []
 

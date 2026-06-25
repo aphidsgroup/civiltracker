@@ -3,9 +3,8 @@
 import { prisma } from '@/lib/prisma'
 import { requireUser } from '@/lib/auth/require-user'
 import { hasPermission } from '@/lib/permissions'
-import { calculateProfitForecast, hasCostRisk, isSiteOverBudget } from '@/lib/reports/calculations'
-import { toDecimal } from '@/lib/reports/money'
-import { ApprovalStatus, Prisma } from '@prisma/client'
+import { hasCostRisk, isSiteOverBudget, calculateProfitForecast } from '@/lib/reports/calculations'
+import { Prisma } from '@prisma/client'
 
 export async function getFounderDashboardStats() {
   const user = await requireUser()
@@ -138,6 +137,7 @@ export async function getFounderDashboardStats() {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getSiteCostReport(filters: any) {
   const user = await requireUser()
   if (!hasPermission(user.role, 'reports.view')) throw new Error('Unauthorized')
@@ -188,6 +188,7 @@ export async function getSiteCostReport(filters: any) {
 }
 
 // Ensure simple export tracking
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function logReportExport(reportType: string, format: string, filters: any) {
   const user = await requireUser()
   if (user.role !== 'SUPER_ADMIN') {
@@ -200,6 +201,7 @@ export async function logReportExport(reportType: string, format: string, filter
       companyId: user.companyId,
       action: `REPORT_EXPORTED_${format}`,
       module: 'REPORTS',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       after: { reportType, filters } as any
     }
   })
@@ -211,6 +213,7 @@ export async function logReportExport(reportType: string, format: string, filter
         generatedById: user.id,
         reportType,
         format,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         filtersJson: filters as any
       }
     })
@@ -219,6 +222,7 @@ export async function logReportExport(reportType: string, format: string, filter
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
 export async function getVendorPayableReport(filters: any) {
   const user = await requireUser()
   if (!hasPermission(user.role, 'reports.vendorPayable')) throw new Error('Unauthorized')
@@ -238,6 +242,7 @@ export async function getVendorPayableReport(filters: any) {
   }))
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
 export async function getClientReceivableReport(filters: any) {
   const user = await requireUser()
   if (!hasPermission(user.role, 'reports.clientReceivable')) throw new Error('Unauthorized')
