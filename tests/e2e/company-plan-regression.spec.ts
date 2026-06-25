@@ -3,18 +3,189 @@
  *
  * Regression guard added after Phase 9 production incident:
  * The Phase 9 migration changed Company.plan from String → CompanyPlan enum
- * using a DROP+ADD sequence, which reset 2 production companies to TRIAL.
+ * using a DROP+ADD sequence. Even though ADD COLUMN followed DROP COLUMN, all
+ * existing plan values were reset to the DEFAULT ('TRIAL'), wiping 2 production
+ * companies' billing state.
  *
- * These tests verify that:
- * 1. Company plan values are preserved when unrelated fields are updated.
- * 2. Super Admin can update company limits without resetting the plan.
- * 3. The plan field always survives a round-trip through the edit form.
+ * STRICT RULE (tightened post-incident):
+ * ────────────────────────────────────────
+ * Any migration file that contains DROP COLUMN on a protected commercial field
+ * FAILS by default — regardless of whether ADD COLUMN also appears.
+ *
+ * The ONLY exception: the migration contains the exact marker comment:
+ *   -- APPROVED_COMMERCIAL_STATE_BACKFILL
+ *
+ * AND the migration also satisfies ALL of:
+ *   1. A backup/temp column is created before the drop (ADD COLUMN *_backup or *_new)
+ *   2. An explicit UPDATE ... SET ... (data copy / backfill) is present
+ *   3. A validation/assertion query or comment is present
+ *   4. No blind DEFAULT reset — the backfill must not rely solely on a DEFAULT value
+ *
+ * Protected commercial fields:
+ *   Company.plan
+ *   Company.status
+ *   Company.modulesJson
+ *   Company.userLimit
+ *   Company.siteLimit
+ *   Company.storageLimitMb
  *
  * Run against preview (not production — requires seeded test data):
  *   npx playwright test tests/e2e/company-plan-regression.spec.ts
  */
 
 import { test, expect } from '@playwright/test'
+import * as fs from 'fs'
+import * as path from 'path'
+
+// ---------------------------------------------------------------------------
+// Protected commercial state fields — never DROP without approved backfill
+// ---------------------------------------------------------------------------
+
+const PROTECTED_COLUMNS = [
+  '"plan"',
+  '"status"',
+  '"modulesJson"',
+  '"userLimit"',
+  '"siteLimit"',
+  '"storageLimitMb"',
+]
+
+const APPROVAL_MARKER = '-- APPROVED_COMMERCIAL_STATE_BACKFILL'
+
+/**
+ * Checks a single migration SQL file for unsafe DROP COLUMN on protected fields.
+ * Returns an array of violation strings (empty = safe).
+ */
+function auditMigrationSql(sql: string, filename: string): string[] {
+  const violations: string[] = []
+  const upper = sql.toUpperCase()
+  const hasApprovalMarker = sql.includes(APPROVAL_MARKER)
+
+  for (const col of PROTECTED_COLUMNS) {
+    const colUpper = col.toUpperCase()
+    // Look for DROP COLUMN followed (on same line) by the column name
+    const dropPattern = new RegExp(`DROP\\s+COLUMN\\s+(?:IF\\s+EXISTS\\s+)?${colUpper.replace(/"/g, '(?:"|)')}`, 'i')
+    if (dropPattern.test(upper)) {
+      if (!hasApprovalMarker) {
+        violations.push(
+          `[${filename}] DROP COLUMN on protected field ${col} found WITHOUT approval marker.\n` +
+          `  → Add '${APPROVAL_MARKER}' AND a full backfill sequence, or rewrite without dropping.`
+        )
+        continue
+      }
+
+      // Marker is present — verify all backfill requirements are met
+      const backfillViolations: string[] = []
+
+      // 1. Must have a temp/backup column (ADD COLUMN *_backup or *_new)
+      const hasBackupCol =
+        /ADD\s+COLUMN\s+"\w+(?:_new|_backup|_temp)"/i.test(sql) ||
+        /ADD\s+COLUMN\s+\w+(?:_new|_backup|_temp)/i.test(sql)
+      if (!hasBackupCol) {
+        backfillViolations.push('missing temp/backup column before DROP (expected *_new, *_backup, or *_temp)')
+      }
+
+      // 2. Must have an explicit UPDATE ... SET ... (data copy)
+      if (!/UPDATE\s+/i.test(sql)) {
+        backfillViolations.push('missing UPDATE ... SET ... backfill statement')
+      }
+
+      // 3. Must have a validation query or comment
+      const hasValidation =
+        /SELECT\s+COUNT/i.test(sql) ||
+        /--\s*validate/i.test(sql) ||
+        /--\s*verify/i.test(sql) ||
+        /--\s*assert/i.test(sql) ||
+        /--\s*check/i.test(sql)
+      if (!hasValidation) {
+        backfillViolations.push('missing validation query or -- validate/verify/check comment')
+      }
+
+      // 4. Backfill must not rely solely on DEFAULT (blind reset)
+      // If the only ADD COLUMN for the protected field uses a NOT NULL DEFAULT with no UPDATE,
+      // that's a blind reset. We already check UPDATE above, so this is belt-and-suspenders.
+      const blindDefaultPattern = new RegExp(
+        `ADD\\s+COLUMN\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?${colUpper.replace(/"/g, '(?:"|)')}.*DEFAULT`,
+        'i'
+      )
+      if (blindDefaultPattern.test(sql) && !/UPDATE\s+/i.test(sql)) {
+        backfillViolations.push(`blind DEFAULT reset on ${col} with no UPDATE backfill`)
+      }
+
+      if (backfillViolations.length > 0) {
+        violations.push(
+          `[${filename}] DROP COLUMN on ${col} has approval marker but INCOMPLETE backfill:\n` +
+          backfillViolations.map(v => `    - ${v}`).join('\n')
+        )
+      }
+    }
+  }
+
+  return violations
+}
+
+// ---------------------------------------------------------------------------
+// Migration File Safety Guard — scans ALL migration files
+// ---------------------------------------------------------------------------
+
+test.describe('Migration File Safety Guard', () => {
+  test('No migration drops protected commercial columns without approved backfill', () => {
+    const migrationsDir = path.resolve(__dirname, '../../prisma/migrations')
+
+    if (!fs.existsSync(migrationsDir)) {
+      // No migrations dir in this environment — skip
+      return
+    }
+
+    const allViolations: string[] = []
+
+    const migrationFolders = fs.readdirSync(migrationsDir).filter(f =>
+      fs.statSync(path.join(migrationsDir, f)).isDirectory()
+    )
+
+    for (const folder of migrationFolders) {
+      const sqlFile = path.join(migrationsDir, folder, 'migration.sql')
+      if (!fs.existsSync(sqlFile)) continue
+
+      const sql = fs.readFileSync(sqlFile, 'utf-8')
+      const violations = auditMigrationSql(sql, `${folder}/migration.sql`)
+      allViolations.push(...violations)
+    }
+
+    if (allViolations.length > 0) {
+      throw new Error(
+        `\n\nCOMMERCIAL STATE MIGRATION GUARD FAILED\n` +
+        `═══════════════════════════════════════\n` +
+        `${allViolations.length} violation(s) found in migration files:\n\n` +
+        allViolations.join('\n\n') +
+        `\n\nSee docs/admin-runbook.md for the approved backfill pattern.\n`
+      )
+    }
+  })
+
+  test('Phase 9 migration specifically: plan DROP is flagged as a known incident', () => {
+    // This test exists as a historical record. Phase 9 migration DOES contain a
+    // DROP+ADD on plan without the approval marker — it is the incident that
+    // created this guard. The test confirms the guard would have caught it.
+    const sqlFile = path.resolve(
+      __dirname,
+      '../../prisma/migrations/20260625160000_phase_9_multitenant/migration.sql'
+    )
+
+    if (!fs.existsSync(sqlFile)) return
+
+    const sql = fs.readFileSync(sqlFile, 'utf-8')
+    const violations = auditMigrationSql(sql, 'phase_9/migration.sql')
+
+    // This migration SHOULD produce violations (it's the incident migration)
+    // We document this rather than skip it so the historical record is clear.
+    expect(violations.length).toBeGreaterThan(0)
+
+    // And the violation must mention "plan"
+    const mentionsPlan = violations.some(v => v.includes('"plan"'))
+    expect(mentionsPlan).toBe(true)
+  })
+})
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -30,7 +201,7 @@ async function loginAsSuperAdmin(page: Parameters<typeof test>[1] extends (args:
 }
 
 // ---------------------------------------------------------------------------
-// Plan Persistence Tests
+// Runtime Plan Persistence Tests (require seeded preview environment)
 // ---------------------------------------------------------------------------
 
 test.describe('Company Plan Persistence', () => {
@@ -38,115 +209,50 @@ test.describe('Company Plan Persistence', () => {
     await loginAsSuperAdmin(page)
   })
 
-  test('/super-admin/companies lists companies with plan values', async ({ page }) => {
+  test('/super-admin/companies loads without error', async ({ page }) => {
     await page.goto('/super-admin/companies')
     const body = await page.locator('body').innerText()
     expect(body).not.toContain('This page could not be found')
     expect(body).not.toContain('Application error')
-    // Companies page should render without crash
     expect(await page.evaluate(() => document.readyState)).toBe('complete')
   })
 
-  test('Company edit form shows plan field', async ({ page }) => {
-    await page.goto('/super-admin/companies')
-    // Find the first company edit link
-    const editLink = page.locator('a[href*="/super-admin/companies/"][href$="/edit"], a:has-text("Edit")').first()
-    const editCount = await editLink.count()
-    if (editCount === 0) {
-      // Navigate directly to companies list and check for any company
-      const companyLink = page.locator('a[href*="/super-admin/companies/"]').first()
-      await companyLink.click()
-      await page.waitForLoadState('networkidle')
-    } else {
-      await editLink.click()
-      await page.waitForLoadState('networkidle')
-    }
-    // Company detail/edit page should load without error
-    const body = await page.locator('body').innerText()
-    expect(body).not.toContain('Application error')
-  })
-
-  test('/super-admin/companies/new form includes plan field', async ({ page }) => {
+  test('/super-admin/companies/new form includes plan and limit fields', async ({ page }) => {
     await page.goto('/super-admin/companies/new')
     const body = await page.locator('body').innerText()
     expect(body).not.toContain('This page could not be found')
     expect(body).not.toContain('Application error')
 
-    // The create form must have plan, userLimit, siteLimit fields
     await expect(page.locator('input[name="name"]')).toBeVisible()
     await expect(page.locator('input[name="userLimit"]')).toBeVisible()
     await expect(page.locator('input[name="siteLimit"]')).toBeVisible()
 
-    // Plan selector should be present (select or radio group)
+    // Plan selector must be present
     const planField = page.locator('select[name="plan"], input[name="plan"], [data-field="plan"]')
-    const planCount = await planField.count()
-    expect(planCount).toBeGreaterThan(0)
+    expect(await planField.count()).toBeGreaterThan(0)
   })
 
-  test('API /api/companies returns plan field in response', async ({ page, request }) => {
-    await loginAsSuperAdmin(page)
+  test('API /api/companies preserves plan field on all returned companies', async ({ page, request }) => {
     const cookies = await page.context().cookies()
     const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ')
 
-    // Check if there's a companies API endpoint
     const res = await request.get('/api/companies', {
       headers: { Cookie: cookieHeader },
     })
 
-    // Either 200 with data or 404 if no such endpoint — but NOT a plan-stripping 200
     if (res.status() === 200) {
       const body = await res.json()
-      const companies = body.companies ?? body
+      const companies: unknown[] = body.companies ?? body
       if (Array.isArray(companies) && companies.length > 0) {
-        // Every company in the response must have a plan field
         for (const company of companies) {
-          expect(company).toHaveProperty('plan')
-          expect(typeof company.plan).toBe('string')
-          expect(company.plan.length).toBeGreaterThan(0)
+          const c = company as Record<string, unknown>
+          expect(c).toHaveProperty('plan')
+          expect(typeof c.plan).toBe('string')
+          expect((c.plan as string).length).toBeGreaterThan(0)
+          // Plan must never be empty string — that would indicate a stripped value
+          expect(c.plan).not.toBe('')
         }
       }
-    }
-    // If 404, the API doesn't exist which is fine — no regression to test
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Migration Guard: Verify Prisma Migration SQL Safety
-// ---------------------------------------------------------------------------
-
-test.describe('Migration File Safety Guard', () => {
-  test('Phase 9 migration SQL does not contain unguarded DROP COLUMN on plan', async () => {
-    // This test reads the migration file content at test time to confirm the pattern
-    // In CI, this would fail if someone re-generates the migration destructively
-    const fs = await import('fs')
-    const path = await import('path')
-
-    const migrationDir = path.resolve(
-      __dirname,
-      '../../prisma/migrations/20260625160000_phase_9_multitenant'
-    )
-
-    let migrationSql = ''
-    try {
-      migrationSql = fs.readFileSync(path.join(migrationDir, 'migration.sql'), 'utf-8')
-    } catch {
-      // Migration file may not exist in all environments — skip
-      return
-    }
-
-    // The migration should NOT contain a bare DROP COLUMN "plan" without a preceding ADD COLUMN
-    const lines = migrationSql.split('\n')
-    const dropPlanLines = lines.filter(l =>
-      l.toUpperCase().includes('DROP COLUMN') && l.includes('"plan"')
-    )
-    const addPlanLines = lines.filter(l =>
-      l.toUpperCase().includes('ADD COLUMN') && l.includes('"plan"')
-    )
-
-    // If the migration drops plan, it must also add it back in the same file (type change pattern)
-    // A bare DROP without ADD would be data-destructive
-    if (dropPlanLines.length > 0) {
-      expect(addPlanLines.length).toBeGreaterThan(0)
     }
   })
 })

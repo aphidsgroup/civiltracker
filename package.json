@@ -74,6 +74,6 @@
     "vitest": "^4.1.9"
   },
   "prisma": {
-    "seed": "npx tsx prisma/seed.ts"
+  "seed": "npx tsx prisma/seed.ts"
   }
 }

@@ -23,27 +23,90 @@ Vercel auto-deploys on push to `main`. Monitor at https://vercel.com/dashboard.
 
 #### Pre-Migration Safety Checklist
 
-Before merging any migration to `main`, verify the migration SQL contains **none** of the following on protected columns:
+##### Protected Commercial Fields
 
-| Check | Command |
-|-------|---------|
-| No `DROP COLUMN` on `Company.plan` | `grep -i 'DROP COLUMN.*"plan"' migration.sql` → must return nothing |
-| No `DROP COLUMN` on `Company.status` | `grep -i 'DROP COLUMN.*"status"' migration.sql` → must return nothing |
-| No `DROP COLUMN` on `Company.modulesJson` | `grep -i 'DROP COLUMN.*"modulesJson"' migration.sql` → must return nothing |
-| No `DROP COLUMN` on limit fields | `grep -i 'DROP COLUMN.*"userLimit\|siteLimit\|storageLimitMb"' migration.sql` → must return nothing |
-| No destructive changes on subscription fields | No `DROP TABLE "Company"`, no `TRUNCATE`, no `DELETE FROM "Company"` |
+These columns hold billing and subscription state. **Any `DROP COLUMN` on them is a hard failure.**
 
-**If a type change on a protected column is unavoidable**, write an explicit backfill:
+| Field | Table | Why protected |
+|-------|-------|--------------|
+| `plan` | `Company` | Billing tier — Phase 9 incident reset 2 companies to TRIAL |
+| `status` | `Company` | Account lifecycle (TRIAL/ACTIVE/SUSPENDED/CANCELLED) |
+| `modulesJson` | `Company` | Enabled module list, set per contract |
+| `userLimit` | `Company` | Per-contract seat cap |
+| `siteLimit` | `Company` | Per-contract site cap |
+| `storageLimitMb` | `Company` | Per-contract storage cap |
+
+##### Rule: DROP COLUMN on protected fields fails by default
+
+Run these checks on every migration SQL file before merging:
+
+```bash
+# Each of these must return ZERO matches
+grep -i 'DROP COLUMN.*"plan"'          migration.sql
+grep -i 'DROP COLUMN.*"status"'        migration.sql
+grep -i 'DROP COLUMN.*"modulesJson"'   migration.sql
+grep -i 'DROP COLUMN.*"userLimit"'     migration.sql
+grep -i 'DROP COLUMN.*"siteLimit"'     migration.sql
+grep -i 'DROP COLUMN.*"storageLimitMb"' migration.sql
+grep -i 'DROP TABLE.*"Company"'        migration.sql
+grep -i 'TRUNCATE.*"Company"'          migration.sql
+```
+
+The automated Playwright regression suite (`tests/e2e/company-plan-regression.spec.ts`) also runs this check on every migration file at CI time.
+
+> **Why `DROP+ADD` is never safe:** The Phase 9 incident used exactly this pattern — `DROP COLUMN "plan"` followed by `ADD COLUMN "plan" DEFAULT 'TRIAL'`. Even though ADD COLUMN was present, all existing values were silently wiped and replaced with the DEFAULT. The guard rejects this regardless. See `docs/production-migration-audit.md`.
+
+##### Exception: approved backfill-safe migration
+
+If a type change on a protected column is truly unavoidable, the migration **must** include all of the following or the regression test will fail:
+
+1. **Approval marker** — add this exact comment anywhere in the migration file:
+   ```sql
+   -- APPROVED_COMMERCIAL_STATE_BACKFILL
+   ```
+
+2. **Backup/temp column** — create a safe staging column before touching the original:
+   ```sql
+   ALTER TABLE "Company" ADD COLUMN "plan_new" "CompanyPlan" NOT NULL DEFAULT 'TRIAL';
+   ```
+
+3. **Explicit data backfill** — copy existing values before dropping:
+   ```sql
+   UPDATE "Company" SET "plan_new" = "plan"::text::"CompanyPlan";
+   ```
+
+4. **Validation query or comment** — assert data integrity after backfill:
+   ```sql
+   -- verify: SELECT COUNT(*) FROM "Company" WHERE "plan_new" IS NULL → must be 0
+   ```
+
+5. **Drop and rename** — only after steps 2–4:
+   ```sql
+   ALTER TABLE "Company" DROP COLUMN "plan";
+   ALTER TABLE "Company" RENAME COLUMN "plan_new" TO "plan";
+   ```
+
+Full approved example:
 
 ```sql
--- SAFE type change pattern (String → Enum example)
+-- APPROVED_COMMERCIAL_STATE_BACKFILL
+-- Context: changing Company.plan from String → CompanyPlan enum
+-- Incident history: see docs/production-migration-audit.md
+
+-- Step 1: add temp column
 ALTER TABLE "Company" ADD COLUMN "plan_new" "CompanyPlan" NOT NULL DEFAULT 'TRIAL';
+
+-- Step 2: backfill from existing values (no blind DEFAULT)
 UPDATE "Company" SET "plan_new" = "plan"::text::"CompanyPlan";
+
+-- Step 3: validate — run manually before step 4
+-- verify: SELECT COUNT(*) FROM "Company" WHERE "plan_new" IS NULL  → must be 0
+-- verify: SELECT plan, plan_new FROM "Company"                     → values match
+
+-- Step 4: swap
 ALTER TABLE "Company" DROP COLUMN "plan";
 ALTER TABLE "Company" RENAME COLUMN "plan_new" TO "plan";
 ```
-
-> **Why this matters:** Phase 9 migration changed `Company.plan` from String → CompanyPlan enum via a DROP+ADD sequence. This reset 2 production companies to TRIAL and required manual correction. See `docs/production-migration-audit.md`.
 
 #### Steps
 
