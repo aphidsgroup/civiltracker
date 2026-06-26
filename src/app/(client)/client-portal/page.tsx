@@ -44,6 +44,15 @@ export default async function ClientPortal() {
       {/* Hero section */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 rounded-full bg-white/5 blur-3xl pointer-events-none"></div>
+        <form action={async () => {
+          'use server'
+          const { signOut } = await import('@/lib/auth')
+          await signOut({ redirectTo: '/login' })
+        }} className="absolute top-6 right-6 z-20">
+          <button type="submit" className="text-white/70 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md transition-all border border-white/10">
+            Logout
+          </button>
+        </form>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center relative z-10">
           <div className="md:col-span-2 space-y-4">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-amber-300 text-xs font-semibold backdrop-blur-md border border-white/10">

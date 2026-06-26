@@ -71,7 +71,7 @@ export default async function UsersSettingsPage() {
                         {getInitials(m.user.name ?? m.user.email)}
                       </div>
                       <div>
-                        <div className="font-semibold text-sm text-gray-900">{m.user.name ?? '—'}</div>
+                        <Link href={`/settings/users/${m.id}`} className="font-semibold text-sm text-blue-600 hover:underline">{m.user.name ?? '—'}</Link>
                         <div className="text-xs text-gray-500">{m.user.email}</div>
                       </div>
                     </div>
