@@ -68,7 +68,7 @@ export default async function MobileNotificationsPage() {
       {/* Hero Banner */}
       <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-b-[32px] shadow-xl space-y-3 mb-4">
         <div className="flex items-center justify-between">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#fff7ed]0/20 border border-blue-400/30 text-[10px] font-black uppercase tracking-wider text-blue-300">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#fc6e20]/20 border border-blue-400/30 text-[10px] font-black uppercase tracking-wider text-blue-300">
             <Sparkles size={12} />
             <span>Telemetry Dispatch</span>
           </div>

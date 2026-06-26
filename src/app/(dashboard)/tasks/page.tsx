@@ -12,7 +12,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 const STATUS_DOT: Record<string, string> = {
   NOT_STARTED: 'bg-slate-400 dark:bg-slate-500',
-  IN_PROGRESS: 'bg-[#fff7ed]0 dark:bg-blue-400',
+  IN_PROGRESS: 'bg-[#fc6e20] dark:bg-blue-400',
   DELAYED: 'bg-red-500 dark:bg-red-400',
   COMPLETED: 'bg-emerald-500 dark:bg-emerald-400',
 }
@@ -100,7 +100,7 @@ export default async function TasksPage() {
                     <td className="px-4 py-3.5 text-sm">
                       <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">{t.progress}%</div>
                       <div className="w-20 bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                        <div className="bg-[#fc6e20] dark:bg-[#fff7ed]0 h-full rounded-full transition-all" style={{ width: `${t.progress}%` }}></div>
+                        <div className="bg-[#fc6e20] dark:bg-[#fc6e20] h-full rounded-full transition-all" style={{ width: `${t.progress}%` }}></div>
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-xs text-slate-500 dark:text-slate-400">

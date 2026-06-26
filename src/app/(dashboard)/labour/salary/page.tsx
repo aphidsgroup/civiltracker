@@ -139,7 +139,7 @@ export default async function LabourSalaryPage() {
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-[#e85b0d]950 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between border border-white/10">
+        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-[#ea580c] text-white rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between border border-white/10">
           <div className="absolute -right-6 -bottom-6 w-36 h-36 bg-white/5 rounded-full blur-2xl pointer-events-none" />
           <div className="flex items-center justify-between text-slate-300 mb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Gross Computed</span>
@@ -208,7 +208,7 @@ export default async function LabourSalaryPage() {
               key={run.id}
               className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative overflow-hidden group"
             >
-              <div className="absolute top-0 left-0 w-1 h-full bg-[#fff7ed]0 group-hover:bg-[#fc6e20] transition-colors" />
+              <div className="absolute top-0 left-0 w-1 h-full bg-[#fc6e20] group-hover:bg-[#fc6e20] transition-colors" />
 
               <div className="space-y-2 flex-1 pl-2">
                 <div className="flex flex-wrap items-center gap-2.5">

@@ -103,7 +103,7 @@ export default async function ClientPortalPaymentsPage() {
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8 pb-24 min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* Hero Header */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-[#e85b0d]950 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden border border-white/10">
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-[#ea580c] text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden border border-white/10">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-3 max-w-2xl">

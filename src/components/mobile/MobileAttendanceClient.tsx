@@ -675,7 +675,7 @@ export default function MobileAttendanceClient({
                     </div>
                   </div>
                   <div className="flex items-center gap-2 pt-1">
-                    <button type="submit" disabled={updating} className="flex-1 py-2.5 bg-[#fff7ed]0 text-white font-black text-xs rounded-xl shadow-lg border-none"><Check size={15} className="inline mr-1 -mt-0.5" /> Save Changes</button>
+                    <button type="submit" disabled={updating} className="flex-1 py-2.5 bg-[#fc6e20] text-white font-black text-xs rounded-xl shadow-lg border-none"><Check size={15} className="inline mr-1 -mt-0.5" /> Save Changes</button>
                     <button type="button" onClick={() => setEditingId(null)} className="px-4 py-2.5 bg-white/10 text-slate-300 font-bold text-xs rounded-xl border-none">Cancel</button>
                   </div>
                 </form>
@@ -710,7 +710,7 @@ export default function MobileAttendanceClient({
         </div>
 
         {showContractorForm && (
-          <form onSubmit={handleAddContractor} className="bg-gradient-to-br from-blue-900 to-[#e85b0d]950 p-5 rounded-3xl text-white shadow-xl space-y-4 border border-blue-500/30 animate-in zoom-in-95 duration-200">
+          <form onSubmit={handleAddContractor} className="bg-gradient-to-br from-blue-900 to-[#ea580c] p-5 rounded-3xl text-white shadow-xl space-y-4 border border-blue-500/30 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="text-xs font-black uppercase tracking-wider text-blue-300">Log Daily Contractor</div>
               <span className="text-[10px] text-blue-200/50">Today's Headcount</span>
@@ -746,7 +746,7 @@ export default function MobileAttendanceClient({
                 <input type="time" value={conStartTime} onChange={e => setConStartTime(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white text-xs font-bold focus:ring-2 focus:ring-blue-400 box-border" />
               </div>
             </div>
-            <button type="submit" disabled={addingContractor} className="w-full py-3 bg-[#fff7ed]0 hover:bg-[#fc6e20] active:scale-98 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md mt-2 flex justify-center items-center gap-1.5">
+            <button type="submit" disabled={addingContractor} className="w-full py-3 bg-[#fc6e20] hover:bg-[#fc6e20] active:scale-98 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md mt-2 flex justify-center items-center gap-1.5">
               {addingContractor ? 'Saving...' : <><Check size={16} strokeWidth={3} /> Save Contractor Log</>}
             </button>
           </form>
