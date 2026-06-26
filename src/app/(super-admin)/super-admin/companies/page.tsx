@@ -6,6 +6,7 @@ import { getInitials } from '@/lib/utils'
 import ResponsiveTable from '@/components/responsive/ResponsiveTable'
 import MobileCardList from '@/components/responsive/MobileCardList'
 import { CompanyStatus } from '@prisma/client'
+import { Plus } from 'lucide-react'
 
 export default async function CompaniesPage({
   searchParams,
@@ -42,66 +43,50 @@ export default async function CompaniesPage({
   ]
 
   return (
-    <>
-      <div className="topbar">
-        <div className="title">Company Directory</div>
-        <Link href="/super-admin/companies/new" className="btn-primary" style={{ textDecoration: 'none' }}>
-          <svg className="svg16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-          Add Company
+    <div className="min-h-screen bg-gray-50/50">
+      <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
+        <h1 className="text-xl font-semibold text-gray-900">Company Directory</h1>
+        <Link href="/super-admin/companies/new" className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors">
+          <Plus className="w-4 h-4" /> Add Company
         </Link>
       </div>
       
-      <div style={{ padding: '24px' }}>
-        <div className="tabs" style={{ display: 'flex', gap: '8px', marginBottom: '20px', background: '#fff', padding: '6px', borderRadius: '12px', border: '1px solid var(--line)', width: 'fit-content' }}>
-          {tabs.map(t => (
-            <Link 
-              key={t.id} 
-              href={`?tab=${t.id}`}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: 600,
-                textDecoration: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                color: tab === t.id ? '#13558e' : 'var(--mut)',
-                background: tab === t.id ? 'rgba(19,85,142,0.06)' : 'transparent'
-              }}
-            >
-              {t.label}
-              <span style={{ 
-                background: tab === t.id ? '#13558e' : '#eef2f6', 
-                color: tab === t.id ? '#fff' : 'var(--mut)',
-                padding: '2px 6px',
-                borderRadius: '4px',
-                fontSize: '11px',
-                fontWeight: 700
-              }}>
-                {t.count}
-              </span>
-            </Link>
-          ))}
+      <div className="p-6">
+        <div className="flex flex-wrap gap-2 mb-6 bg-white p-1.5 rounded-xl border border-gray-200 w-fit">
+          {tabs.map(t => {
+            const isActiveTab = tab === t.id
+            return (
+              <Link 
+                key={t.id} 
+                href={`?tab=${t.id}`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isActiveTab ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}`}
+              >
+                {t.label}
+                <span className={`px-2 py-0.5 rounded text-xs font-bold ${isActiveTab ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                  {t.count}
+                </span>
+              </Link>
+            )
+          })}
         </div>
 
-        <div className="ct-card" style={{ overflowX: 'auto' }}>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden overflow-x-auto">
           <ResponsiveTable
             desktopView={
-              <table className="ct-table">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr>
-                    <th>Company</th>
-                    <th>Owner</th>
-                    <th>Plan</th>
-                    <th>Sites</th>
-                    <th>Users</th>
-                    <th>Storage</th>
-                    <th>Status</th>
-                    <th>Action</th>
+                  <tr className="border-b border-gray-200 bg-gray-50/75">
+                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Company</th>
+                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Owner</th>
+                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Plan</th>
+                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sites</th>
+                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Users</th>
+                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Storage</th>
+                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-100">
                   {companies.map(c => {
                     const owner = c.members[0]?.user
                     const maxUsers = 50 // Mock max users based on plan
@@ -110,61 +95,65 @@ export default async function CompaniesPage({
                     const sitePct = Math.min((c._count.sites / maxSites) * 100, 100)
                     const userPct = Math.min((c._count.members / maxUsers) * 100, 100)
                     
-                    let stCls = 'chip-green'
-                    if (c.status === 'TRIAL') stCls = 'chip-amber'
-                    if (c.status === 'SUSPENDED') stCls = 'chip-red'
+                    let stCls = 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    let dotCls = 'bg-emerald-500'
+                    if (c.status === 'TRIAL') {
+                      stCls = 'bg-amber-50 text-amber-700 border-amber-200'
+                      dotCls = 'bg-amber-500'
+                    }
+                    if (c.status === 'SUSPENDED') {
+                      stCls = 'bg-rose-50 text-rose-700 border-rose-200'
+                      dotCls = 'bg-rose-500'
+                    }
 
                     return (
-                      <tr key={c.id}>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div style={{ 
-                              width: '40px', height: '40px', borderRadius: '10px', 
-                              background: `linear-gradient(135deg, var(--p), var(--p3))`,
-                              color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '14px', fontWeight: 700
-                            }}>
+                      <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-900 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
                               {getInitials(c.name)}
                             </div>
                             <div>
-                              <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--ink)' }}>{c.name}</div>
-                              <div style={{ fontSize: '12px', color: 'var(--mut)', marginTop: '2px' }}>
+                              <div className="font-bold text-sm text-gray-900">{c.name}</div>
+                              <div className="text-xs text-gray-500 mt-0.5">
                                 {c.city} • since {new Date(c.createdAt).getFullYear()}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td>
-                          <div style={{ fontWeight: 600, fontSize: '13px' }}>{owner?.name || 'No Owner'}</div>
-                          <div style={{ fontSize: '12px', color: 'var(--mut)', marginTop: '2px' }}>{owner?.phone || owner?.email || '-'}</div>
+                        <td className="px-6 py-4">
+                          <div className="font-semibold text-sm text-gray-900">{owner?.name || 'No Owner'}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">{owner?.phone || owner?.email || '-'}</div>
                         </td>
-                        <td>
-                          <div className="chip chip-blue">{c.plan || 'PRO'}</div>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                            {c.plan || 'PRO'}
+                          </span>
                         </td>
-                        <td>
-                          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>{c._count.sites} of {maxSites} used</div>
-                          <div className="ct-progress">
-                            <div className={`ct-progress-fill ${sitePct > 90 ? 'red' : sitePct > 75 ? 'amber' : ''}`} style={{ width: `${sitePct}%` }}></div>
+                        <td className="px-6 py-4">
+                          <div className="text-xs font-semibold text-gray-700 mb-1.5">{c._count.sites} of {maxSites} used</div>
+                          <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                            <div className={`h-full rounded-full ${sitePct > 90 ? 'bg-rose-500' : sitePct > 75 ? 'bg-amber-500' : 'bg-blue-600'}`} style={{ width: `${sitePct}%` }} />
                           </div>
                         </td>
-                        <td>
-                          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '6px' }}>{c._count.members} of {maxUsers} active</div>
-                          <div className="ct-progress">
-                            <div className={`ct-progress-fill ${userPct > 90 ? 'red' : userPct > 75 ? 'amber' : ''}`} style={{ width: `${userPct}%` }}></div>
+                        <td className="px-6 py-4">
+                          <div className="text-xs font-semibold text-gray-700 mb-1.5">{c._count.members} of {maxUsers} active</div>
+                          <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                            <div className={`h-full rounded-full ${userPct > 90 ? 'bg-rose-500' : userPct > 75 ? 'bg-amber-500' : 'bg-blue-600'}`} style={{ width: `${userPct}%` }} />
                           </div>
                         </td>
-                        <td>
-                          <div style={{ fontWeight: 600, fontSize: '13px' }}>{(Number(c.storageUsed) / (1024 * 1024)).toFixed(1)} MB</div>
+                        <td className="px-6 py-4">
+                          <div className="font-semibold text-sm text-gray-900">{(Number(c.storageUsed) / (1024 * 1024)).toFixed(1)} MB</div>
                         </td>
-                        <td>
-                          <div className={`chip ${stCls}`}>
-                            <span className="chip-dot"></span>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${stCls}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${dotCls}`} />
                             {c.status}
-                          </div>
+                          </span>
                         </td>
-                        <td>
-                          <Link href={`/super-admin/companies/${c.id}`} style={{ textDecoration: 'none' }}>
-                            <div className="btn-ghost" style={{ padding: '6px 12px', fontSize: '12px' }}>Manage</div>
+                        <td className="px-6 py-4">
+                          <Link href={`/super-admin/companies/${c.id}`} className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors inline-block">
+                            Manage
                           </Link>
                         </td>
                       </tr>
@@ -173,7 +162,7 @@ export default async function CompaniesPage({
                   
                   {companies.length === 0 && (
                     <tr>
-                      <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--mut)' }}>
+                      <td colSpan={8} className="text-center py-10 text-sm text-gray-500">
                         No companies found for this status.
                       </td>
                     </tr>
@@ -185,28 +174,35 @@ export default async function CompaniesPage({
               <MobileCardList
                 items={companies.map(c => {
                   const owner = c.members[0]?.user
-                  let stCls = 'chip-green'
-                  if (c.status === 'TRIAL') stCls = 'chip-amber'
-                  if (c.status === 'SUSPENDED') stCls = 'chip-red'
+                  let stCls = 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  let dotCls = 'bg-emerald-500'
+                  if (c.status === 'TRIAL') {
+                    stCls = 'bg-amber-50 text-amber-700 border-amber-200'
+                    dotCls = 'bg-amber-500'
+                  }
+                  if (c.status === 'SUSPENDED') {
+                    stCls = 'bg-rose-50 text-rose-700 border-rose-200'
+                    dotCls = 'bg-rose-500'
+                  }
 
                   return {
                     id: c.id,
                     title: c.name,
                     subtitle: owner ? owner.email : 'No owner',
                     meta: (
-                      <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                        <span className="chip chip-blue" style={{ fontSize: '9px' }}>{c.plan || 'PRO'}</span>
-                        <span style={{ fontSize: '12px', color: 'var(--mut)', fontWeight: 600 }}>{c._count.sites} sites</span>
+                      <div className="flex gap-2 mt-1">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200">{c.plan || 'PRO'}</span>
+                        <span className="text-xs text-gray-500 font-semibold">{c._count.sites} sites</span>
                       </div>
                     ),
-                    statusNode: <span className={`chip ${stCls}`} style={{ fontSize: '10px' }}><span className="chip-dot"></span>{c.status}</span>,
+                    statusNode: (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${stCls}`}>
+                        <span className={`w-1 h-1 rounded-full ${dotCls}`} />
+                        {c.status}
+                      </span>
+                    ),
                     avatar: (
-                      <div style={{ 
-                        width: '40px', height: '40px', borderRadius: '10px', 
-                        background: `linear-gradient(135deg, var(--p), var(--p3))`,
-                        color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '14px', fontWeight: 700
-                      }}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-900 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
                         {getInitials(c.name)}
                       </div>
                     )
@@ -217,6 +213,6 @@ export default async function CompaniesPage({
           />
         </div>
       </div>
-    </>
+    </div>
   )
 }

@@ -6,6 +6,7 @@ import { getApprovalByIdAction } from '@/actions/approvals'
 import ApprovalDetailActions from '@/components/approvals/ApprovalDetailActions'
 import { hasPermission } from '@/lib/permissions'
 import type { Role } from '@prisma/client'
+import { ArrowLeft, Paperclip, MessageSquare, History } from 'lucide-react'
 
 export default async function ApprovalDetailPage({
   params,
@@ -25,14 +26,14 @@ export default async function ApprovalDetailPage({
 
   const { approval, entityData } = approvalData
 
-  const statusColor: Record<string, string> = {
-    PENDING: 'amber',
-    SUBMITTED: 'amber',
-    PENDING_REVIEW: 'amber',
-    APPROVED: 'green',
-    PAID: 'blue',
-    REJECTED: 'red',
-    DRAFT: 'mut',
+  const statusColors: Record<string, string> = {
+    PENDING: 'bg-amber-100 text-amber-800',
+    SUBMITTED: 'bg-amber-100 text-amber-800',
+    PENDING_REVIEW: 'bg-amber-100 text-amber-800',
+    APPROVED: 'bg-emerald-100 text-emerald-800',
+    PAID: 'bg-blue-100 text-blue-800',
+    REJECTED: 'bg-red-100 text-red-800',
+    DRAFT: 'bg-slate-100 text-slate-700',
   }
 
   const userRole = session.user.role as Role
@@ -40,35 +41,35 @@ export default async function ApprovalDetailPage({
   const canPay = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'ACCOUNTANT'].includes(userRole) || hasPermission(userRole, 'salary.markPaid') || hasPermission(userRole, 'payments.manage')
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '22px', maxWidth: '900px', margin: '0 auto' }}>
+    <div className="flex flex-col gap-5.5 max-w-[900px] mx-auto">
       <div>
-        <Link href="/approvals" style={{ color: 'var(--mut)', textDecoration: 'none', fontSize: '13px', fontWeight: 700 }}>
-          ← Back to Approval Center
+        <Link href="/approvals" className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-700 no-underline text-xs font-bold transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to Approval Center
         </Link>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '10px', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="flex justify-between items-start mt-2.5 flex-wrap gap-3">
           <div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' }}>
-              <span className={`chip chip-${statusColor[approval.currentStatus] ?? 'mut'}`} style={{ fontSize: '11px' }}>
+            <div className="flex gap-2 items-center mb-1.5">
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusColors[approval.currentStatus] ?? 'bg-slate-100 text-slate-700'}`}>
                 {approval.currentStatus}
               </span>
-              <span className="chip chip-mut" style={{ fontSize: '11px' }}>
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                 {approval.entityType}
               </span>
-              <span className={`chip chip-${approval.priority === 'URGENT' ? 'red' : 'mut'}`} style={{ fontSize: '11px' }}>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${approval.priority === 'URGENT' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-700'}`}>
                 {approval.priority}
               </span>
             </div>
-            <h1 style={{ fontSize: '24px', fontWeight: 800, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+            <h1 className="text-2xl font-extrabold m-0 mb-1 tracking-tight text-slate-900">
               {approval.title}
             </h1>
-            <p style={{ color: 'var(--mut)', fontSize: '13.5px', margin: 0 }}>
+            <p className="text-slate-500 text-[13.5px] m-0">
               Requested by {approval.requestedBy.name} ({approval.requestedBy.role}) · {approval.site?.name || 'Office Wide'}
             </p>
           </div>
 
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '11px', color: 'var(--mut)', fontWeight: 700, textTransform: 'uppercase' }}>Amount</div>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--ink)' }}>
+          <div className="text-right">
+            <div className="text-[11px] text-slate-500 font-bold uppercase">Amount</div>
+            <div className="text-[28px] font-extrabold text-slate-900">
               {formatCurrency(approval.amount ? Number(approval.amount) : 0)}
             </div>
           </div>
@@ -76,33 +77,33 @@ export default async function ApprovalDetailPage({
       </div>
 
       {/* Description / Metadata Card */}
-      <div className="ct-card" style={{ padding: '20px' }}>
-        <h3 style={{ fontSize: '15px', fontWeight: 800, margin: '0 0 10px' }}>Request Rationale & Context</h3>
-        <p style={{ fontSize: '14px', lineHeight: '1.6', color: 'var(--ink)', margin: 0, whiteSpace: 'pre-wrap' }}>
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <h3 className="text-sm font-extrabold m-0 mb-2.5 text-slate-800">Request Rationale & Context</h3>
+        <p className="text-sm leading-relaxed text-slate-900 m-0 whitespace-pre-wrap">
           {approval.description || 'No additional text description provided.'}
         </p>
 
         {approval.rejectionReason && (
-          <div style={{ marginTop: '16px', padding: '12px 16px', borderRadius: '8px', background: '#fdf2f2', borderLeft: '4px solid var(--red)' }}>
-            <div style={{ fontSize: '12px', fontWeight: 800, color: '#991b1b', marginBottom: '4px' }}>REJECTION REASON</div>
-            <div style={{ fontSize: '13.5px', color: '#771d1d', fontWeight: 600 }}>{approval.rejectionReason}</div>
+          <div className="mt-4 p-3 sm:px-4 sm:py-3 rounded-lg bg-red-50 border-l-4 border-red-600">
+            <div className="text-xs font-extrabold text-red-800 mb-1">REJECTION REASON</div>
+            <div className="text-sm text-red-900 font-semibold">{approval.rejectionReason}</div>
           </div>
         )}
 
         {/* Display attachments if expense */}
         {entityData && 'billAttachments' in entityData && Array.isArray(entityData.billAttachments) && entityData.billAttachments.length > 0 && (
-          <div style={{ marginTop: '20px', borderTop: '1px solid var(--line)', paddingTop: '16px' }}>
-            <h4 style={{ fontSize: '13px', fontWeight: 800, margin: '0 0 10px', color: 'var(--mut)' }}>Attached Bill / Document</h4>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <div className="mt-5 border-t border-slate-200 pt-4">
+            <h4 className="text-xs font-extrabold m-0 mb-2.5 text-slate-500">Attached Bill / Document</h4>
+            <div className="flex gap-2.5 flex-wrap">
               {entityData.billAttachments.map((att: { id: string; secureUrl: string; format: string | null }) => (
                 <a
                   key={att.id}
                   href={att.secureUrl}
                   target="_blank"
                   rel="noreferrer"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '6px', background: 'var(--bg)', border: '1px solid var(--line)', textDecoration: 'none', color: 'var(--p)', fontSize: '13px', fontWeight: 700 }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-slate-50 border border-slate-200 no-underline text-blue-600 hover:bg-slate-100 text-xs font-bold transition-colors"
                 >
-                  📎 View Attachment ({att.format || 'doc'})
+                  <Paperclip className="w-3.5 h-3.5" /> View Attachment ({att.format || 'doc'})
                 </a>
               ))}
             </div>
@@ -119,19 +120,21 @@ export default async function ApprovalDetailPage({
       />
 
       {/* Comments Trail */}
-      <div className="ct-card" style={{ padding: '20px' }}>
-        <h3 style={{ fontSize: '15px', fontWeight: 800, margin: '0 0 16px' }}>💬 Internal Discussion ({approval.comments.length})</h3>
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <h3 className="text-sm font-extrabold m-0 mb-4 text-slate-800 flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-blue-600" /> Internal Discussion ({approval.comments.length})
+        </h3>
         {approval.comments.length === 0 ? (
-          <div style={{ color: 'var(--mut)', fontSize: '13px', fontStyle: 'italic' }}>No notes posted yet. Use the box above to start discussion.</div>
+          <div className="text-slate-500 text-xs italic">No notes posted yet. Use the box above to start discussion.</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div className="flex flex-col gap-3.5">
             {approval.comments.map((c: { id: string; user: { name: string; role: string }; comment: string; createdAt: Date }) => (
-              <div key={c.id} style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--bg)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--ink)' }}>{c.user.name} ({c.user.role})</span>
-                  <span style={{ fontSize: '11px', color: 'var(--mut)', fontWeight: 600 }}>{formatDateTime(c.createdAt)}</span>
+              <div key={c.id} className="p-3 sm:px-3.5 sm:py-3 rounded-lg bg-slate-50 border border-slate-100">
+                <div className="flex justify-between mb-1.5">
+                  <span className="text-xs font-extrabold text-slate-900">{c.user.name} ({c.user.role})</span>
+                  <span className="text-[11px] text-slate-500 font-semibold">{formatDateTime(c.createdAt)}</span>
                 </div>
-                <div style={{ fontSize: '13.5px', color: 'var(--ink)', lineHeight: '1.5' }}>{c.comment}</div>
+                <div className="text-[13.5px] text-slate-800 leading-normal">{c.comment}</div>
               </div>
             ))}
           </div>
@@ -139,17 +142,19 @@ export default async function ApprovalDetailPage({
       </div>
 
       {/* Timeline Trail */}
-      <div className="ct-card" style={{ padding: '20px' }}>
-        <h3 style={{ fontSize: '15px', fontWeight: 800, margin: '0 0 16px' }}>📜 Audit Timeline</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderLeft: '2px solid var(--line)', paddingLeft: '16px', marginLeft: '6px' }}>
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <h3 className="text-sm font-extrabold m-0 mb-4 text-slate-800 flex items-center gap-2">
+          <History className="w-4 h-4 text-slate-500" /> Audit Timeline
+        </h3>
+        <div className="flex flex-col gap-3 border-l-2 border-slate-200 pl-4 ml-1.5">
           {approval.timelines.map((t: { id: string; action: string; note: string | null; actor: { name: string; role: string }; createdAt: Date }) => (
-            <div key={t.id} style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', left: '-21px', top: '2px', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--p)' }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--ink)' }}>{t.action}</span>
-                <span style={{ fontSize: '11px', color: 'var(--mut)', fontWeight: 600 }}>{formatDateTime(t.createdAt)}</span>
+            <div key={t.id} className="relative">
+              <div className="absolute -left-[21px] top-0.5 w-2 h-2 rounded-full bg-blue-600" />
+              <div className="flex justify-between">
+                <span className="text-xs font-extrabold text-slate-900">{t.action}</span>
+                <span className="text-[11px] text-slate-500 font-semibold">{formatDateTime(t.createdAt)}</span>
               </div>
-              <div style={{ fontSize: '12.5px', color: 'var(--mut)', marginTop: '2px' }}>
+              <div className="text-xs text-slate-500 mt-0.5">
                 By {t.actor.name} ({t.actor.role}) {t.note && `— "${t.note}"`}
               </div>
             </div>

@@ -15,10 +15,10 @@ export default async function BillsPage() {
   })
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+    <div className="flex flex-col gap-5.5">
       <div>
-        <h1 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 3px', letterSpacing: '-0.02em' }}>Bill Approval</h1>
-        <p style={{ color: 'var(--mut)', fontSize: '13px', margin: 0 }}>{pendingBills.length} bills awaiting approval</p>
+        <h1 className="text-2xl font-extrabold m-0 mb-1 tracking-tight text-slate-900">Bill Approval</h1>
+        <p className="text-slate-500 text-xs m-0">{pendingBills.length} bills awaiting approval</p>
       </div>
       <BillApprovalList bills={pendingBills} />
     </div>

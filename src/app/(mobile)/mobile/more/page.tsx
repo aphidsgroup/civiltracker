@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { ChevronRight, Grid } from 'lucide-react'
 
 export default async function MobileMorePage() {
   const session = await auth()
@@ -26,17 +27,23 @@ export default async function MobileMorePage() {
   ]
 
   return (
-    <div style={{ padding: '16px' }}>
-      <h1 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '18px' }}>More</h1>
+    <div className="p-4 pb-24 max-w-lg mx-auto bg-gray-50 min-h-screen">
+      <div className="flex items-center gap-2.5 mb-6 pt-2">
+        <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+          <Grid className="w-5 h-5" />
+        </div>
+        <h1 className="text-lg font-bold text-gray-900">More</h1>
+      </div>
+
       {sections.map(section => (
-        <div key={section.title} style={{ marginBottom: '18px' }}>
-          <div style={{ fontSize: '10.5px', fontWeight: 700, color: 'var(--mut)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>{section.title}</div>
-          <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid var(--line)', overflow: 'hidden' }}>
-            {section.items.map((item, i) => (
-              <Link key={item.href} href={item.href} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderBottom: i < section.items.length - 1 ? '1px solid var(--line)' : 'none', textDecoration: 'none', color: 'inherit' }}>
-                <span style={{ fontSize: '18px', width: '24px', textAlign: 'center' }}>{item.icon}</span>
-                <span style={{ fontSize: '14px', fontWeight: 600 }}>{item.label}</span>
-                <span style={{ marginLeft: 'auto', color: 'var(--mut)', fontSize: '16px' }}>›</span>
+        <div key={section.title} className="mb-6">
+          <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 pl-1">{section.title}</div>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-100">
+            {section.items.map((item) => (
+              <Link key={item.href} href={item.href} className="flex items-center gap-3 p-3.5 hover:bg-gray-50 transition-colors">
+                <span className="text-lg w-6 text-center">{item.icon}</span>
+                <span className="text-sm font-semibold text-gray-800">{item.label}</span>
+                <ChevronRight className="w-4 h-4 ml-auto text-gray-400" />
               </Link>
             ))}
           </div>

@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import Link from 'next/link'
 
 async function createSite(formData: FormData) {
   'use server'
@@ -39,44 +40,46 @@ export default async function NewSitePage() {
 
   return (
     <>
-      <div className="topbar"><div className="title">New Site</div></div>
-      <div style={{ padding: '24px', maxWidth: 640 }}>
-        <div className="ct-card">
+      <div className="flex items-center justify-between pb-6 border-b border-slate-200 mb-6">
+        <h1 className="text-2xl font-bold text-slate-900">New Site</h1>
+      </div>
+      <div className="max-w-2xl">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
           <form action={createSite}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--mut)', marginBottom: 6 }}>Site Name *</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Site Name *</label>
                 <input name="name" required placeholder="e.g. Marina Towers Block A"
-                  style={{ width: '100%', border: '1.5px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />
               </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--mut)', marginBottom: 6 }}>Location *</label>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Location *</label>
                 <input name="location" required placeholder="e.g. Chennai, Tamil Nadu"
-                  style={{ width: '100%', border: '1.5px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />
               </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--mut)', marginBottom: 6 }}>Address</label>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Address</label>
                 <input name="address" placeholder="Full street address"
-                  style={{ width: '100%', border: '1.5px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--mut)', marginBottom: 6 }}>Project Type</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Project Type</label>
                 <select name="projectType"
-                  style={{ width: '100%', border: '1.5px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', background: '#fff' }}>
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
                   <option value="">Select type</option>
                   <option>RESIDENTIAL</option><option>COMMERCIAL</option>
                   <option>INFRASTRUCTURE</option><option>INDUSTRIAL</option><option>RENOVATION</option>
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--mut)', marginBottom: 6 }}>Budget (₹)</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Budget (₹)</label>
                 <input name="budget" type="number" min="0" placeholder="5000000"
-                  style={{ width: '100%', border: '1.5px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />
               </div>
             </div>
-            <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
-              <button type="submit" style={{ background: 'var(--p)', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Create Site</button>
-              <a href="/sites" style={{ background: 'var(--bg)', color: 'var(--ink)', border: '1.5px solid var(--line)', borderRadius: 10, padding: '11px 20px', fontSize: 14, fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>Cancel</a>
+            <div className="mt-6 flex items-center gap-3">
+              <button type="submit" className="bg-blue-600 text-white border-none rounded-lg px-6 py-2.5 text-sm font-bold hover:bg-blue-700 cursor-pointer transition-colors">Create Site</button>
+              <Link href="/sites" className="bg-slate-100 text-slate-700 border border-slate-200 rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-slate-200 text-center transition-colors">Cancel</Link>
             </div>
           </form>
         </div>

@@ -1,13 +1,15 @@
+import { FileText, Home } from 'lucide-react'
+
 export default function Page() {
   return (
-    <div className="module">
-      <div className="modic">
-        <svg className="svg28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+    <div className="flex flex-col items-center justify-center min-h-[400px] bg-white border border-slate-200 rounded-2xl p-8 text-center max-w-lg mx-auto shadow-sm my-12">
+      <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-500 mb-4">
+        <FileText className="w-7 h-7" />
       </div>
-      <div className="modt">DETAILS Module</div>
-      <div className="mods">This module is currently being configured for your workspace. It will be available shortly.</div>
-      <button className="modbtn">
-        <svg className="svg18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <div className="text-lg font-bold text-slate-900 mb-2">DETAILS Module</div>
+      <div className="text-sm text-slate-500 leading-relaxed mb-6">This module is currently being configured for your workspace. It will be available shortly.</div>
+      <button className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-sm cursor-pointer border-none font-inherit">
+        <Home className="w-4.5 h-4.5" />
         Return to Dashboard
       </button>
     </div>

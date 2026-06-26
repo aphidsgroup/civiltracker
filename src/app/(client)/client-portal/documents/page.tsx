@@ -1,11 +1,15 @@
-export default function Page() {
+import { FileText } from 'lucide-react'
+
+export default function DocumentsModulePage() {
   return (
-    <div className="module">
-      <div className="modic">
-        <svg className="svg28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+    <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center bg-white rounded-2xl border border-slate-200 shadow-sm">
+      <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4">
+        <FileText size={32} strokeWidth={1.5} />
       </div>
-      <div className="modt">DOCUMENTS Module</div>
-      <div className="mods">This module is currently being configured for your workspace. It will be available shortly.</div>
+      <h2 className="text-xl font-bold text-slate-800 mb-2">Documents Module</h2>
+      <p className="text-sm text-slate-500 max-w-md leading-relaxed">
+        This module is currently being provisioned for your workspace. Verified contracts, drawings, and site approvals will appear here shortly.
+      </p>
     </div>
   )
 }

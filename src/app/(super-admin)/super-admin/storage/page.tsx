@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
+import { HardDrive, Cloud, FileCode, Building2 } from 'lucide-react'
 
 export default async function StoragePage() {
   const session = await auth()
@@ -19,84 +20,101 @@ export default async function StoragePage() {
   const totalLimitMb = Number(totalAgg._sum.storageLimitMb || 0)
   const mediaCount = await prisma.mediaAsset.count()
 
+  function statusStyle(status: string) {
+    if (status === 'ACTIVE') return 'bg-emerald-100 text-emerald-800'
+    if (status === 'TRIAL') return 'bg-amber-100 text-amber-800'
+    return 'bg-rose-100 text-rose-800'
+  }
+
   return (
     <>
-      <div className="topbar">
-        <div className="title">Storage Usage</div>
+      <div className="flex items-center justify-between px-8 py-5 border-b border-slate-200 bg-white">
+        <div className="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <HardDrive className="text-blue-600" size={20} />
+          Platform Storage Meter
+        </div>
       </div>
 
-      <div style={{ padding: '24px' }}>
-        <div className="kpis" style={{ marginBottom: '24px' }}>
-          <div className="kpi">
-            <div className="klbl">Total Used</div>
-            <div className="knum">{totalUsedMb.toFixed(1)} MB</div>
-            <div className="ksub"><span>●</span> Across all companies</div>
+      <div className="p-8 max-w-7xl mx-auto space-y-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Used</div>
+            <div className="text-2xl font-black text-slate-800 mt-1">{totalUsedMb.toFixed(1)} MB</div>
+            <div className="text-xs font-semibold text-blue-600 mt-0.5">Cloudinary storage</div>
           </div>
-          <div className="kpi">
-            <div className="klbl">Total Allotted</div>
-            <div className="knum">{(totalLimitMb / 1024).toFixed(1)} GB</div>
-            <div className="ksub"><span>●</span> Combined limits</div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Allocated</div>
+            <div className="text-2xl font-black text-slate-800 mt-1">{(totalLimitMb / 1024).toFixed(1)} GB</div>
+            <div className="text-xs font-semibold text-slate-500 mt-0.5">Combined company quotas</div>
           </div>
-          <div className="kpi">
-            <div className="klbl">Media Assets</div>
-            <div className="knum">{mediaCount}</div>
-            <div className="ksub"><span>●</span> Cloudinary files</div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Media Assets</div>
+            <div className="text-2xl font-black text-slate-800 mt-1">{mediaCount}</div>
+            <div className="text-xs font-semibold text-slate-500 mt-0.5">Indexed files</div>
           </div>
-          <div className="kpi">
-            <div className="klbl">Companies</div>
-            <div className="knum">{companies.length}</div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Companies</div>
+            <div className="text-2xl font-black text-slate-800 mt-1">{companies.length}</div>
+            <div className="text-xs font-semibold text-slate-500 mt-0.5">Active workspaces</div>
           </div>
         </div>
 
-        <div className="ct-card" style={{ overflowX: 'auto' }}>
-          <table className="ct-table">
-            <thead>
-              <tr>
-                <th>Company</th>
-                <th>Plan</th>
-                <th>Sites</th>
-                <th>Used</th>
-                <th>Limit</th>
-                <th>Usage</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companies.map(c => {
-                const usedMb = Number(c.storageUsed) / (1024 * 1024)
-                const limitMb = c.storageLimitMb
-                const pct = Math.min((usedMb / limitMb) * 100, 100)
-                const barColor = pct > 90 ? 'var(--red)' : pct > 75 ? 'var(--amber)' : 'var(--p)'
-                return (
-                  <tr key={c.id}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,var(--p),#1d6fb5)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3.5 px-6">Company</th>
+                  <th className="py-3.5 px-6">Plan</th>
+                  <th className="py-3.5 px-6">Sites</th>
+                  <th className="py-3.5 px-6">Used</th>
+                  <th className="py-3.5 px-6">Limit</th>
+                  <th className="py-3.5 px-6 w-48">Usage Meter</th>
+                  <th className="py-3.5 px-6">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {companies.map(c => {
+                  const usedMb = Number(c.storageUsed) / (1024 * 1024)
+                  const limitMb = c.storageLimitMb
+                  const pct = Math.min((usedMb / limitMb) * 100, 100)
+                  const isHigh = pct > 90
+                  return (
+                    <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-4 px-6 font-bold text-slate-900 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-extrabold text-xs flex-shrink-0">
                           {c.name.substring(0, 2).toUpperCase()}
                         </div>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{c.name}</div>
-                      </div>
-                    </td>
-                    <td><span className="chip chip-blue" style={{ fontSize: 11 }}>{c.plan}</span></td>
-                    <td style={{ fontSize: 13, fontWeight: 600 }}>{c._count.sites}</td>
-                    <td style={{ fontSize: 13, fontWeight: 700 }}>{usedMb.toFixed(2)} MB</td>
-                    <td style={{ fontSize: 13, color: 'var(--mut)' }}>{limitMb} MB</td>
-                    <td style={{ minWidth: 140 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, color: pct > 90 ? 'var(--red)' : 'var(--mut)' }}>{pct.toFixed(1)}%</div>
-                      <div className="ct-progress">
-                        <div className="ct-progress-fill" style={{ width: `${pct}%`, background: barColor }}></div>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`chip ${c.status === 'ACTIVE' ? 'chip-green' : c.status === 'TRIAL' ? 'chip-amber' : 'chip-red'}`} style={{ fontSize: 11 }}>
-                        <span className="chip-dot"></span>{c.status}
-                      </span>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                        <span>{c.name}</span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className="px-2 py-0.5 text-xs font-semibold rounded bg-slate-100 text-slate-700 border border-slate-200">
+                          {c.plan}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 font-semibold text-slate-600">{c._count.sites}</td>
+                      <td className="py-4 px-6 font-bold text-slate-800">{usedMb.toFixed(2)} MB</td>
+                      <td className="py-4 px-6 text-slate-400">{limitMb} MB</td>
+                      <td className="py-4 px-6">
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="font-semibold text-slate-500">{pct.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${isHigh ? 'bg-rose-500' : 'bg-blue-600'}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-bold rounded-full ${statusStyle(c.status)}`}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                          {c.status}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </>

@@ -1,6 +1,8 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { Plus } from 'lucide-react'
 
 export default async function UsersSettingsPage() {
   const session = await auth()
@@ -25,54 +27,78 @@ export default async function UsersSettingsPage() {
   }
 
   return (
-    <>
-      <div className="topbar"><div className="title">Team Members</div></div>
-      <div style={{ padding: '24px' }}>
-        <div className="kpis" style={{ marginBottom: 24 }}>
+    <div className="min-h-screen bg-gray-50/50">
+      <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
+        <h1 className="text-xl font-semibold text-gray-900">Team Members</h1>
+      </div>
+      <div className="p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
             { label: 'Total Members', value: members.length },
             { label: 'Active', value: activeCount },
             { label: 'User Limit', value: userLimit },
             { label: 'Slots Used', value: `${activeCount} / ${userLimit}` },
           ].map(k => (
-            <div key={k.label} className="kpi">
-              <div className="klbl">{k.label}</div>
-              <div className="knum" style={{ fontSize: 18 }}>{k.value}</div>
+            <div key={k.label} className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">{k.label}</div>
+              <div className="text-xl font-bold text-gray-900 mt-1">{k.value}</div>
             </div>
           ))}
         </div>
-        <div className="ct-card" style={{ overflowX: 'auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>All Members</div>
-            <a href="/settings/users/invite" style={{ background: 'var(--p)', color: '#fff', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>+ Invite</a>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 overflow-hidden overflow-x-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-base font-bold text-gray-900">All Members</h2>
+            <Link href="/settings/users/invite" className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-medium shadow-sm transition-colors">
+              <Plus className="w-4 h-4" /> Invite
+            </Link>
           </div>
-          <table className="ct-table">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr><th>Member</th><th>Role</th><th>Phone</th><th>Joined</th><th>Status</th></tr>
+              <tr className="border-b border-gray-200 bg-gray-50/75">
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Member</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Joined</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+              </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100">
               {members.map(m => (
-                <tr key={m.id}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--p)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, flexShrink: 0 }}>{getInitials(m.user.name ?? m.user.email)}</div>
+                <tr key={m.id} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {getInitials(m.user.name ?? m.user.email)}
+                      </div>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 13 }}>{m.user.name ?? '—'}</div>
-                        <div style={{ fontSize: 11.5, color: 'var(--mut)' }}>{m.user.email}</div>
+                        <div className="font-semibold text-sm text-gray-900">{m.user.name ?? '—'}</div>
+                        <div className="text-xs text-gray-500">{m.user.email}</div>
                       </div>
                     </div>
                   </td>
-                  <td style={{ fontSize: 12 }}><span className="chip chip-blue" style={{ fontSize: 11 }}>{m.role}</span></td>
-                  <td style={{ fontSize: 12, color: 'var(--mut)' }}>{m.user.phone ?? '—'}</td>
-                  <td style={{ fontSize: 12, color: 'var(--mut)' }}>{new Date(m.joinedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                  <td><span className={`chip ${m.isActive ? 'chip-green' : 'chip-red'}`} style={{ fontSize: 11 }}>{m.isActive ? 'Active' : 'Inactive'}</span></td>
+                  <td className="px-6 py-4 text-xs font-medium">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                      {m.role}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-xs text-gray-500">{m.user.phone ?? '—'}</td>
+                  <td className="px-6 py-4 text-xs text-gray-500">{new Date(m.joinedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${m.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+                      {m.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
                 </tr>
               ))}
-              {members.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: 32, color: 'var(--mut)' }}>No members yet.</td></tr>}
+              {members.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="text-center py-8 text-sm text-gray-500">No members yet.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
-    </>
+    </div>
   )
 }

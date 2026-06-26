@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import AttendanceMarker from '@/components/mobile/AttendanceMarker'
+import { Users } from 'lucide-react'
 
 export default async function AttendancePage() {
   const session = await auth()
@@ -21,12 +22,17 @@ export default async function AttendancePage() {
   })
 
   return (
-    <div style={{ padding: '16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>Attendance</h1>
-        <span className="chip chip-mut">{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+    <div className="p-4 pb-24 max-w-lg mx-auto bg-gray-50 min-h-screen">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+          <Users className="w-5 h-5" />
+        </div>
+        <h1 className="text-lg font-bold text-gray-900">Attendance</h1>
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold border border-gray-200 bg-white text-gray-600 ml-auto shadow-sm">
+          {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+        </span>
       </div>
-      <div style={{ marginBottom: '10px', fontSize: '12.5px', color: 'var(--mut)', fontWeight: 600 }}>
+      <div className="mb-4 text-xs text-gray-500 font-medium pl-1">
         {labour.length} workers on roster
       </div>
       <AttendanceMarker labour={labour.map(l => ({ id: l.id, name: l.name, trade: l.trade, siteName: l.site.name, attendance: l.attendance[0] ?? null }))} />

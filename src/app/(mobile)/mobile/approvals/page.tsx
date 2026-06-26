@@ -4,6 +4,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import MobileCardList from '@/components/responsive/MobileCardList'
 import { getApprovalsAction } from '@/actions/approvals'
+import { ArrowLeft, CheckSquare } from 'lucide-react'
 
 export default async function MobileApprovalsPage({
   searchParams,
@@ -18,48 +19,43 @@ export default async function MobileApprovalsPage({
 
   const approvals = await getApprovalsAction({ status: activeStatus })
 
-  const statusColor: Record<string, string> = {
-    PENDING: 'amber',
-    SUBMITTED: 'amber',
-    PENDING_REVIEW: 'amber',
-    APPROVED: 'green',
-    PAID: 'blue',
-    REJECTED: 'red',
-    DRAFT: 'mut',
+  const statusBadge: Record<string, string> = {
+    PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
+    SUBMITTED: 'bg-amber-50 text-amber-700 border-amber-200',
+    PENDING_REVIEW: 'bg-amber-50 text-amber-700 border-amber-200',
+    APPROVED: 'bg-green-50 text-green-700 border-green-200',
+    PAID: 'bg-blue-50 text-blue-700 border-blue-200',
+    REJECTED: 'bg-red-50 text-red-700 border-red-200',
+    DRAFT: 'bg-gray-50 text-gray-600 border-gray-200',
   }
 
   const tabs = ['ALL', 'PENDING', 'APPROVED', 'REJECTED']
 
   return (
-    <div className="module" style={{ paddingBottom: '90px' }}>
-      <div className="appbar" style={{ marginBottom: '14px' }}>
-        <div className="sitepill">
-          <div>
-            <div className="sitenm">Field Approvals</div>
-            <div className="sitesub">Review site requests & bills</div>
-          </div>
+    <div className="p-4 pb-24 max-w-lg mx-auto bg-gray-50 min-h-screen">
+      <div className="mb-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-3">
+        <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
+          <CheckSquare className="w-6 h-6" />
+        </div>
+        <div>
+          <h1 className="text-lg font-bold text-gray-900">Field Approvals</h1>
+          <p className="text-xs text-gray-500">Review site requests & bills</p>
         </div>
       </div>
 
       {/* Filter tabs */}
-      <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px', paddingBottom: '4px' }}>
+      <div className="flex gap-2 overflow-x-auto mb-4 pb-1 scrollbar-none">
         {tabs.map((tab) => {
           const isActive = activeStatus === tab
           return (
             <Link
               key={tab}
               href={`/mobile/approvals${tab === 'ALL' ? '' : `?status=${tab}`}`}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '16px',
-                fontSize: '12px',
-                fontWeight: 700,
-                textDecoration: 'none',
-                background: isActive ? 'var(--p)' : '#fff',
-                color: isActive ? '#fff' : 'var(--ink)',
-                border: isActive ? 'none' : '1px solid var(--line)',
-                whiteSpace: 'nowrap',
-              }}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                isActive
+                  ? 'bg-amber-500 text-white shadow-sm'
+                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              }`}
             >
               {tab}
             </Link>
@@ -72,32 +68,33 @@ export default async function MobileApprovalsPage({
         items={approvals.map((app) => ({
           id: app.id,
           title: (
-            <Link href={`/mobile/approvals/${app.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+            <Link href={`/mobile/approvals/${app.id}`} className="block font-semibold text-gray-900 hover:text-amber-600 transition-colors">
               {app.title}
             </Link>
           ),
           subtitle: `${app.entityType} • ${app.site?.name || 'Office'} • ${app.requestedBy.name}`,
           meta: (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-              <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ink)' }}>
+            <div className="flex justify-between items-center mt-2">
+              <div className="text-sm font-extrabold text-gray-900">
                 {formatCurrency(app.amount ? Number(app.amount) : 0)}
               </div>
-              <span style={{ fontSize: '11px', color: 'var(--mut)', fontWeight: 600 }}>
+              <span className="text-[11px] text-gray-400 font-medium">
                 {formatDate(app.submittedAt)}
               </span>
             </div>
           ),
           statusNode: (
-            <span className={`chip chip-${statusColor[app.currentStatus] ?? 'mut'}`} style={{ fontSize: '10px' }}>
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider ${statusBadge[app.currentStatus] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>
               {app.currentStatus}
             </span>
           ),
         }))}
       />
 
-      <div style={{ marginTop: '20px', textAlign: 'center' }}>
-        <Link href="/mobile/home" style={{ color: 'var(--p)', fontWeight: 700, textDecoration: 'none', fontSize: '13px' }}>
-          ← Back to Mobile Home
+      <div className="mt-8 text-center">
+        <Link href="/mobile/home" className="inline-flex items-center text-amber-600 font-bold text-xs hover:underline">
+          <ArrowLeft className="w-4 h-4 mr-1" />
+          Back to Mobile Home
         </Link>
       </div>
     </div>

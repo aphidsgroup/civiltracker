@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils'
+import { ChevronLeft } from 'lucide-react'
 
 export default async function SiteDetailPage({
   params,
@@ -29,83 +30,107 @@ export default async function SiteDetailPage({
 
   return (
     <>
-      <div className="pageact">
-        <div className="filtbar" style={{ gap: '10px' }}>
-          <Link href="/sites" className="backb2" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: '#647387', cursor: 'pointer', textDecoration: 'none' }}>
-            <svg className="svg16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-2.5">
+          <Link href="/sites" className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors">
+            <ChevronLeft className="w-4 h-4" />
             Sites
           </Link>
-          <div style={{ fontSize: '17px', fontWeight: 800 }}>{site.name}</div>
-          <div className="schip green"><span className="sdot"></span>{site.status.replace('_', ' ')}</div>
+          <div className="text-lg font-extrabold text-slate-900">{site.name}</div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            {site.status.replace('_', ' ')}
+          </div>
         </div>
-        <div className="miniact">Share to client</div>
-      </div>
-      
-      <div className="tabs">
-        <div className="tab on">Overview</div>
-        <div className="tab">DPR</div>
-        <div className="tab">Expenses</div>
-        <div className="tab">Bills</div>
-        <div className="tab">Labour</div>
-        <div className="tab">Materials</div>
-        <div className="tab">Tasks</div>
-        <div className="tab">BOQ</div>
-      </div>
-      
-      <div className="statrow">
-        <div className="statc dark">
-          <div className="statn">{progress}%</div>
-          <div className="statl">Overall progress • {site.currentStage || 'Planning'} stage</div>
-        </div>
-        <div className="statc">
-          <div className="statn">{formatCurrency(spent)}</div>
-          <div className="statl">Spent of {formatCurrency(budget)}</div>
-        </div>
-        <div className="statc">
-          <div className="statn">-</div>
-          <div className="statl">Labour present</div>
-        </div>
-        <div className="statc">
-          <div className="statn" style={{ color: '#a96c08' }}>0</div>
-          <div className="statl">Pending approvals</div>
+        <div className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer shadow-sm transition-colors">
+          Share to client
         </div>
       </div>
       
-      <div className="dgrid">
-        <div className="colL">
-          <div className="card">
-            <div className="chead"><div className="ctitle">Budget vs Actual by head</div></div>
-            <div className="cbody">
-              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--mut)', fontSize: '13px' }}>
+      <div className="flex items-center gap-2 border-b border-slate-200 mb-6 overflow-x-auto">
+        <div className="px-3 py-2 text-sm font-semibold text-blue-600 border-b-2 border-blue-600 whitespace-nowrap cursor-pointer">Overview</div>
+        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">DPR</div>
+        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">Expenses</div>
+        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">Bills</div>
+        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">Labour</div>
+        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">Materials</div>
+        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">Tasks</div>
+        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">BOQ</div>
+      </div>
+      
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="p-4 bg-slate-900 text-white rounded-xl shadow-sm">
+          <div className="text-2xl font-bold">{progress}%</div>
+          <div className="text-xs text-slate-400 mt-1">Overall progress • {site.currentStage || 'Planning'} stage</div>
+        </div>
+        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+          <div className="text-2xl font-bold text-slate-900">{formatCurrency(spent)}</div>
+          <div className="text-xs text-slate-500 mt-1">Spent of {formatCurrency(budget)}</div>
+        </div>
+        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+          <div className="text-2xl font-bold text-slate-900">-</div>
+          <div className="text-xs text-slate-500 mt-1">Labour present</div>
+        </div>
+        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+          <div className="text-2xl font-bold text-amber-600">0</div>
+          <div className="text-xs text-slate-500 mt-1">Pending approvals</div>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200">
+              <div className="font-bold text-slate-800 text-sm">Budget vs Actual by head</div>
+            </div>
+            <div className="p-5">
+              <div className="py-8 text-center text-slate-500 text-xs">
                 Detailed budget breakdown is not configured for this project.
               </div>
             </div>
           </div>
           
-          <div className="card">
-            <div className="chead">
-              <div className="ctitle">Today&apos;s site update</div>
-              <div className="csub">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+              <div className="font-bold text-slate-800 text-sm">Today&apos;s site update</div>
+              <div className="text-xs text-slate-500">
                 {latestDpr ? `From DPR • ${formatDateTime(latestDpr.createdAt)}` : 'No recent updates'}
               </div>
             </div>
-            <div className="cbody">
-              <div style={{ fontSize: '13.5px', lineHeight: 1.6, color: '#3a4b5c', fontWeight: 500 }}>
+            <div className="p-5">
+              <div className="text-sm leading-relaxed text-slate-700 font-medium">
                 {latestDpr ? latestDpr.workDone : 'No DPRs submitted for this site yet.'}
               </div>
             </div>
           </div>
         </div>
         
-        <div className="colR">
-          <div className="card">
-            <div className="chead"><div className="ctitle">Site facts</div></div>
-            <div className="cbody">
-              <div className="metarow"><span className="metak">Client</span><span className="metav">{site.clientName || '-'}</span></div>
-              <div className="metarow"><span className="metak">Contract</span><span className="metav">Item-rate • {formatCurrency(budget)}</span></div>
-              <div className="metarow"><span className="metak">Start</span><span className="metav">{formatDate(site.startDate)}</span></div>
-              <div className="metarow"><span className="metak">Handover</span><span className="metav">{formatDate(site.handoverDate)}</span></div>
-              <div className="metarow"><span className="metak">Location</span><span className="metav">{site.location}</span></div>
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200">
+              <div className="font-bold text-slate-800 text-sm">Site facts</div>
+            </div>
+            <div className="p-5">
+              <div className="flex items-center justify-between py-2.5 border-b border-slate-100 text-xs">
+                <span className="text-slate-500 font-medium">Client</span>
+                <span className="text-slate-900 font-semibold text-right">{site.clientName || '-'}</span>
+              </div>
+              <div className="flex items-center justify-between py-2.5 border-b border-slate-100 text-xs">
+                <span className="text-slate-500 font-medium">Contract</span>
+                <span className="text-slate-900 font-semibold text-right">Item-rate • {formatCurrency(budget)}</span>
+              </div>
+              <div className="flex items-center justify-between py-2.5 border-b border-slate-100 text-xs">
+                <span className="text-slate-500 font-medium">Start</span>
+                <span className="text-slate-900 font-semibold text-right">{formatDate(site.startDate)}</span>
+              </div>
+              <div className="flex items-center justify-between py-2.5 border-b border-slate-100 text-xs">
+                <span className="text-slate-500 font-medium">Handover</span>
+                <span className="text-slate-900 font-semibold text-right">{formatDate(site.handoverDate)}</span>
+              </div>
+              <div className="flex items-center justify-between py-2.5 text-xs">
+                <span className="text-slate-500 font-medium">Location</span>
+                <span className="text-slate-900 font-semibold text-right">{site.location}</span>
+              </div>
             </div>
           </div>
         </div>

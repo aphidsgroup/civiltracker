@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import Link from 'next/link'
 
 async function createCompany(formData: FormData) {
   'use server'
@@ -31,50 +32,50 @@ export default async function NewCompanyPage() {
   const plans = await prisma.subscriptionPlan.findMany({ orderBy: { price: 'asc' } })
 
   return (
-    <>
-      <div className="topbar">
-        <div className="title">Create Company</div>
+    <div className="min-h-screen bg-gray-50/50">
+      <div className="flex items-center px-6 py-4 bg-white border-b border-gray-200">
+        <h1 className="text-xl font-semibold text-gray-900">Create Company</h1>
       </div>
 
-      <div style={{ padding: '24px', maxWidth: 640 }}>
-        <div className="ct-card">
+      <div className="p-6 max-w-2xl">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <form action={createCompany}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--mut)', marginBottom: 6 }}>Company Name *</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Company Name *</label>
                 <input name="name" required placeholder="Madras Construction Pvt Ltd"
-                  style={{ width: '100%', border: '1.5px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--mut)', marginBottom: 6 }}>Email</label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Email</label>
                 <input name="email" type="email" placeholder="admin@company.com"
-                  style={{ width: '100%', border: '1.5px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--mut)', marginBottom: 6 }}>Phone</label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Phone</label>
                 <input name="phone" type="tel" placeholder="+91 98765 43210"
-                  style={{ width: '100%', border: '1.5px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--mut)', marginBottom: 6 }}>GST Number</label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">GST Number</label>
                 <input name="gst" placeholder="22AAAAA0000A1Z5"
-                  style={{ width: '100%', border: '1.5px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--mut)', marginBottom: 6 }}>City</label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">City</label>
                 <input name="city" placeholder="Chennai"
-                  style={{ width: '100%', border: '1.5px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--mut)', marginBottom: 6 }}>State</label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">State</label>
                 <input name="state" placeholder="Tamil Nadu"
-                  style={{ width: '100%', border: '1.5px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }} />
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               </div>
               {plans.length > 0 && (
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: 'var(--mut)', marginBottom: 6 }}>Subscription Plan</label>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Subscription Plan</label>
                   <select name="planId"
-                    style={{ width: '100%', border: '1.5px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', background: '#fff' }}>
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     {plans.map(p => (
                       <option key={p.id} value={p.id}>{p.name} — ₹{Number(p.price).toLocaleString("en-IN")}/mo</option>
                     ))}
@@ -83,19 +84,19 @@ export default async function NewCompanyPage() {
               )}
             </div>
 
-            <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
+            <div className="mt-6 flex items-center gap-3">
               <button type="submit"
-                style={{ background: 'var(--p)', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors cursor-pointer">
                 Create Company
               </button>
-              <a href="/super-admin/companies"
-                style={{ background: 'var(--bg)', color: 'var(--ink)', border: '1.5px solid var(--line)', borderRadius: 10, padding: '11px 20px', fontSize: 14, fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>
+              <Link href="/super-admin/companies"
+                className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors inline-block">
                 Cancel
-              </a>
+              </Link>
             </div>
           </form>
         </div>
       </div>
-    </>
+    </div>
   )
 }

@@ -24,21 +24,25 @@ export default async function SettingsPage() {
   if (!company) redirect('/login')
 
   const roleColors: Record<string, string> = {
-    COMPANY_ADMIN: 'blue', PROJECT_MANAGER: 'violet', ACCOUNTANT: 'amber',
-    SITE_ENGINEER: 'green', SUPERVISOR: 'mut', CLIENT: 'red',
+    COMPANY_ADMIN: 'bg-blue-50 text-blue-700 border-blue-200',
+    PROJECT_MANAGER: 'bg-purple-50 text-purple-700 border-purple-200',
+    ACCOUNTANT: 'bg-amber-50 text-amber-700 border-amber-200',
+    SITE_ENGINEER: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    SUPERVISOR: 'bg-gray-100 text-gray-700 border-gray-200',
+    CLIENT: 'bg-rose-50 text-rose-700 border-rose-200',
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+    <div className="flex flex-col gap-6 p-6 min-h-screen bg-gray-50/50">
       <div>
-        <h1 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 3px', letterSpacing: '-0.02em' }}>Settings</h1>
-        <p style={{ color: 'var(--mut)', fontSize: '13px', margin: 0 }}>Company and account settings</p>
+        <h1 className="text-xl font-semibold tracking-tight text-gray-900 mb-1">Settings</h1>
+        <p className="text-sm text-gray-500 m-0">Company and account settings</p>
       </div>
 
       {/* Company info */}
-      <div className="ct-card" style={{ padding: '20px' }}>
-        <h2 style={{ fontSize: '15px', fontWeight: 800, margin: '0 0 16px' }}>Company</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <h2 className="text-base font-bold text-gray-900 mb-4">Company</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[
             { label: 'Company Name', value: company.name },
             { label: 'Plan', value: company.plan ?? 'Standard' },
@@ -48,44 +52,53 @@ export default async function SettingsPage() {
             { label: 'Member Since', value: formatDate(company.createdAt) },
           ].map(f => (
             <div key={f.label}>
-              <div style={{ fontSize: '10.5px', color: 'var(--mut)', fontWeight: 700, marginBottom: '4px', textTransform: 'uppercase' }}>{f.label}</div>
-              <div style={{ fontSize: '14px', fontWeight: 700 }}>{f.value}</div>
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{f.label}</div>
+              <div className="text-sm font-semibold text-gray-900">{f.value}</div>
             </div>
           ))}
         </div>
       </div>
 
       {/* Team */}
-      <div className="ct-card" style={{ overflow: 'hidden' }}>
-        <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--line)' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 800, margin: 0 }}>Team Members</h2>
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50/50">
+          <h2 className="text-base font-bold text-gray-900 m-0">Team Members</h2>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="ct-table">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Joined</th>
-                <th>Status</th>
+              <tr className="border-b border-gray-200 bg-gray-50/75">
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Joined</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100">
               {users.map(u => (
-                <tr key={u.id}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, #1d6fb5, #0c3c6a)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-blue-900 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
                         {u.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0,2)}
                       </div>
-                      <span style={{ fontWeight: 700 }}>{u.name}</span>
+                      <span className="font-semibold text-sm text-gray-900">{u.name}</span>
                     </div>
                   </td>
-                  <td style={{ fontSize: '12.5px', color: 'var(--mut)', fontWeight: 500 }}>{u.email}</td>
-                  <td><span className={`chip chip-${roleColors[u.role] ?? 'mut'}`}>{u.role.replace(/_/g, ' ')}</span></td>
-                  <td style={{ fontSize: '12px', color: 'var(--mut)', fontWeight: 500 }}>{formatDate(u.createdAt)}</td>
-                  <td><span className={`chip chip-${u.isActive ? 'green' : 'mut'}`}><span className="chip-dot" />{u.isActive ? 'Active' : 'Inactive'}</span></td>
+                  <td className="px-6 py-4 text-xs font-medium text-gray-500">{u.email}</td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${roleColors[u.role] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+                      {u.role.replace(/_/g, ' ')}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-xs font-medium text-gray-500">{formatDate(u.createdAt)}</td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${u.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${u.isActive ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                      {u.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>

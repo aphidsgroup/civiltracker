@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { ArrowLeft, CheckCircle2, Check } from 'lucide-react'
 
 const CATEGORIES = [
   { value: 'MATERIAL', label: '\u{1F9F1} Material' },
@@ -62,36 +63,55 @@ export default function AddExpensePage() {
 
   if (submitted) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
-        <div style={{ fontSize: '60px' }}>\u2705</div>
-        <div style={{ fontSize: '18px', fontWeight: 800 }}>Expense Added!</div>
-        <div style={{ fontSize: '13px', color: 'var(--mut)' }}>Redirecting...</div>
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center gap-3 bg-gray-50">
+        <CheckCircle2 className="w-16 h-16 text-green-500 animate-bounce" />
+        <div className="text-xl font-extrabold text-gray-900">Expense Added!</div>
+        <div className="text-sm text-gray-500">Redirecting...</div>
       </div>
     )
   }
 
   return (
-    <div style={{ padding: '16px' }}>
+    <div className="p-4 pb-24 max-w-lg mx-auto bg-gray-50 min-h-screen">
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <button onClick={() => router.back()} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', padding: '4px', color: 'var(--ink)' }}>\u2190</button>
-        <h1 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>Add Expense</h1>
+      <div className="flex items-center gap-3 mb-6 pt-2">
+        <button 
+          onClick={() => router.back()} 
+          className="p-2 text-gray-700 hover:bg-gray-200 rounded-full transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-lg font-bold text-gray-900">Add Expense</h1>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         {/* Amount */}
-        <div>
-          <label className="ct-label">Amount</label>
-          <div className="mobile-amt-wrap">
-            <span className="mobile-rupee">\u20B9</span>
-            <input type="number" className="mobile-amt-in" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} required min="1" step="0.01" />
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Amount</label>
+          <div className="flex items-center">
+            <span className="text-3xl font-extrabold text-gray-400 mr-2">\u20B9</span>
+            <input 
+              type="number" 
+              className="w-full text-3xl font-extrabold text-gray-900 focus:outline-none placeholder-gray-300 bg-transparent" 
+              placeholder="0" 
+              value={amount} 
+              onChange={e => setAmount(e.target.value)} 
+              required 
+              min="1" 
+              step="0.01" 
+            />
           </div>
         </div>
 
         {/* Site */}
         <div>
-          <label className="ct-label">Site</label>
-          <select className="mobile-inp" value={siteId} onChange={e => setSiteId(e.target.value)} required>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-2">Site</label>
+          <select 
+            className="w-full px-3.5 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm" 
+            value={siteId} 
+            onChange={e => setSiteId(e.target.value)} 
+            required
+          >
             <option value="">Select site</option>
             {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
@@ -99,44 +119,90 @@ export default function AddExpensePage() {
 
         {/* Category chips */}
         <div>
-          <label className="ct-label">Category</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-2">Category</label>
+          <div className="flex flex-wrap gap-2">
             {CATEGORIES.map(c => (
-              <button key={c.value} type="button" className={`mobile-chip ${category === c.value ? 'selected' : ''}`} onClick={() => setCategory(c.value)}>{c.label}</button>
+              <button 
+                key={c.value} 
+                type="button" 
+                className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all shadow-sm ${
+                  category === c.value 
+                    ? 'border border-amber-500 bg-amber-50 text-amber-900 ring-1 ring-amber-500 font-semibold' 
+                    : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                }`} 
+                onClick={() => setCategory(c.value)}
+              >
+                {c.label}
+              </button>
             ))}
           </div>
         </div>
 
         {/* Payment mode chips */}
         <div>
-          <label className="ct-label">Payment Mode</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-2">Payment Mode</label>
+          <div className="flex flex-wrap gap-2">
             {PAYMENT_MODES.map(p => (
-              <button key={p.value} type="button" className={`mobile-chip ${paymentMode === p.value ? 'selected' : ''}`} onClick={() => setPaymentMode(p.value)}>{p.label}</button>
+              <button 
+                key={p.value} 
+                type="button" 
+                className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all shadow-sm ${
+                  paymentMode === p.value 
+                    ? 'border border-amber-500 bg-amber-50 text-amber-900 ring-1 ring-amber-500 font-semibold' 
+                    : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                }`} 
+                onClick={() => setPaymentMode(p.value)}
+              >
+                {p.label}
+              </button>
             ))}
           </div>
         </div>
 
         {/* Description */}
         <div>
-          <label className="ct-label">Description *</label>
-          <textarea className="mobile-inp" placeholder="What was this expense for?" value={description} onChange={e => setDescription(e.target.value)} rows={2} required style={{ resize: 'none' }} />
+          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-2">Description *</label>
+          <textarea 
+            className="w-full px-3.5 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm resize-none" 
+            placeholder="What was this expense for?" 
+            value={description} 
+            onChange={e => setDescription(e.target.value)} 
+            rows={2} 
+            required 
+          />
         </div>
 
         {/* Paid to */}
         <div>
-          <label className="ct-label">Paid To (Vendor/Person)</label>
-          <input type="text" className="mobile-inp" placeholder="Vendor name" value={paidTo} onChange={e => setPaidTo(e.target.value)} />
+          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-2">Paid To (Vendor/Person)</label>
+          <input 
+            type="text" 
+            className="w-full px-3.5 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm" 
+            placeholder="Vendor name" 
+            value={paidTo} 
+            onChange={e => setPaidTo(e.target.value)} 
+          />
         </div>
 
         {/* Bill number */}
         <div>
-          <label className="ct-label">Bill / Invoice No.</label>
-          <input type="text" className="mobile-inp" placeholder="INV-001" value={billNumber} onChange={e => setBillNumber(e.target.value)} />
+          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-2">Bill / Invoice No.</label>
+          <input 
+            type="text" 
+            className="w-full px-3.5 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm" 
+            placeholder="INV-001" 
+            value={billNumber} 
+            onChange={e => setBillNumber(e.target.value)} 
+          />
         </div>
 
-        <button type="submit" disabled={loading} className="mobile-btn-primary">
-          {loading ? 'Saving...' : '\u2714 Submit Expense'}
+        <button 
+          type="submit" 
+          disabled={loading} 
+          className="w-full mt-2 py-3.5 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-bold rounded-xl text-sm shadow-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Check className="w-5 h-5" />
+          {loading ? 'Saving...' : 'Submit Expense'}
         </button>
       </form>
     </div>

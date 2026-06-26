@@ -1,15 +1,20 @@
+import Link from 'next/link'
+import { CalendarCheck, Home } from 'lucide-react'
+
 export default function Page() {
   return (
-    <div className="module">
-      <div className="modic">
-        <svg className="svg28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+    <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm max-w-lg mx-auto my-12">
+      <div className="p-4 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 rounded-2xl mb-4">
+        <CalendarCheck className="w-10 h-10" />
       </div>
-      <div className="modt">ATTENDANCE Module</div>
-      <div className="mods">This module is currently being configured for your workspace. It will be available shortly.</div>
-      <button className="modbtn">
-        <svg className="svg18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight mb-2">ATTENDANCE Module</h1>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-sm leading-relaxed">
+        This module is currently being configured for your workspace. It will be available shortly.
+      </p>
+      <Link href="/" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm transition-colors shadow-sm">
+        <Home className="w-4 h-4" />
         Return to Dashboard
-      </button>
+      </Link>
     </div>
   )
 }

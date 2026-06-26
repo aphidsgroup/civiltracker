@@ -1,10 +1,15 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
+import { FileText, FolderOpen } from 'lucide-react'
 
 const CAT_COLOR: Record<string, string> = {
-  CONTRACT: 'chip-blue', DRAWING: 'chip-violet', PERMIT: 'chip-amber',
-  REPORT: 'chip-green', INVOICE: 'chip-red', OTHER: '',
+  CONTRACT: 'bg-blue-50 text-blue-700 border-blue-200',
+  DRAWING: 'bg-purple-50 text-purple-700 border-purple-200',
+  PERMIT: 'bg-amber-50 text-amber-700 border-amber-200',
+  REPORT: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  INVOICE: 'bg-rose-50 text-rose-700 border-rose-200',
+  OTHER: 'bg-gray-100 text-gray-600 border-gray-200',
 }
 
 export default async function DocumentsPage() {
@@ -24,63 +29,64 @@ export default async function DocumentsPage() {
   }, {} as Record<string, number>)
 
   return (
-    <>
-      <div className="topbar">
-        <div className="title">Documents</div>
+    <div className="min-h-screen bg-gray-50/50">
+      <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
+        <h1 className="text-xl font-semibold text-gray-900">Documents</h1>
       </div>
 
-      <div style={{ padding: '20px' }}>
-        <div className="kpis" style={{ marginBottom: '20px' }}>
-          <div className="kpi">
-            <div className="klbl">Total Documents</div>
-            <div className="knum">{docs.length}</div>
+      <div className="p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+          <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+            <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Documents</div>
+            <div className="text-2xl font-bold text-gray-900 mt-1">{docs.length}</div>
           </div>
           {Object.entries(byCategory).map(([cat, count]) => (
-            <div key={cat} className="kpi">
-              <div className="klbl">{cat}</div>
-              <div className="knum">{count}</div>
+            <div key={cat} className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">{cat}</div>
+              <div className="text-2xl font-bold text-gray-900 mt-1">{count}</div>
             </div>
           ))}
         </div>
 
         {docs.length === 0 ? (
-          <div className="ct-card" style={{ padding: '60px 20px', textAlign: 'center' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
-            <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 6 }}>No documents yet</div>
-            <div style={{ fontSize: 13, color: 'var(--mut)' }}>Upload contracts, drawings, permits, and reports to keep everything in one place.</div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center flex flex-col items-center justify-center">
+            <div className="p-4 bg-blue-50 text-blue-600 rounded-full mb-4">
+              <FolderOpen className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-1">No documents yet</h3>
+            <p className="text-sm text-gray-500 max-w-sm">Upload contracts, drawings, permits, and reports to keep everything in one place.</p>
           </div>
         ) : (
-          <div className="ct-card" style={{ overflowX: 'auto' }}>
-            <table className="ct-table">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden overflow-x-auto">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Site</th>
-                  <th>Category</th>
-                  <th>Version</th>
-                  <th>Date</th>
+                <tr className="border-b border-gray-200 bg-gray-50/75">
+                  <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                  <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Site</th>
+                  <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</th>
+                  <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Version</th>
+                  <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100">
                 {docs.map(d => (
-                  <tr key={d.id}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 8, background: '#e7f0fb', color: 'var(--p)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <tr key={d.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                          <FileText className="w-4 h-4" />
                         </div>
-                        <div style={{ fontWeight: 700, fontSize: 13 }}>{d.name}</div>
+                        <div className="font-medium text-sm text-gray-900">{d.name}</div>
                       </div>
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--mut)' }}>{d.site?.name ?? 'Company-wide'}</td>
-                    <td>
-                      <span className={`chip ${CAT_COLOR[d.category] ?? ''}`}
-                        style={{ fontSize: 10, fontWeight: 700, ...(!CAT_COLOR[d.category] ? { background: '#eef2f6', color: 'var(--mut)' } : {}) }}>
+                    <td className="px-6 py-4 text-xs text-gray-500">{d.site?.name ?? 'Company-wide'}</td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${CAT_COLOR[d.category] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                         {d.category}
                       </span>
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--mut)' }}>v{d.version ?? '1'}</td>
-                    <td style={{ fontSize: 12, color: 'var(--mut)' }}>
+                    <td className="px-6 py-4 text-xs text-gray-500">v{d.version ?? '1'}</td>
+                    <td className="px-6 py-4 text-xs text-gray-500">
                       {new Date(d.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
                   </tr>
@@ -90,6 +96,6 @@ export default async function DocumentsPage() {
           </div>
         )}
       </div>
-    </>
+    </div>
   )
 }
