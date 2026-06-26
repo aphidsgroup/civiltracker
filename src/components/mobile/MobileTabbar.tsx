@@ -9,6 +9,21 @@ export default function MobileTabbar() {
   const pathname = usePathname()
   const [showQuickAdd, setShowQuickAdd] = useState(false)
 
+  const hideTabbarRoutes = [
+    '/upload-bill',
+    '/add-expense',
+    '/site-photo',
+    '/attendance',
+    '/dpr',
+    '/add',
+    '/approvals',
+    '/notifications'
+  ]
+
+  if (hideTabbarRoutes.some(route => pathname.includes(route))) {
+    return null
+  }
+
   const isOn = (segment: string) => pathname.includes(segment)
 
   const tab = (href: string, label: string, icon: React.ReactNode, segment: string) => {
