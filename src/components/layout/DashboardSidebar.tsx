@@ -4,10 +4,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { SessionUser } from '@/types'
 import { getInitials } from '@/lib/utils'
+import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard, FileText, Receipt, CheckCircle2, Users, Package,
   ShoppingCart, DollarSign, BarChart3, Settings, Layers, Building2,
-  Truck, ClipboardList, FolderOpen, UserCircle, CalendarCheck
+  Truck, ClipboardList, FolderOpen, UserCircle, CalendarCheck, LogOut
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -117,16 +118,26 @@ export default function DashboardSidebar({
       </nav>
 
       {/* User */}
-      <div className="flex items-center gap-2.5 p-2.5 border-t border-white/[0.08] mt-2">
-        <div className="w-[34px] h-[34px] rounded-[10px] bg-white/[0.12] text-white font-extrabold text-[13px] flex items-center justify-center flex-shrink-0">
-          {getInitials(user.name ?? user.email ?? '?')}
-        </div>
-        <div className="min-w-0">
-          <div className="text-[13px] font-bold text-white truncate">{user.name ?? 'User'}</div>
-          <div className="text-[10.5px] text-[#8aa0b3] truncate">
-            {user.role?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+      <div className="flex items-center justify-between p-2.5 border-t border-white/[0.08] mt-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-[34px] h-[34px] rounded-[10px] bg-white/[0.12] text-white font-extrabold text-[13px] flex items-center justify-center flex-shrink-0">
+            {getInitials(user.name ?? user.email ?? '?')}
+          </div>
+          <div className="min-w-0">
+            <div className="text-[13px] font-bold text-white truncate">{user.name ?? 'User'}</div>
+            <div className="text-[10.5px] text-[#8aa0b3] truncate">
+              {user.role?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+            </div>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => signOut({ callbackUrl: '/login' })}
+          title="Log out"
+          className="w-8 h-8 rounded-lg hover:bg-white/[0.12] text-[#8aa0b3] hover:text-rose-400 flex items-center justify-center transition-colors cursor-pointer border-none bg-transparent flex-shrink-0 ml-2"
+        >
+          <LogOut size={16} />
+        </button>
       </div>
     </div>
   )

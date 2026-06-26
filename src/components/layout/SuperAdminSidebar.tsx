@@ -4,8 +4,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Building2, Plus, Users, CreditCard,
-  HardDrive, Layers, MessageCircle, FileText, Settings, Landmark
+  HardDrive, Layers, MessageCircle, FileText, Settings, Landmark, LogOut
 } from 'lucide-react'
+import { signOut } from 'next-auth/react'
 
 const NAV_ITEMS = [
   { type: 'group', label: 'Platform' },
@@ -75,6 +76,18 @@ export default function SuperAdminSidebar({ companyCount = 0 }: { companyCount?:
           )
         })}
       </nav>
+
+      {/* Logout Footer */}
+      <div className="mt-auto pt-4 border-t border-white/[0.08]">
+        <button
+          type="button"
+          onClick={() => signOut({ callbackUrl: '/login' })}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-rose-300 hover:bg-rose-500/10 hover:text-rose-200 text-sm font-bold transition-all cursor-pointer border-none bg-transparent"
+        >
+          <LogOut size={18} />
+          <span>Sign Out</span>
+        </button>
+      </div>
     </div>
   )
 }
