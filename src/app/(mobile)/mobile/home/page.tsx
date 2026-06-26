@@ -2,18 +2,24 @@ import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import Link from 'next/link'
 import {
-  Building2, ChevronDown, Bell, ArrowRight, Smartphone, Wallet,
+  Building2, ChevronDown, Bell, ArrowRight, Wallet,
   FileText, Camera, ListTodo, ClipboardList, CheckCircle2, Search
 } from 'lucide-react'
+import PWAInstallBanner from '@/components/mobile/PWAInstallBanner'
+import SiteSelectorClient from '@/components/mobile/SiteSelectorClient'
 
 function getGreeting() {
-  const h = new Date().getHours()
+  // Use IST (UTC+5:30) so server-side time matches Indian local time
+  const now = new Date()
+  const istOffset = 5 * 60 + 30 // minutes
+  const istMs = now.getTime() + (istOffset - now.getTimezoneOffset()) * 60000
+  const h = new Date(istMs).getHours()
   if (h < 12) return 'Good morning'
   if (h < 17) return 'Good afternoon'
   return 'Good evening'
 }
 
-import SiteSelectorClient from '@/components/mobile/SiteSelectorClient'
+
 
 export default async function MobileHome({ searchParams }: { searchParams: { siteId?: string } }) {
   const session = await auth()
@@ -140,20 +146,7 @@ export default async function MobileHome({ searchParams }: { searchParams: { sit
       </div>
 
       {/* Install Banner */}
-      <div className="bg-[#fc6e20] text-white rounded-[16px] p-3.5 flex items-center justify-between shadow-md">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[10px] bg-white/20 flex items-center justify-center text-white/90">
-            <Smartphone size={20} />
-          </div>
-          <div>
-            <div className="text-[13px] font-bold">Install Civil Tracker</div>
-            <div className="text-[10.5px] font-medium text-orange-100">Add to home screen · works offline on site</div>
-          </div>
-        </div>
-        <button className="bg-white hover:bg-slate-50 text-[#fc6e20] text-[12px] font-extrabold px-4 py-2 rounded-lg transition-colors shadow-sm">
-          Install
-        </button>
-      </div>
+      <PWAInstallBanner />
 
       {/* Greeting Section */}
       <div className="flex justify-between items-start pt-1">
