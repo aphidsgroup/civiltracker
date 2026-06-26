@@ -43,7 +43,7 @@ export default function DashboardTopbar({
   const { title, crumb } = getPageInfo()
 
   return (
-    <div className="min-h-[64px] flex-shrink-0 bg-white border-b border-[#e4eaf0] flex flex-wrap items-center gap-3 md:gap-4 px-4 py-3 md:py-0 md:px-6">
+    <div className="h-[60px] md:h-16 flex-shrink-0 bg-white border-b border-[#e4eaf0] flex items-center gap-3 md:gap-4 px-4 md:px-6">
       <button
         className="w-9 h-9 rounded-[10px] bg-[#f2f5f8] border border-[#e4eaf0] flex items-center justify-center text-[#16273a] lg:hidden flex-shrink-0"
         onClick={() => document.dispatchEvent(new CustomEvent('toggle-mobile-menu'))}
@@ -56,8 +56,9 @@ export default function DashboardTopbar({
         <div className="text-[11px] md:text-[12px] text-[#647387] font-semibold mt-0.5 truncate">{crumb}</div>
       </div>
 
-      <div className="w-full md:w-auto md:ml-auto flex items-center gap-2.5 order-last md:order-none mt-1 md:mt-0">
-        <div className="flex items-center gap-2.5 bg-[#f2f5f8] border border-[#e4eaf0] rounded-[11px] px-3 py-2 flex-1 md:w-60 text-[#647387]">
+      <div className="ml-auto flex items-center gap-2 md:gap-2.5 flex-shrink-0">
+        {/* Hide search bar on mobile, show on tablet+ */}
+        <div className="hidden md:flex items-center gap-2.5 bg-[#f2f5f8] border border-[#e4eaf0] rounded-[11px] px-3 py-2 w-60 text-[#647387]">
           <Search size={16} />
           <input
             className="bg-transparent border-none outline-none text-[13px] font-medium text-[#16273a] w-full placeholder:text-[#647387]"
