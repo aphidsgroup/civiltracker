@@ -11,7 +11,7 @@ export default async function SubscriptionsPage() {
   const companies = await prisma.company.findMany({
     select: {
       id: true, name: true, plan: true, status: true, createdAt: true,
-      subscriptions: {
+      subscription: {
         orderBy: { createdAt: 'desc' },
         take: 1,
         include: { plan: true },
@@ -26,12 +26,9 @@ export default async function SubscriptionsPage() {
 
   return (
     <>
-      <div className="topbar">
-        <div className="title">Subscription Plans</div>
-      </div>
-
+      <div className="topbar"><div className="title">Subscription Plans</div></div>
       <div style={{ padding: '24px' }}>
-        <div className="kpis" style={{ marginBottom: '24px' }}>
+        <div className="kpis" style={{ marginBottom: 24 }}>
           {[
             { label: 'Total Companies', value: companies.length },
             { label: 'Active', value: active },
@@ -62,38 +59,25 @@ export default async function SubscriptionsPage() {
           </div>
         )}
 
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, color: 'var(--mut)' }}>COMPANY PLANS</div>
         <div className="ct-card" style={{ overflowX: 'auto' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Company Plans</div>
           <table className="ct-table">
             <thead>
-              <tr>
-                <th>Company</th>
-                <th>Current Plan</th>
-                <th>Status</th>
-                <th>Subscription</th>
-                <th>Expires</th>
-                <th>Since</th>
-              </tr>
+              <tr><th>Company</th><th>Plan</th><th>Status</th><th>Subscription</th><th>Expires</th><th>Since</th></tr>
             </thead>
             <tbody>
               {companies.map(c => {
-                const sub = c.subscriptions[0]
+                const sub = c.subscription[0]
                 return (
                   <tr key={c.id}>
                     <td style={{ fontWeight: 700, fontSize: 14 }}>{c.name}</td>
                     <td><span className="chip chip-blue" style={{ fontSize: 11 }}>{c.plan}</span></td>
                     <td>
-                      <span className={`chip ${c.status === 'ACTIVE' ? 'chip-green' : c.status === 'TRIAL' ? 'chip-amber' : 'chip-red'}`} style={{ fontSize: 11 }}>
-                        <span className="chip-dot"></span>{c.status}
-                      </span>
+                      <span className={`chip ${c.status === 'ACTIVE' ? 'chip-green' : c.status === 'TRIAL' ? 'chip-amber' : 'chip-red'}`} style={{ fontSize: 11 }}>{c.status}</span>
                     </td>
                     <td style={{ fontSize: 13, color: 'var(--mut)' }}>{sub?.plan?.name ?? '—'}</td>
-                    <td style={{ fontSize: 12, color: 'var(--mut)' }}>
-                      {sub?.expiresAt ? new Date(sub.expiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                    </td>
-                    <td style={{ fontSize: 12, color: 'var(--mut)' }}>
-                      {new Date(c.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--mut)' }}>{sub?.expiresAt ? new Date(sub.expiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                    <td style={{ fontSize: 12, color: 'var(--mut)' }}>{new Date(c.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                   </tr>
                 )
               })}

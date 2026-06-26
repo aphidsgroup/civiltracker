@@ -76,7 +76,7 @@ export default async function NewCompanyPage() {
                   <select name="planId"
                     style={{ width: '100%', border: '1.5px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', background: '#fff' }}>
                     {plans.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} — ₹{p.price}/mo</option>
+                      <option key={p.id} value={p.id}>{p.name} — ₹{Number(p.price).toLocaleString("en-IN")}/mo</option>
                     ))}
                   </select>
                 </div>

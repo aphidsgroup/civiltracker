@@ -2,110 +2,65 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 
-const STATUS_COLOR: Record<string, string> = {
-  DRAFT: '', SUBMITTED: 'chip-amber', APPROVED: 'chip-blue', ORDERED: 'chip-blue',
-  RECEIVED: 'chip-green', CANCELLED: 'chip-red',
-}
-
 export default async function PurchasePage() {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
-
-  const orders = await prisma.purchaseOrder.findMany({
-    where: { companyId },
-    include: { vendor: { select: { name: true } } },
-    orderBy: { createdAt: 'desc' },
-  })
 
   const requests = await prisma.purchaseRequest.findMany({
-    where: { companyId },
-    include: { site: { select: { name: true } }, material: { select: { name: true } } },
+    where: { companyId: session.user.companyId },
+    include: { site: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
-    take: 20,
+    take: 50,
   })
 
-  const totalAgg = await prisma.purchaseOrder.aggregate({ where: { companyId }, _sum: { totalAmount: true } })
-  const pendingRequests = await prisma.purchaseRequest.count({ where: { companyId, status: 'PENDING' } })
+  const pending = requests.filter(r => r.status === 'PENDING').length
+  const inProgress = requests.filter(r => r.status === 'PM_APPROVED' || r.status === 'PO_CREATED').length
+  const delivered = requests.filter(r => r.status === 'DELIVERED').length
+
+  const statusChip: Record<string, string> = {
+    PENDING: 'chip-amber',
+    PM_APPROVED: 'chip-blue',
+    PO_CREATED: 'chip-blue',
+    DELIVERED: 'chip-green',
+    CANCELLED: 'chip-red',
+  }
 
   return (
     <>
-      <div className="topbar">
-        <div className="title">Purchase</div>
-      </div>
-
-      <div style={{ padding: '20px' }}>
-        <div className="kpis" style={{ marginBottom: '20px' }}>
-          <div className="kpi">
-            <div className="klbl">Purchase Orders</div>
-            <div className="knum">{orders.length}</div>
-          </div>
-          <div className="kpi">
-            <div className="klbl">Total Value</div>
-            <div className="knum">₹{(Number(totalAgg._sum.totalAmount || 0) / 100000).toFixed(2)}L</div>
-          </div>
-          <div className="kpi">
-            <div className="klbl">Pending Requests</div>
-            <div className="knum">{pendingRequests}</div>
-            <div className="ksub warn"><span>●</span>Awaiting approval</div>
-          </div>
+      <div className="topbar"><div className="title">Purchase Requests</div></div>
+      <div style={{ padding: '24px' }}>
+        <div className="kpis" style={{ marginBottom: 24 }}>
+          {[
+            { label: 'Total', value: requests.length },
+            { label: 'Pending', value: pending },
+            { label: 'In Progress', value: inProgress },
+            { label: 'Delivered', value: delivered },
+          ].map(k => (
+            <div key={k.label} className="kpi">
+              <div className="klbl">{k.label}</div>
+              <div className="knum" style={{ fontSize: 18 }}>{k.value}</div>
+            </div>
+          ))}
         </div>
-
-        <div className="dgrid">
-          <div className="colL">
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10, color: 'var(--mut)' }}>PURCHASE ORDERS</div>
-            <div className="ct-card" style={{ overflowX: 'auto' }}>
-              {orders.length === 0 ? (
-                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--mut)', fontSize: 13 }}>No purchase orders yet.</div>
-              ) : (
-                <table className="ct-table">
-                  <thead>
-                    <tr><th>PO Number</th><th>Vendor</th><th>Amount</th><th>Status</th><th>Date</th></tr>
-                  </thead>
-                  <tbody>
-                    {orders.map(o => (
-                      <tr key={o.id}>
-                        <td style={{ fontWeight: 700, fontSize: 13, fontFamily: 'monospace' }}>{o.poNumber}</td>
-                        <td style={{ fontSize: 13, color: 'var(--mut)' }}>{o.vendor?.name ?? '—'}</td>
-                        <td style={{ fontWeight: 700, fontSize: 14 }}>₹{Number(o.totalAmount).toLocaleString('en-IN')}</td>
-                        <td>
-                          <span className={`chip ${STATUS_COLOR[o.status] ?? ''}`}
-                            style={{ fontSize: 10, fontWeight: 700, ...(!STATUS_COLOR[o.status] ? { background: '#eef2f6', color: 'var(--mut)' } : {}) }}>
-                            {o.status}
-                          </span>
-                        </td>
-                        <td style={{ fontSize: 12, color: 'var(--mut)' }}>
-                          {new Date(o.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-          <div className="colR">
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10, color: 'var(--mut)' }}>MATERIAL REQUESTS</div>
-            <div className="ct-card">
-              {requests.length === 0 ? (
-                <div style={{ padding: '30px', textAlign: 'center', color: 'var(--mut)', fontSize: 13 }}>No requests.</div>
-              ) : (
-                <div>
-                  {requests.map((r, i) => (
-                    <div key={r.id} style={{ padding: '12px 16px', borderBottom: i < requests.length - 1 ? '1px solid var(--line)' : 'none' }}>
-                      <div style={{ fontWeight: 700, fontSize: 13 }}>{r.material?.name ?? r.description ?? '—'}</div>
-                      <div style={{ fontSize: 11, color: 'var(--mut)', marginTop: 2 }}>{r.site?.name} · Qty: {Number(r.quantity)}</div>
-                      <div style={{ marginTop: 6 }}>
-                        <span className={`chip ${r.status === 'APPROVED' ? 'chip-green' : r.status === 'REJECTED' ? 'chip-red' : 'chip-amber'}`} style={{ fontSize: 10 }}>
-                          <span className="chip-dot"></span>{r.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="ct-card" style={{ overflowX: 'auto' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>All Purchase Requests</div>
+          <table className="ct-table">
+            <thead>
+              <tr><th>Description</th><th>Site</th><th>Qty</th><th>Urgency</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {requests.map(r => (
+                <tr key={r.id}>
+                  <td style={{ fontWeight: 600, fontSize: 13 }}>{r.description}</td>
+                  <td style={{ fontSize: 12, color: 'var(--mut)' }}>{r.site?.name ?? '—'}</td>
+                  <td style={{ fontSize: 13 }}>{Number(r.quantity)} {r.unit ?? ''}</td>
+                  <td style={{ fontSize: 12 }}>{r.urgency}</td>
+                  <td><span className={`chip ${statusChip[r.status] ?? 'chip-amber'}`} style={{ fontSize: 11 }}>{r.status.replace('_', ' ')}</span></td>
+                </tr>
+              ))}
+              {requests.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: 32, color: 'var(--mut)' }}>No purchase requests yet.</td></tr>}
+            </tbody>
+          </table>
         </div>
       </div>
     </>
