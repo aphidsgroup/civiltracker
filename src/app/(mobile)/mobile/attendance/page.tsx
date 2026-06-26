@@ -6,7 +6,7 @@ import { Users, Calendar, Sparkles } from 'lucide-react'
 
 export const metadata = {
   title: 'Field Labour Muster Roll | Civil Tracker Mobile',
-  description: 'Mark worker daily attendance and register site employees.',
+  description: 'Mark worker daily attendance, modify salary, and manage advance payments.',
 }
 
 export default async function MobileAttendancePage() {
@@ -33,15 +33,16 @@ export default async function MobileAttendancePage() {
     })
   ])
 
-  // Formatting initial list for client component
   const initialLabour = labour.map(l => ({
     id: l.id,
     name: l.name,
     trade: l.trade,
+    phone: l.phone,
     dailyRate: Number(l.dailyWage) || 650,
     siteId: l.siteId,
     siteName: l.site?.name || 'Assigned Site',
-    status: l.attendance[0]?.status || 'PRESENT'
+    status: l.attendance[0]?.status || 'PRESENT',
+    advance: Number(l.attendance[0]?.advance) || 0
   }))
 
   const fallbackSites = sites.length > 0 ? sites : [
@@ -50,10 +51,10 @@ export default async function MobileAttendancePage() {
   ]
 
   const displayLabour = initialLabour.length > 0 ? initialLabour : [
-    { id: 'demo-l-1', name: 'Murugan M', trade: 'MASON', dailyRate: 950, siteId: fallbackSites[0].id, siteName: fallbackSites[0].name, status: 'PRESENT' },
-    { id: 'demo-l-2', name: 'Suresh Kumar', trade: 'HELPER', dailyRate: 650, siteId: fallbackSites[0].id, siteName: fallbackSites[0].name, status: 'PRESENT' },
-    { id: 'demo-l-3', name: 'Ganesh Carpenter', trade: 'CARPENTER', dailyRate: 850, siteId: fallbackSites[0].id, siteName: fallbackSites[0].name, status: 'HALF_DAY' },
-    { id: 'demo-l-4', name: 'Rajesh Bar Bender', trade: 'BAR_BENDER', dailyRate: 800, siteId: fallbackSites[0].id, siteName: fallbackSites[0].name, status: 'ABSENT' },
+    { id: 'demo-l-1', name: 'Murugan M', trade: 'MASON', phone: null, dailyRate: 950, siteId: fallbackSites[0].id, siteName: fallbackSites[0].name, status: 'PRESENT', advance: 500 },
+    { id: 'demo-l-2', name: 'Suresh Kumar', trade: 'HELPER', phone: null, dailyRate: 650, siteId: fallbackSites[0].id, siteName: fallbackSites[0].name, status: 'PRESENT', advance: 0 },
+    { id: 'demo-l-3', name: 'Ganesh Carpenter', trade: 'CARPENTER', phone: null, dailyRate: 850, siteId: fallbackSites[0].id, siteName: fallbackSites[0].name, status: 'HALF_DAY', advance: 300 },
+    { id: 'demo-l-4', name: 'Rajesh Glass Fitter', trade: 'HELPER', phone: 'CUSTOM_TRADE:Glass Fitter', dailyRate: 800, siteId: fallbackSites[0].id, siteName: fallbackSites[0].name, status: 'ABSENT', advance: 0 },
   ]
 
   return (

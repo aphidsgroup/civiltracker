@@ -3,19 +3,52 @@ import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import AttendanceRegisterClient from '@/components/labour/AttendanceRegisterClient'
-import { CalendarCheck, HardHat, Sparkles, Clock, ShieldAlert } from 'lucide-react'
+import { CalendarCheck, HardHat, Sparkles } from 'lucide-react'
 
 export const metadata = {
   title: 'Labour Attendance Register | Civil Tracker',
-  description: 'Mark daily labour attendance and overtime across project sites.',
+  description: 'Mark daily labour attendance, overtime, and advance payments across project sites.',
 }
 
 export default async function LabourAttendancePage() {
   const user = await requireUser()
   if (!user.companyId) redirect('/login')
 
-  // Exact prompt query requirement
-  const labourList = await prisma.labour.findMany({ where: { companyId: user.companyId, isActive: true }, include: { site: true } })
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const [labourList, sites] = await Promise.all([
+    prisma.labour.findMany({
+      where: { companyId: user.companyId, isActive: true },
+      include: {
+        site: true,
+        attendance: { where: { date: today }, take: 1 }
+      },
+      orderBy: { name: 'asc' }
+    }),
+    prisma.site.findMany({
+      where: { companyId: user.companyId, deletedAt: null },
+      select: { id: true, name: true }
+    })
+  ])
+
+  const formattedLabour = labourList.map(l => ({
+    id: l.id,
+    name: l.name,
+    phone: l.phone,
+    trade: l.trade,
+    dailyWage: Number(l.dailyWage) || 650,
+    siteId: l.siteId,
+    site: l.site ? { id: l.site.id, name: l.site.name } : null,
+    status: l.attendance[0]?.status || 'PRESENT',
+    overtimeHours: Number(l.attendance[0]?.overtimeHours) || 0,
+    advance: Number(l.attendance[0]?.advance) || 0
+  }))
+
+  const fallbackSites = sites.length > 0 ? sites : [
+    { id: 'site-a', name: 'Metro Heights Tower A' },
+    { id: 'site-b', name: 'Green Valley Villas' }
+  ]
 
   const todayStr = new Date().toLocaleDateString('en-IN', {
     weekday: 'long',
@@ -37,7 +70,7 @@ export default async function LabourAttendancePage() {
             Labour Attendance Register
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 m-0">
-            Track daily muster rolls, worker trade deployments, and site overtime.
+            Track daily muster rolls, worker trade deployments, advances, and site overtime.
           </p>
         </div>
 
@@ -50,7 +83,11 @@ export default async function LabourAttendancePage() {
       </div>
 
       {/* Main Interactive Table Component */}
-      <AttendanceRegisterClient labourList={labourList} dateString={todayStr} />
+      <AttendanceRegisterClient
+        initialLabour={formattedLabour}
+        sites={fallbackSites}
+        dateString={todayStr}
+      />
     </div>
   )
 }
