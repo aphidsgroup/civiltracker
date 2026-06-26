@@ -53,20 +53,23 @@ export default function DashboardSidebar({
   const pathname = usePathname()
 
   return (
-    <div className="w-[250px] flex-shrink-0 flex flex-col h-full bg-gradient-to-b from-[#0c2640] to-[#0a2138] text-[#cdd9e6] px-3.5 py-[18px]">
+    <div className="w-[250px] flex-shrink-0 flex flex-col h-full bg-gradient-to-b from-[#0c2640] to-[#0a2138] text-[#cdd9e6]">
       {/* Brand */}
-      <div className="flex items-center gap-2.5 px-2 pb-4">
-        <div className="w-[34px] h-[34px] rounded-[10px] bg-gradient-to-br from-[#1d6fb5] to-[#3a9bdf] flex items-center justify-center text-white flex-shrink-0">
-          <FileText size={18} />
+      <div className="flex h-[72px] shrink-0 items-center gap-3 px-6 border-b border-white/[0.08]">
+        <div className="w-10 h-10 rounded-full overflow-hidden shadow-md shadow-[#fc6e20]/30 shrink-0">
+          <img src="/icons/icon-192.png" alt="Buildogram Logo" className="w-full h-full object-cover" />
         </div>
-        <div>
-          <div className="text-[16px] font-extrabold text-white tracking-[-0.02em]">Civil Tracker</div>
+        <div className="flex flex-col justify-center">
+          <span className="font-black text-[18px] text-white tracking-tighter uppercase leading-none">Civil Tracker</span>
+          <div className="flex justify-end w-full">
+            <span className="font-bold text-[8.5px] text-[#fc6e20] uppercase tracking-widest leading-none mt-0.5">by Buildogram</span>
+          </div>
         </div>
       </div>
 
       {/* Company pill */}
       {companyName && (
-        <div className="flex items-center gap-2.5 mx-2.5 mb-4 px-2.5 py-2 bg-white/[0.07] border border-white/[0.09] rounded-[12px]">
+        <div className="flex items-center gap-2.5 mx-3.5 mt-5 mb-2 px-2.5 py-2 bg-white/[0.07] border border-white/[0.09] rounded-[12px]">
           <div className="w-[30px] h-[30px] rounded-[8px] bg-[#f3b43a] text-[#3a2a05] font-extrabold text-[11px] flex items-center justify-center flex-shrink-0">
             {companyName.substring(0, 2).toUpperCase()}
           </div>

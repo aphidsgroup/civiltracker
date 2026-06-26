@@ -15,6 +15,7 @@ const DEMO_USERS = [
   { role: 'Super Admin', email: 'admin@civiltracker.in', password: 'Admin@123456', color: '#5b47b8' },
   { role: 'Company Admin', email: 'arun@madras-crafters.in', password: 'Admin@123456', color: '#13558e' },
   { role: 'Site Engineer', email: 'murugan@madras-crafters.in', password: 'Admin@123456', color: '#138a4e' },
+  { role: 'Client', email: 'client@annanagar.in', password: 'Admin@123456', color: '#fc6e20' },
 ]
 
 export default function LoginPage() {
@@ -48,15 +49,18 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex font-sans">
       {/* LEFT PANEL */}
-      <div className="w-[460px] flex-shrink-0 hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-[#091e36] via-[#0d3259] to-[#155291]">
-        <div>
+      <div className="w-[460px] flex-shrink-0 hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#fc6e20]/10 blur-[100px] rounded-full pointer-events-none" />
+        <div className="relative z-10">
           <div className="flex items-center gap-3 mb-10">
-            <div className="w-[52px] h-[52px] rounded-[16px] bg-gradient-to-br from-[#f3b43a] to-[#e08a0b] flex items-center justify-center shadow-[0_12px_28px_-6px_rgba(243,180,58,0.45)]">
-              <span className="text-[#3a2a05] text-2xl">📋</span>
+            <div className="w-[52px] h-[52px] rounded-full overflow-hidden shadow-[0_12px_28px_-6px_rgba(252,110,32,0.45)]">
+              <img src="/icons/icon-192.png" alt="Buildogram Logo" className="w-full h-full object-cover" />
             </div>
-            <div>
-              <div className="text-white text-[26px] font-black tracking-[-0.03em]">Civil Tracker</div>
-              <div className="text-white/50 text-[11px] font-semibold tracking-[0.06em] uppercase">Construction Management</div>
+            <div className="flex flex-col justify-center">
+              <span className="font-black text-[26px] text-white tracking-tighter uppercase leading-none">Civil Tracker</span>
+              <div className="flex justify-end w-full">
+                <span className="font-bold text-[11px] text-[#fc6e20] uppercase tracking-widest leading-none mt-1">by Buildogram</span>
+              </div>
             </div>
           </div>
           <div className="flex flex-col gap-5">
@@ -77,10 +81,23 @@ export default function LoginPage() {
       </div>
 
       {/* RIGHT PANEL */}
-      <div className="flex-1 flex items-start lg:items-center justify-center p-6 pt-12 lg:p-12 bg-gradient-to-br from-[#091e36] via-[#0d3259] to-[#155291] lg:bg-[#f0f4f8]" style={{background: undefined}}>
+      <div className="flex-1 flex items-start lg:items-center justify-center p-6 pt-12 lg:p-12 bg-gradient-to-br from-slate-900 to-slate-800 lg:bg-[#f8fafc]">
         <div className="w-full max-w-[420px] bg-white rounded-[20px] p-8 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.12)]">
-          <div className="text-[28px] font-black text-[#16273a] tracking-[-0.03em] mb-1">Welcome back</div>
-          <div className="text-[14px] font-medium text-[#647387] mb-8">Sign in to your workspace</div>
+          {/* Mobile Logo (hidden on desktop) */}
+          <div className="flex items-center justify-center gap-3 mb-8 lg:hidden">
+            <div className="w-12 h-12 rounded-full overflow-hidden shadow-md shadow-[#fc6e20]/30 shrink-0">
+              <img src="/icons/icon-192.png" alt="Buildogram Logo" className="w-full h-full object-cover" />
+            </div>
+            <div className="flex flex-col justify-center">
+              <span className="font-black text-[22px] text-[#0f172a] tracking-tighter uppercase leading-none">Civil Tracker</span>
+              <div className="flex justify-end w-full">
+                <span className="font-bold text-[9px] text-[#fc6e20] uppercase tracking-widest leading-none mt-1">by Buildogram</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-[28px] font-black text-[#16273a] tracking-[-0.03em] mb-1 text-center">Welcome back</div>
+          <div className="text-[14px] font-medium text-[#647387] mb-8 text-center">Sign in to your workspace</div>
 
           {error && (
             <div className="bg-[#fef0ee] text-[#c4392c] border border-[#f5c6c1] rounded-[10px] px-3.5 py-3 text-[13px] font-semibold mb-5 flex items-center gap-2">
@@ -94,7 +111,7 @@ export default function LoginPage() {
               <div className="relative">
                 <input type="email" placeholder="you@company.com" value={email}
                   onChange={e => setEmail(e.target.value)} required autoFocus autoComplete="email"
-                  className="w-full bg-white border-[1.5px] border-[#dde5ee] rounded-[12px] py-[13px] pl-4 pr-11 text-[15px] font-medium text-[#16273a] outline-none transition-all focus:border-[#13558e] focus:shadow-[0_0_0_3px_rgba(19,85,142,0.12)]"
+                  className="w-full bg-white border-[1.5px] border-[#dde5ee] rounded-[12px] py-[13px] pl-4 pr-11 text-[15px] font-medium text-[#16273a] outline-none transition-all focus:border-[#fc6e20] focus:shadow-[0_0_0_3px_rgba(252,110,32,0.12)]"
                 />
                 <Mail size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8a9ab0] pointer-events-none" />
               </div>
@@ -104,7 +121,7 @@ export default function LoginPage() {
               <div className="relative">
                 <input type={showPass ? 'text' : 'password'} placeholder="••••••••" value={password}
                   onChange={e => setPassword(e.target.value)} required autoComplete="current-password"
-                  className="w-full bg-white border-[1.5px] border-[#dde5ee] rounded-[12px] py-[13px] pl-4 pr-11 text-[15px] font-medium text-[#16273a] outline-none transition-all focus:border-[#13558e] focus:shadow-[0_0_0_3px_rgba(19,85,142,0.12)]"
+                  className="w-full bg-white border-[1.5px] border-[#dde5ee] rounded-[12px] py-[13px] pl-4 pr-11 text-[15px] font-medium text-[#16273a] outline-none transition-all focus:border-[#fc6e20] focus:shadow-[0_0_0_3px_rgba(252,110,32,0.12)]"
                 />
                 <button type="button" tabIndex={-1} onClick={() => setShowPass(v => !v)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8a9ab0] bg-transparent border-none cursor-pointer p-1">
@@ -113,7 +130,7 @@ export default function LoginPage() {
               </div>
             </div>
             <button type="submit" disabled={loading || !hydrated}
-              className="w-full bg-gradient-to-r from-[#13558e] to-[#1d6fb5] text-white text-[15px] font-bold py-[15px] rounded-[13px] flex items-center justify-center gap-2 shadow-[0_10px_28px_-10px_rgba(19,85,142,0.55)] hover:-translate-y-px hover:shadow-[0_14px_32px_-10px_rgba(19,85,142,0.65)] transition-all disabled:opacity-60 disabled:cursor-not-allowed mt-2">
+              className="w-full bg-gradient-to-r from-[#fc6e20] to-[#e85b0d] text-white text-[15px] font-bold py-[15px] rounded-[13px] flex items-center justify-center gap-2 shadow-[0_10px_28px_-10px_rgba(252,110,32,0.55)] hover:-translate-y-px hover:shadow-[0_14px_32px_-10px_rgba(252,110,32,0.65)] transition-all disabled:opacity-60 disabled:cursor-not-allowed mt-2">
               {loading ? 'Signing in…' : (<>Sign in <ArrowRight size={16} /></>)}
             </button>
           </form>
@@ -128,7 +145,7 @@ export default function LoginPage() {
               {DEMO_USERS.map(u => (
                 <button key={u.email} type="button"
                   onClick={() => { setEmail(u.email); setPassword(u.password); setError('') }}
-                  className="flex items-center gap-3 px-3.5 py-[11px] rounded-[11px] border-[1.5px] border-[#e4eaf0] bg-white hover:border-[#13558e] hover:bg-[#f5f8fc] text-left w-full transition-all cursor-pointer">
+                  className="flex items-center gap-3 px-3.5 py-[11px] rounded-[11px] border-[1.5px] border-[#e4eaf0] bg-white hover:border-[#fc6e20] hover:bg-[#fff7ed] text-left w-full transition-all cursor-pointer">
                   <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: u.color }} />
                   <div>
                     <div className="text-[12.5px] font-bold text-[#16273a]">{u.role}</div>

@@ -9,9 +9,9 @@
    CIVIL TRACKER — DESIGN TOKENS
    =================================================== */
 :root {
-  --p: #13558e;
-  --p2: #0e3e69;
-  --p3: #1d6fb5;
+  --p: #fc6e20;
+  --p2: #ea580c;
+  --p3: #f97316;
   --amber: #e08a0b;
   --amber-light: #f3b43a;
   --green: #138a4e;
@@ -28,19 +28,19 @@
   --card-foreground: #16273a;
   --popover: #ffffff;
   --popover-foreground: #16273a;
-  --primary: #13558e;
+  --primary: #fc6e20;
   --primary-foreground: #ffffff;
   --secondary: #e4eaf0;
   --secondary-foreground: #16273a;
   --muted: #f2f5f8;
   --muted-foreground: #647387;
-  --accent: #e7f0fb;
-  --accent-foreground: #13558e;
+  --accent: #fff7ed;
+  --accent-foreground: #fc6e20;
   --destructive: #d9483b;
   --destructive-foreground: #ffffff;
   --border: #e4eaf0;
   --input: #e4eaf0;
-  --ring: #13558e;
+  --ring: #fc6e20;
   --radius: 0.75rem;
 }
 
@@ -134,7 +134,7 @@ html, body {
 .schip.green  { background: #e2f3ea; color: #0f7a45; }
 .schip.amber  { background: #fbeacb; color: #a96c08; }
 .schip.red    { background: #fbe6e3; color: #c4392c; }
-.schip.blue   { background: #e7f0fb; color: #13558e; }
+.schip.blue   { background: #fff7ed; color: #fc6e20; }
 .schip.violet { background: #ece8fa; color: #5b47b8; }
 .schip.mut    { background: #eef2f6; color: #647387; }
 .sdot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }

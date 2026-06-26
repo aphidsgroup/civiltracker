@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, FileText, Building2, UserCircle, Plus, X } from 'lucide-react'
+import { Home, FileText, Building2, UserCircle, Plus, X, ClipboardList, BarChart2, Activity } from 'lucide-react'
 
 export default function MobileTabbar() {
   const pathname = usePathname()
@@ -32,10 +32,10 @@ export default function MobileTabbar() {
       <Link
         href={href}
         className={`flex flex-col items-center justify-center gap-1 flex-1 py-2 transition-all active:scale-95 no-underline ${
-          active ? 'text-blue-600 font-extrabold' : 'text-slate-400 hover:text-slate-600 font-semibold'
+          active ? 'text-[#fc6e20] font-extrabold' : 'text-slate-400 hover:text-slate-600 font-semibold'
         }`}
       >
-        <div className={`p-1 rounded-xl transition-all ${active ? 'bg-blue-50 text-blue-600' : ''}`}>
+        <div className={`p-1 rounded-xl transition-all ${active ? 'bg-[#fff7ed] text-[#fc6e20]' : ''}`}>
           {icon}
         </div>
         <span className="text-[10px] tracking-tight">{label}</span>
@@ -104,21 +104,21 @@ export default function MobileTabbar() {
       {/* Bottom Navigation Bar */}
       <div className="fixed bottom-0 left-0 right-0 max-w-[440px] mx-auto bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-[0_-10px_25px_rgba(0,0,0,0.06)] z-40 h-[76px] px-2 flex items-center justify-between select-none">
         {tab('/mobile/home', 'Home', <Home size={22} strokeWidth={isOn('/home') ? 2.6 : 2} />, '/home')}
-        {tab('/mobile/reports', 'Reports', <FileText size={22} strokeWidth={isOn('/reports') ? 2.6 : 2} />, '/reports')}
+        {tab('/mobile/sites', 'Sites', <ClipboardList size={22} strokeWidth={isOn('/sites') ? 2.6 : 2} />, '/sites')}
 
         {/* Elevated Center FAB Trigger */}
         <div className="flex-1 flex justify-center relative -top-6">
           <button
             onClick={() => setShowQuickAdd(true)}
             aria-label="Quick Add Menu"
-            className="w-14 h-14 rounded-full bg-gradient-to-tr from-[#1e3a8a] via-[#2563eb] to-[#3b82f6] text-white flex items-center justify-center shadow-lg shadow-blue-600/35 ring-[6px] ring-slate-50 hover:scale-105 active:scale-95 transition-all border-none cursor-pointer p-0"
+            className="w-14 h-14 rounded-full bg-gradient-to-tr from-[#c2410c] via-[#ea580c] to-[#fc6e20] text-white flex items-center justify-center shadow-lg shadow-[#fc6e20]/35 ring-[6px] ring-slate-50 hover:scale-105 active:scale-95 transition-all border-none cursor-pointer p-0"
           >
             <Plus size={30} strokeWidth={3} className={`transition-transform duration-200 ${showQuickAdd ? 'rotate-45' : ''}`} />
           </button>
         </div>
 
-        {tab('/mobile/sites', 'Projects', <Building2 size={22} strokeWidth={isOn('/sites') ? 2.6 : 2} />, '/sites')}
-        {tab('/mobile/profile', 'Profile', <UserCircle size={22} strokeWidth={isOn('/profile') ? 2.6 : 2} />, '/profile')}
+        {tab('/mobile/reports', 'Reports', <BarChart2 size={22} strokeWidth={isOn('/reports') ? 2.6 : 2} />, '/reports')}
+        {tab('/mobile/activity', 'Activity', <Activity size={22} strokeWidth={isOn('/activity') ? 2.6 : 2} />, '/activity')}
       </div>
     </>
   )

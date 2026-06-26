@@ -13,7 +13,9 @@ function getGreeting() {
   return 'Good evening'
 }
 
-export default async function MobileHome() {
+import SiteSelectorClient from '@/components/mobile/SiteSelectorClient'
+
+export default async function MobileHome({ searchParams }: { searchParams: { siteId?: string } }) {
   const session = await auth()
   const companyId = session?.user?.companyId
   const userId = session?.user?.id
@@ -28,9 +30,28 @@ export default async function MobileHome() {
   })
   const siteIds = member?.siteIds ?? []
 
-  const activeSite = siteIds.length > 0
-    ? await prisma.site.findFirst({ where: { id: { in: siteIds }, companyId } })
-    : await prisma.site.findFirst({ where: { companyId }, orderBy: { createdAt: 'desc' } })
+  const requestedSiteId = searchParams?.siteId
+
+  // Fetch all sites user has access to
+  const allSitesRecords = siteIds.length > 0
+    ? await prisma.site.findMany({ where: { id: { in: siteIds }, companyId }, include: { company: true }, orderBy: { name: 'asc' } })
+    : await prisma.site.findMany({ where: { companyId }, include: { company: true }, orderBy: { name: 'asc' } })
+
+  const allSites = allSitesRecords.map(s => ({
+    id: s.id,
+    name: s.name,
+    companyName: s.company.name
+  }))
+
+  const activeSiteRecord = requestedSiteId 
+    ? allSitesRecords.find(s => s.id === requestedSiteId) || allSitesRecords[0]
+    : allSitesRecords[0]
+
+  const activeSite = activeSiteRecord ? {
+    id: activeSiteRecord.id,
+    name: activeSiteRecord.name,
+    companyName: activeSiteRecord.company.name
+  } : null
 
   const siteId = activeSite?.id
 
@@ -79,12 +100,12 @@ export default async function MobileHome() {
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
 
-  const budget = Number(activeSite?.budget ?? 0)
-  const spent = Number(activeSite?.spent ?? 0)
+  const budget = Number(activeSiteRecord?.budget ?? 0)
+  const spent = Number(activeSiteRecord?.spent ?? 0)
   const budgetPct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 61 // Approx from screenshot
 
-  const startDate = activeSite?.startDate
-  const targetDate = activeSite?.targetEndDate
+  const startDate = activeSiteRecord?.startDate
+  const targetDate = activeSiteRecord?.targetEndDate
   const dayOfProject = startDate
     ? Math.floor((Date.now() - new Date(startDate).getTime()) / 86400000) + 1
     : 184
@@ -99,16 +120,7 @@ export default async function MobileHome() {
     <div className="space-y-6 p-4 sm:p-6 select-none bg-[#f8fafc] min-h-screen">
       {/* Top Sticky Appbar */}
       <div className="flex items-center justify-between sticky top-0 z-30 bg-[#f8fafc]/95 backdrop-blur-md py-2 -mx-4 px-4 sm:-mx-6 sm:px-6">
-        <div className="flex items-center gap-2.5 bg-white px-3 py-2 rounded-[14px] border border-slate-200/60 shadow-sm max-w-[220px]">
-          <div className="w-7 h-7 rounded-[8px] bg-[#1e40af] flex items-center justify-center flex-shrink-0 text-white">
-            <Building2 size={14} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-bold text-slate-900 truncate">{activeSite?.name ?? 'Anna Nagar Villa'}</div>
-            <div className="text-[10px] text-slate-500 font-medium truncate">Madras Crafters</div>
-          </div>
-          <ChevronDown size={14} className="text-slate-400 flex-shrink-0" />
-        </div>
+        <SiteSelectorClient activeSite={activeSite} allSites={allSites} />
 
         <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 text-[11px] font-bold px-3 py-1.5 rounded-full border border-emerald-100">
@@ -128,17 +140,17 @@ export default async function MobileHome() {
       </div>
 
       {/* Install Banner */}
-      <div className="bg-[#1e40af] text-white rounded-[16px] p-3.5 flex items-center justify-between shadow-md">
+      <div className="bg-[#fc6e20] text-white rounded-[16px] p-3.5 flex items-center justify-between shadow-md">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[10px] bg-white/10 flex items-center justify-center text-white/90">
+          <div className="w-10 h-10 rounded-[10px] bg-white/20 flex items-center justify-center text-white/90">
             <Smartphone size={20} />
           </div>
           <div>
             <div className="text-[13px] font-bold">Install Civil Tracker</div>
-            <div className="text-[10.5px] font-medium text-blue-100">Add to home screen · works offline on site</div>
+            <div className="text-[10.5px] font-medium text-orange-100">Add to home screen · works offline on site</div>
           </div>
         </div>
-        <button className="bg-[#f59e0b] hover:bg-[#d97706] text-amber-950 text-[12px] font-bold px-4 py-2 rounded-lg transition-colors">
+        <button className="bg-white hover:bg-slate-50 text-[#fc6e20] text-[12px] font-extrabold px-4 py-2 rounded-lg transition-colors shadow-sm">
           Install
         </button>
       </div>
@@ -160,12 +172,12 @@ export default async function MobileHome() {
       </div>
 
       {/* Today On Site Hero Banner */}
-      <div className="bg-[#1e40af] text-white rounded-[24px] p-5 shadow-lg relative overflow-hidden">
+      <div className="bg-[#0f172a] text-white rounded-[24px] p-5 shadow-lg relative overflow-hidden">
         {/* Decorative inner glow */}
-        <div className="absolute right-0 top-0 w-48 h-48 bg-blue-400/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute right-0 top-0 w-48 h-48 bg-[#fc6e20]/20 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex justify-between items-center relative z-10 mb-5">
-          <div className="text-[11px] font-bold tracking-widest text-blue-100/90 uppercase">
+          <div className="text-[11px] font-bold tracking-widest text-[#fc6e20] uppercase">
             TODAY ON SITE
           </div>
           <div className="text-[11px] font-bold text-white bg-white/15 px-3 py-1 rounded-full backdrop-blur-md">
@@ -178,7 +190,7 @@ export default async function MobileHome() {
             <div className="text-[28px] font-black text-white tracking-tight leading-none mb-1">
               {todaySpend >= 1000 ? `₹${(todaySpend / 1000).toFixed(1)}k` : `₹${todaySpend}`}
             </div>
-            <div className="text-[11px] font-medium text-blue-200">
+            <div className="text-[11px] font-medium text-slate-400">
               Today's expense
             </div>
           </div>
@@ -187,9 +199,9 @@ export default async function MobileHome() {
           
           <div className="flex-1">
             <div className="text-[22px] font-black text-white tracking-tight leading-none mb-1">
-              {todayAttendance}<span className="text-[14px] text-blue-200 font-bold">/{totalLabour}</span>
+              {todayAttendance}<span className="text-[14px] text-slate-400 font-bold">/{totalLabour}</span>
             </div>
-            <div className="text-[11px] font-medium text-blue-200">
+            <div className="text-[11px] font-medium text-slate-400">
               Labour present
             </div>
           </div>
@@ -200,7 +212,7 @@ export default async function MobileHome() {
             <div className="text-[22px] font-black text-white tracking-tight leading-none mb-1">
               {pendingBillsCount}
             </div>
-            <div className="text-[11px] font-medium text-blue-200">
+            <div className="text-[11px] font-medium text-slate-400">
               Bills pending
             </div>
           </div>
@@ -211,9 +223,9 @@ export default async function MobileHome() {
             <span className="text-white">Budget used</span>
             <span className="text-white">₹1.14 Cr / ₹1.85 Cr</span>
           </div>
-          <div className="h-[6px] w-full bg-white/10 rounded-full overflow-hidden">
+          <div className="h-[6px] w-full bg-slate-800 rounded-full overflow-hidden">
             <div
-              className="h-full bg-[#fbcfe8] bg-gradient-to-r from-[#fcd34d] to-[#f59e0b] rounded-full"
+              className="h-full bg-[#fc6e20] rounded-full"
               style={{ width: `${budgetPct}%` }}
             />
           </div>
@@ -224,7 +236,7 @@ export default async function MobileHome() {
       <div className="space-y-3">
         <div className="flex justify-between items-center px-1">
           <h2 className="text-[15px] font-extrabold text-slate-900 m-0">Quick actions</h2>
-          <span className="text-[12px] font-bold text-[#1e40af]">Within 3 taps</span>
+          <span className="text-[12px] font-bold text-[#fc6e20]">Within 3 taps</span>
         </div>
 
         <div className="grid grid-cols-2 gap-3.5">
@@ -237,7 +249,7 @@ export default async function MobileHome() {
                 {pendingBillsCount}
               </span>
             )}
-            <div className="w-10 h-10 rounded-[12px] bg-[#eff6ff] text-[#1e40af] flex items-center justify-center mb-3">
+            <div className="w-10 h-10 rounded-[12px] bg-[#fff7ed] text-[#fc6e20] flex items-center justify-center mb-3">
               <FileText size={20} strokeWidth={2.2} />
             </div>
             <div className="text-[14px] font-extrabold text-slate-900 leading-tight mb-1">Upload Bill</div>
@@ -282,7 +294,7 @@ export default async function MobileHome() {
       {/* Daily Progress Report Action Card */}
       <Link
         href="/mobile/dpr"
-        className="block bg-[#1e40af] active:scale-98 text-white p-[18px] rounded-[18px] shadow-md transition-all no-underline"
+        className="block bg-[#0f172a] active:scale-98 text-white p-[18px] rounded-[18px] shadow-md transition-all no-underline"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3.5">
@@ -307,7 +319,7 @@ export default async function MobileHome() {
       <div className="space-y-3 pt-2">
         <div className="flex justify-between items-center px-1">
           <h2 className="text-[15px] font-extrabold text-slate-900 m-0">Pending your approval</h2>
-          <Link href="/mobile/approvals" className="text-[12px] font-bold text-[#1e40af] no-underline">See all</Link>
+          <Link href="/mobile/approvals" className="text-[12px] font-bold text-[#fc6e20] no-underline">See all</Link>
         </div>
         <div className="bg-[#f8fafc] space-y-2.5">
           <div className="p-3.5 bg-white rounded-[16px] border border-slate-100 shadow-sm flex items-center justify-between">
@@ -354,7 +366,7 @@ export default async function MobileHome() {
       <div className="space-y-3 pt-3">
         <div className="flex justify-between items-center px-1">
           <h2 className="text-[15px] font-extrabold text-slate-900 m-0">Recent bill uploads</h2>
-          <Link href="/mobile/reports" className="text-[12px] font-bold text-[#1e40af] no-underline">View all</Link>
+          <Link href="/mobile/reports" className="text-[12px] font-bold text-[#fc6e20] no-underline">View all</Link>
         </div>
 
         <div className="bg-[#f8fafc] space-y-2.5">

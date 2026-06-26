@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import MobileTabbar from '@/components/mobile/MobileTabbar'
+import MobileHeader from '@/components/mobile/MobileHeader'
 
 export default async function MobileLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -8,6 +9,7 @@ export default async function MobileLayout({ children }: { children: React.React
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between max-w-[440px] mx-auto relative shadow-2xl overflow-x-hidden border-x border-slate-200/60 font-sans">
+      <MobileHeader />
       <main className="flex-1 pb-28">
         {children}
       </main>

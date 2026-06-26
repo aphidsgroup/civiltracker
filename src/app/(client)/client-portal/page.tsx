@@ -8,8 +8,13 @@ export default async function ClientPortal() {
   const session = await auth()
   if (session?.user?.role !== 'CLIENT') redirect('/dashboard')
 
+  const clientRecord = await prisma.client.findFirst({
+    where: { email: session?.user?.email }
+  })
+
   const site = await prisma.site.findFirst({
-    where: { clientId: session?.user?.id, deletedAt: null },
+    where: { companyId: clientRecord?.companyId, deletedAt: null },
+    orderBy: { createdAt: 'desc' },
     include: {
       company: true,
       photos: {

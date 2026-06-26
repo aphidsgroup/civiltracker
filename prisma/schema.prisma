@@ -267,6 +267,7 @@ model Company {
   materials         Material[]
   vendors           Vendor[]
   subcontractors    Subcontractor[]
+  contractorAttendances ContractorAttendance[]
   dprs              DailyProgressReport[]
   documents         Document[]
   clients           Client[]
@@ -382,6 +383,7 @@ model Site {
   labour           Labour[]
   materials        Material[]
   dprs             DailyProgressReport[]
+  contractorAttendances ContractorAttendance[]
   photos           SitePhoto[]
   tasks            Task[]
   boqItems         BOQItem[]
@@ -510,6 +512,7 @@ model LabourAttendance {
   siteId        String
   date          DateTime         @db.Date
   status        AttendanceStatus @default(PRESENT)
+  startTime     String?
   overtimeHours Float            @default(0)
   advance       Decimal          @default(0) @db.Decimal(10, 2)
   deduction     Decimal          @default(0) @db.Decimal(10, 2)
@@ -662,8 +665,38 @@ model Subcontractor {
   updatedAt      DateTime @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  attendances ContractorAttendance[]
 
   @@index([companyId])
+}
+
+// ============================================================
+// CONTRACTOR ATTENDANCE
+// ============================================================
+
+model ContractorAttendance {
+  id              String   @id @default(cuid())
+  companyId       String
+  siteId          String
+  subcontractorId String
+  date            DateTime @db.Date
+  contractorType  String?
+  labourCount     Int      @default(0)
+  startTime       String?
+  dailyAdvance    Decimal  @default(0) @db.Decimal(10, 2)
+  notes           String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site          Site          @relation(fields: [siteId], references: [id])
+  subcontractor Subcontractor @relation(fields: [subcontractorId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([siteId])
+  @@index([subcontractorId])
+  @@index([date])
 }
 
 // ============================================================

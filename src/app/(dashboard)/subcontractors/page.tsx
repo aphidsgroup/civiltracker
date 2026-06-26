@@ -76,12 +76,19 @@ export default async function SubcontractorsPage() {
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Phone</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Work Order</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">RA Billed</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Retention</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Advance Given</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pending/Due</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {subcontractors.map(s => (
+                {subcontractors.map(s => {
+                  const workOrder = Number(s.workOrderValue) || 0
+                  const advance = Number(s.advance) || 0
+                  const raBilled = Number(s.raBilled) || 0
+                  const pending = workOrder - advance - raBilled
+                  
+                  return (
                   <tr key={s.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-4 py-3.5 text-sm">
                       <div className="flex items-center gap-3">
@@ -94,9 +101,10 @@ export default async function SubcontractorsPage() {
                     <td className="px-4 py-3.5 text-xs font-semibold text-slate-700 dark:text-slate-300">{s.trade ?? '—'}</td>
                     <td className="px-4 py-3.5 text-xs text-slate-500 dark:text-slate-400 font-mono">{s.gst ?? '—'}</td>
                     <td className="px-4 py-3.5 text-sm text-slate-600 dark:text-slate-300">{s.phone ?? '—'}</td>
-                    <td className="px-4 py-3.5 text-sm font-bold text-slate-900 dark:text-slate-100">₹{Number(s.workOrderValue).toLocaleString('en-IN')}</td>
-                    <td className="px-4 py-3.5 text-sm font-bold text-emerald-600 dark:text-emerald-400">₹{Number(s.raBilled).toLocaleString('en-IN')}</td>
-                    <td className="px-4 py-3.5 text-sm font-bold text-amber-600 dark:text-amber-400">₹{Number(s.retention).toLocaleString('en-IN')}</td>
+                    <td className="px-4 py-3.5 text-sm font-bold text-slate-900 dark:text-slate-100">₹{workOrder.toLocaleString('en-IN')}</td>
+                    <td className="px-4 py-3.5 text-sm font-bold text-emerald-600 dark:text-emerald-400">₹{raBilled.toLocaleString('en-IN')}</td>
+                    <td className="px-4 py-3.5 text-sm font-bold text-amber-600 dark:text-amber-400">₹{advance.toLocaleString('en-IN')}</td>
+                    <td className="px-4 py-3.5 text-sm font-bold text-rose-600 dark:text-rose-400">₹{pending.toLocaleString('en-IN')}</td>
                     <td className="px-4 py-3.5 text-sm">
                       <span className={`px-2.5 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 ${
                         s.isActive 
@@ -108,7 +116,8 @@ export default async function SubcontractorsPage() {
                       </span>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

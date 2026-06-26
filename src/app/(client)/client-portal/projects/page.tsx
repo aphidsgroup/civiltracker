@@ -13,7 +13,7 @@ export const metadata = {
 
 export default async function ClientPortalProjectsPage() {
   const session = await auth();
-  if (!session?.user?.companyId) redirect('/login');
+  if (!session?.user) redirect('/login');
 
   const clientRecord = await prisma.client.findFirst({
     where: {

@@ -30,13 +30,15 @@ export default function SuperAdminSidebar({ companyCount = 0 }: { companyCount?:
   return (
     <div className="w-[248px] flex-shrink-0 flex flex-col h-full bg-gradient-to-b from-[#0a1d33] to-[#08172a] text-[#cdd9e6] px-3.5 py-[18px]">
       {/* Brand */}
-      <div className="flex items-center gap-2.5 px-2 pb-3.5">
-        <div className="w-[34px] h-[34px] rounded-[10px] bg-gradient-to-br from-[#f3b43a] to-[#e08a0b] text-[#3a2a05] flex items-center justify-center flex-shrink-0">
-          <FileText size={18} />
+      <div className="flex h-[72px] shrink-0 items-center gap-3 px-2 mb-3">
+        <div className="w-10 h-10 rounded-full overflow-hidden shadow-md shadow-[#fc6e20]/30 shrink-0">
+          <img src="/icons/icon-192.png" alt="Buildogram Logo" className="w-full h-full object-cover" />
         </div>
-        <div>
-          <div className="text-[16px] font-extrabold text-white tracking-[-0.02em]">Civil Tracker</div>
-          <div className="text-[10px] font-semibold text-[#7d94a8] tracking-[0.04em] uppercase">Super Admin</div>
+        <div className="flex flex-col justify-center">
+          <span className="font-black text-[18px] text-white tracking-tighter uppercase leading-none">Civil Tracker</span>
+          <div className="flex justify-end w-full">
+            <span className="font-bold text-[8.5px] text-[#fc6e20] uppercase tracking-widest leading-none mt-0.5">by Buildogram</span>
+          </div>
         </div>
       </div>
 

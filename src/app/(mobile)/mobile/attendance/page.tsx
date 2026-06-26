@@ -2,11 +2,11 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import MobileAttendanceClient from '@/components/mobile/MobileAttendanceClient'
-import { Users, Calendar, Sparkles } from 'lucide-react'
+import { Users, Sparkles } from 'lucide-react'
 
 export const metadata = {
   title: 'Field Labour Muster Roll | Civil Tracker Mobile',
-  description: 'Mark worker daily attendance, modify salary, and manage advance payments.',
+  description: 'Mark worker daily attendance, log contractor headcount, and manage advance payments.',
 }
 
 export default async function MobileAttendancePage() {
@@ -17,7 +17,7 @@ export default async function MobileAttendancePage() {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const [labour, sites] = await Promise.all([
+  const [allLabour, sites, contractorAttendances] = await Promise.all([
     prisma.labour.findMany({
       where: { companyId, isActive: true },
       include: {
@@ -30,10 +30,21 @@ export default async function MobileAttendancePage() {
       where: { companyId, deletedAt: null },
       select: { id: true, name: true },
       orderBy: { createdAt: 'desc' }
+    }),
+    prisma.contractorAttendance.findMany({
+      where: { companyId, date: today },
+      include: { subcontractor: { select: { name: true, trade: true } } },
+      orderBy: { createdAt: 'desc' }
     })
   ])
 
-  const initialLabour = labour.map(l => ({
+  const fallbackSites = sites.length > 0 ? sites : [
+    { id: 'demo-site-1', name: 'Metro Heights Tower B' },
+    { id: 'demo-site-2', name: 'Green Valley Villas' }
+  ]
+
+  // Separate into Today's Roster vs Other Company Workers
+  const mapLabour = (l: any) => ({
     id: l.id,
     name: l.name,
     trade: l.trade,
@@ -42,20 +53,22 @@ export default async function MobileAttendancePage() {
     siteId: l.siteId,
     siteName: l.site?.name || 'Assigned Site',
     status: l.attendance[0]?.status || 'PRESENT',
-    advance: Number(l.attendance[0]?.advance) || 0
+    advance: Number(l.attendance[0]?.advance) || 0,
+    startTime: l.attendance[0]?.startTime || null
+  })
+
+  const todayRoster = allLabour.filter(l => l.attendance.length > 0).map(mapLabour)
+  const otherWorkers = allLabour.filter(l => l.attendance.length === 0).map(mapLabour)
+
+  const initialContractors = contractorAttendances.map(ca => ({
+    id: ca.id,
+    name: ca.subcontractor?.name || 'Unknown',
+    trade: ca.contractorType || ca.subcontractor?.trade || 'Others',
+    labourCount: ca.labourCount,
+    advance: Number(ca.dailyAdvance) || 0,
+    siteId: ca.siteId,
+    startTime: ca.startTime || null
   }))
-
-  const fallbackSites = sites.length > 0 ? sites : [
-    { id: 'demo-site-1', name: 'Metro Heights Tower B' },
-    { id: 'demo-site-2', name: 'Green Valley Villas' }
-  ]
-
-  const displayLabour = initialLabour.length > 0 ? initialLabour : [
-    { id: 'demo-l-1', name: 'Murugan M', trade: 'MASON', phone: null, dailyRate: 950, siteId: fallbackSites[0].id, siteName: fallbackSites[0].name, status: 'PRESENT', advance: 500 },
-    { id: 'demo-l-2', name: 'Suresh Kumar', trade: 'HELPER', phone: null, dailyRate: 650, siteId: fallbackSites[0].id, siteName: fallbackSites[0].name, status: 'PRESENT', advance: 0 },
-    { id: 'demo-l-3', name: 'Ganesh Carpenter', trade: 'CARPENTER', phone: null, dailyRate: 850, siteId: fallbackSites[0].id, siteName: fallbackSites[0].name, status: 'HALF_DAY', advance: 300 },
-    { id: 'demo-l-4', name: 'Rajesh Glass Fitter', trade: 'HELPER', phone: 'CUSTOM_TRADE:Glass Fitter', dailyRate: 800, siteId: fallbackSites[0].id, siteName: fallbackSites[0].name, status: 'ABSENT', advance: 0 },
-  ]
 
   return (
     <div className="p-4 sm:p-6 max-w-lg mx-auto space-y-6 select-none">
@@ -70,7 +83,7 @@ export default async function MobileAttendancePage() {
               <Sparkles size={11} />
               <span>FIELD ROSTER OCR</span>
             </div>
-            <h1 className="text-xl font-black tracking-tight text-white m-0">Labour Muster Roll</h1>
+            <h1 className="text-xl font-black tracking-tight text-white m-0">Daily Roster</h1>
           </div>
         </div>
 
@@ -82,7 +95,12 @@ export default async function MobileAttendancePage() {
         </div>
       </div>
 
-      <MobileAttendanceClient initialLabour={displayLabour} sites={fallbackSites} />
+      <MobileAttendanceClient 
+        todayRoster={todayRoster} 
+        otherWorkers={otherWorkers} 
+        initialContractors={initialContractors}
+        sites={fallbackSites} 
+      />
     </div>
   )
 }

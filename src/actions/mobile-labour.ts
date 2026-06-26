@@ -10,6 +10,7 @@ export async function addMobileWorkerAction(formData: {
   customTrade?: string
   dailyRate: number
   siteId: string
+  startTime?: string
 }) {
   const user = await requireUser()
   if (!user.companyId) throw new Error('No active company context')
@@ -108,7 +109,7 @@ export async function updateWorkerAction(formData: {
   return { success: true, worker }
 }
 
-export async function saveMobileAttendanceAction(records: { labourId: string; status: string; siteId: string; advance?: number }[]) {
+export async function saveMobileAttendanceAction(records: { labourId: string; status: string; siteId: string; advance?: number, startTime?: string }[]) {
   const user = await requireUser()
   if (!user.companyId) throw new Error('No active company context')
 
@@ -131,11 +132,13 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
         date: today,
         status: item.status as any,
         advance: Number(item.advance) || 0,
+        startTime: item.startTime,
         markedById: user.id
       },
       update: {
         status: item.status as any,
         advance: item.advance !== undefined ? Number(item.advance) : undefined,
+        startTime: item.startTime !== undefined ? item.startTime : undefined,
         markedById: user.id
       }
     })
@@ -145,4 +148,158 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
   revalidatePath('/mobile/attendance')
   revalidatePath('/labour/attendance')
   return { success: true, count }
+}
+
+export async function addExistingWorkerToRoster(labourId: string, siteId: string, startTime?: string) {
+  const user = await requireUser()
+  if (!user.companyId) throw new Error('No active company context')
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // Mark them present for today to add them to the roster
+  const record = await prisma.labourAttendance.upsert({
+    where: {
+      labourId_date: {
+        labourId,
+        date: today
+      }
+    },
+    create: {
+      labourId,
+      siteId,
+      date: today,
+      status: 'PRESENT',
+      advance: 0,
+      startTime,
+      markedById: user.id
+    },
+    update: {
+      status: 'PRESENT',
+      startTime: startTime !== undefined ? startTime : undefined
+    }
+  })
+
+  // Update their default site assignment too
+  await prisma.labour.update({
+    where: { id: labourId },
+    data: { siteId }
+  })
+
+  revalidatePath('/mobile/attendance')
+  return { success: true, record }
+}
+
+export async function saveContractorAttendance(data: {
+  siteId: string
+  contractorName: string
+  contractorType: string
+  labourCount: number
+  dailyAdvance: number
+  startTime?: string
+}) {
+  const user = await requireUser()
+  if (!user.companyId) throw new Error('No active company context')
+
+  // Find or create subcontractor
+  let sub = await prisma.subcontractor.findFirst({
+    where: {
+      companyId: user.companyId,
+      name: { equals: data.contractorName, mode: 'insensitive' }
+    }
+  })
+
+  if (!sub) {
+    sub = await prisma.subcontractor.create({
+      data: {
+        companyId: user.companyId,
+        name: data.contractorName,
+        trade: data.contractorType,
+      }
+    })
+  }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // Log the daily attendance for this contractor
+  const attendance = await prisma.contractorAttendance.create({
+    data: {
+      companyId: user.companyId,
+      siteId: data.siteId,
+      subcontractorId: sub.id,
+      date: today,
+      contractorType: data.contractorType,
+      labourCount: data.labourCount,
+      startTime: data.startTime,
+      dailyAdvance: data.dailyAdvance,
+      createdById: user.id
+    }
+  })
+
+  // Update total advance on the subcontractor record
+  if (data.dailyAdvance > 0) {
+    await prisma.subcontractor.update({
+      where: { id: sub.id },
+      data: {
+        advance: {
+          increment: data.dailyAdvance
+        }
+      }
+    })
+  }
+
+  revalidatePath('/mobile/attendance')
+  revalidatePath('/sites/[id]', 'page')
+  return { success: true, attendance }
+}
+
+export async function removeLabourAttendanceAction(labourId: string) {
+  const user = await requireUser()
+  if (!user.companyId) throw new Error('No active company context')
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // Delete today's attendance record
+  await prisma.labourAttendance.deleteMany({
+    where: {
+      labourId,
+      date: today
+    }
+  })
+
+  revalidatePath('/mobile/attendance')
+  revalidatePath('/labour/attendance')
+  return { success: true }
+}
+
+export async function removeContractorAttendanceAction(attendanceId: string) {
+  const user = await requireUser()
+  if (!user.companyId) throw new Error('No active company context')
+
+  // Find the record to reverse the advance amount if any
+  const record = await prisma.contractorAttendance.findUnique({
+    where: { id: attendanceId, companyId: user.companyId }
+  })
+
+  if (record) {
+    if (Number(record.dailyAdvance) > 0) {
+      await prisma.subcontractor.update({
+        where: { id: record.subcontractorId },
+        data: {
+          advance: {
+            decrement: record.dailyAdvance
+          }
+        }
+      })
+    }
+    await prisma.contractorAttendance.delete({
+      where: { id: attendanceId }
+    })
+  }
+
+  revalidatePath('/mobile/attendance')
+  revalidatePath('/sites/[id]', 'page')
+  return { success: true }
 }
