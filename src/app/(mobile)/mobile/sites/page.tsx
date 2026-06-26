@@ -1,7 +1,7 @@
 import { requireUser } from '@/lib/auth/require-user'
 import prisma from '@/lib/prisma'
 import Link from 'next/link'
-import { Building2, MapPin, Calendar, ArrowRight, Layers, AlertTriangle } from 'lucide-react'
+import { Building2, MapPin, Calendar, ArrowRight, Layers, AlertTriangle, HardHat } from 'lucide-react'
 
 export default async function MobileSitesPage() {
   const user = await requireUser()
@@ -18,10 +18,21 @@ export default async function MobileSitesPage() {
     )
   }
 
-  const sites = await prisma.site.findMany({
+  const isSiteEngineer = user.role === 'SITE_ENGINEER' || user.role === 'SUPERVISOR'
+
+  let sites = await prisma.site.findMany({
     where: { companyId: user.companyId },
     orderBy: { createdAt: 'desc' }
   })
+
+  // Filter for Site Engineers: only assigned projects
+  if (isSiteEngineer) {
+    const member = await prisma.companyMember.findFirst({
+      where: { userId: user.id, companyId: user.companyId }
+    })
+    const assignedIds = new Set(member?.siteIds || [])
+    sites = sites.filter(s => s.assignedEngineerId === user.id || s.engineerId === user.id || assignedIds.has(s.id))
+  }
 
   function fmtAmt(n: number) {
     if (n >= 10000000) return '₹' + (n / 10000000).toFixed(2) + 'Cr'
@@ -48,20 +59,24 @@ export default async function MobileSitesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f2f5f8] pb-28">
+    <div className="min-h-screen bg-[#f2f5f8] pb-28 select-none">
       {/* HEADER */}
       <div className="bg-gradient-to-br from-[#0d3a63] to-[#1a64a6] text-white px-5 pt-6 pb-8 shadow-lg rounded-b-[28px]">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2.5 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 text-xs font-bold uppercase tracking-wider text-white/90">
             <Building2 size={14} className="text-[#38bdf8]" />
-            <span>Project Sites</span>
+            <span>{isSiteEngineer ? 'Assigned Projects' : 'Project Sites'}</span>
           </div>
           <span className="text-xs font-extrabold bg-white text-[#0d3a63] px-2.5 py-0.5 rounded-full shadow-sm">
             {sites.length} Total
           </span>
         </div>
-        <h1 className="text-[26px] font-black tracking-tight mt-3">Active Worksites</h1>
-        <p className="text-sm text-white/80 font-medium mt-1">Monitor budget utilization & operational progress</p>
+        <h1 className="text-[26px] font-black tracking-tight mt-3">
+          {isSiteEngineer ? 'My Worksites' : 'Active Worksites'}
+        </h1>
+        <p className="text-sm text-white/80 font-medium mt-1">
+          {isSiteEngineer ? 'Manage field operations & submit daily inputs' : 'Monitor budget utilization & operational progress'}
+        </p>
       </div>
 
       {/* SITES FEED */}
@@ -69,10 +84,16 @@ export default async function MobileSitesPage() {
         {sites.length === 0 ? (
           <div className="bg-white rounded-[20px] p-8 text-center border border-[#e4eaf0] shadow-sm">
             <div className="w-14 h-14 bg-[#f0f4f8] text-[#647387] rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <Layers size={28} />
+              {isSiteEngineer ? <HardHat size={28} className="text-blue-600" /> : <Layers size={28} />}
             </div>
-            <h3 className="text-base font-extrabold text-[#16273a]">No Sites Created</h3>
-            <p className="text-xs text-[#647387] mt-1 max-w-xs mx-auto">Sites added to your company workspace will appear here.</p>
+            <h3 className="text-base font-extrabold text-[#16273a]">
+              {isSiteEngineer ? 'No Assigned Projects' : 'No Sites Created'}
+            </h3>
+            <p className="text-xs text-[#647387] mt-1 max-w-xs mx-auto leading-relaxed">
+              {isSiteEngineer
+                ? 'You do not have any active projects assigned to your account yet. Please contact Company Administration.'
+                : 'Sites added to your company workspace will appear here.'}
+            </p>
           </div>
         ) : (
           sites.map((site) => {
@@ -84,8 +105,8 @@ export default async function MobileSitesPage() {
             return (
               <Link
                 key={site.id}
-                href={`/sites/${site.id}`}
-                className="block bg-white rounded-[20px] p-4 border border-[#e4eaf0] shadow-sm active:scale-[0.98] transition-all hover:border-[#cbd5e1]"
+                href={`/mobile/sites/${site.id}`}
+                className="block bg-white rounded-[20px] p-4 border border-[#e4eaf0] shadow-sm active:scale-[0.98] transition-all hover:border-[#cbd5e1] no-underline text-inherit"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -100,7 +121,7 @@ export default async function MobileSitesPage() {
                         </span>
                       )}
                     </div>
-                    <h2 className="text-[17px] font-black text-[#16273a] truncate">{site.name}</h2>
+                    <h2 className="text-[17px] font-black text-[#16273a] truncate m-0">{site.name}</h2>
                     <div className="flex items-center gap-1.5 text-xs font-medium text-[#647387] mt-1 truncate">
                       <MapPin size={13} className="text-[#94a3b8] flex-shrink-0" />
                       <span className="truncate">{site.location || 'No location specified'}</span>
@@ -111,35 +132,45 @@ export default async function MobileSitesPage() {
                   </div>
                 </div>
 
-                {/* BUDGET SECTION */}
-                <div className="mt-4 pt-3 border-t border-[#f0f4f8]">
-                  <div className="flex justify-between items-baseline mb-1.5">
-                    <div className="text-[11px] font-extrabold uppercase tracking-wider text-[#647387]">BUDGET SPENT</div>
-                    <div className="text-xs font-black text-[#16273a]">
-                      <span className="text-[#0d3a63] text-sm">{fmtAmt(spent)}</span>
-                      <span className="text-[#94a3b8] font-semibold"> / {budget > 0 ? fmtAmt(budget) : 'Unset'}</span>
+                {/* Hide financial details from Site Engineer */}
+                {!isSiteEngineer ? (
+                  <div className="mt-4 pt-3 border-t border-[#f0f4f8]">
+                    <div className="flex justify-between items-baseline mb-1.5">
+                      <div className="text-[11px] font-extrabold uppercase tracking-wider text-[#647387]">BUDGET SPENT</div>
+                      <div className="text-xs font-black text-[#16273a]">
+                        <span className="text-[#0d3a63] text-sm">{fmtAmt(spent)}</span>
+                        <span className="text-[#94a3b8] font-semibold"> / {budget > 0 ? fmtAmt(budget) : 'Unset'}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="h-2 bg-[#f0f4f8] rounded-full overflow-hidden p-0.5">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          pct > 90 ? 'bg-gradient-to-r from-amber-500 to-rose-500' : 'bg-gradient-to-r from-[#38bdf8] to-[#0d3a63]'
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between mt-2 text-[11px] font-bold text-[#647387]">
+                      <span>{pct}% Utilized</span>
+                      {site.startDate && (
+                        <span className="flex items-center gap-1 text-[#94a3b8] font-normal">
+                          <Calendar size={11} />
+                          Started {new Date(site.startDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  
-                  <div className="h-2 bg-[#f0f4f8] rounded-full overflow-hidden p-0.5">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        pct > 90 ? 'bg-gradient-to-r from-amber-500 to-rose-500' : 'bg-gradient-to-r from-[#38bdf8] to-[#0d3a63]'
-                      }`}
-                      style={{ width: `${pct}%` }}
-                    />
+                ) : (
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-extrabold text-blue-600">
+                    <span className="flex items-center gap-1.5">
+                      <HardHat size={14} />
+                      <span>Site Engineer View</span>
+                    </span>
+                    <span>Tap to give inputs &rarr;</span>
                   </div>
-
-                  <div className="flex items-center justify-between mt-2 text-[11px] font-bold text-[#647387]">
-                    <span>{pct}% Utilized</span>
-                    {site.startDate && (
-                      <span className="flex items-center gap-1 text-[#94a3b8] font-normal">
-                        <Calendar size={11} />
-                        Started {new Date(site.startDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                )}
               </Link>
             )
           })

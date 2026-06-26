@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, FileText, BarChart3, UserCircle, Plus } from 'lucide-react'
+import { Home, FileText, Building2, UserCircle, Plus } from 'lucide-react'
 
 export default function MobileTabbar() {
   const pathname = usePathname()
@@ -41,7 +41,7 @@ export default function MobileTabbar() {
         </Link>
       </div>
 
-      {tab('/mobile/sites', 'Portfolio', <BarChart3 size={22} strokeWidth={isOn('/sites') ? 2.6 : 2} />, '/sites')}
+      {tab('/mobile/sites', 'Projects', <Building2 size={22} strokeWidth={isOn('/sites') ? 2.6 : 2} />, '/sites')}
       {tab('/mobile/profile', 'Profile', <UserCircle size={22} strokeWidth={isOn('/profile') ? 2.6 : 2} />, '/profile')}
     </div>
   )
