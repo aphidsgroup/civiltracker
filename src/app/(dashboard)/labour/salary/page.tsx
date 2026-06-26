@@ -1,4 +1,4 @@
-﻿import React from 'react'
+import React from 'react'
 import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'

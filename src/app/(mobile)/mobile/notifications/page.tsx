@@ -1,4 +1,4 @@
-﻿import { requireUser } from '@/lib/auth/require-user'
+import { requireUser } from '@/lib/auth/require-user'
 import Link from 'next/link'
 import { Bell, ShieldAlert, FileCheck, Camera, HardHat, CheckCheck, ArrowLeft, Sparkles, ChevronRight, AlertTriangle } from 'lucide-react'
 

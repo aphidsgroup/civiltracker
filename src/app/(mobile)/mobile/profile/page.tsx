@@ -1,4 +1,4 @@
-﻿import { requireUser } from '@/lib/auth/require-user'
+import { requireUser } from '@/lib/auth/require-user'
 import { signOut } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import Link from 'next/link'

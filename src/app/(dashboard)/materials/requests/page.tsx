@@ -1,4 +1,4 @@
-﻿import { requireUser } from '@/lib/auth/require-user'
+import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
 import { AlertCircle, Plus } from 'lucide-react'
 

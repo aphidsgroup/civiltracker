@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from 'react'
 import { addMobileWorkerAction, updateWorkerAction, saveMobileAttendanceAction, addExistingWorkerToRoster, saveContractorAttendance, removeLabourAttendanceAction, removeContractorAttendanceAction } from '@/actions/mobile-labour'

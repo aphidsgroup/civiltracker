@@ -1,4 +1,4 @@
-﻿import { requireUser } from '@/lib/auth/require-user'
+import { requireUser } from '@/lib/auth/require-user'
 import { hasPermission } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 import { FileText, Table, ArrowLeft } from 'lucide-react'

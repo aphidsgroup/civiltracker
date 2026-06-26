@@ -1,4 +1,4 @@
-﻿// eslint-disable-next-line @typescript-eslint/no-require-imports
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const PdfPrinter = require('pdfmake')
 import ExcelJS from 'exceljs'
 // Define standard fonts for pdfmake

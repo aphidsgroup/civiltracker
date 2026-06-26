@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { useTransition } from 'react'
 import { approveApprovalAction, rejectApprovalAction, markApprovalPaidAction } from '@/actions/approvals'

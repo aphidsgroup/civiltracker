@@ -1,4 +1,4 @@
-﻿import { auth } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'

@@ -1,4 +1,4 @@
-﻿import { getFounderDashboardStats } from '@/actions/reports'
+import { getFounderDashboardStats } from '@/actions/reports'
 import { Card } from '@/components/ui/card'
 import { requireUser } from '@/lib/auth/require-user'
 import { formatCompactINR } from '@/lib/reports/money'

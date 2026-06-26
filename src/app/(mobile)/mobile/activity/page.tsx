@@ -1,4 +1,4 @@
-﻿import { auth } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { FileText, Image as ImageIcon, Users, IndianRupee, Clock } from 'lucide-react'
 

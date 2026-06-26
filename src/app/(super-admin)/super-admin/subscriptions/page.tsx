@@ -1,4 +1,4 @@
-﻿import { auth } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { CreditCard, Building2, Layers, CheckCircle2 } from 'lucide-react'
