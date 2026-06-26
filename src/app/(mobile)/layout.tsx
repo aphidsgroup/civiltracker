@@ -15,3 +15,5 @@ export default async function MobileLayout({ children }: { children: React.React
     </div>
   )
 }
+
+// trigger HMR

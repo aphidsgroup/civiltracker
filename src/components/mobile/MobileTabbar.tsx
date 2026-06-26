@@ -88,10 +88,10 @@ export default function MobileTabbar() {
                   onClick={() => setShowQuickAdd(false)}
                   className="flex flex-col items-center group no-underline text-inherit active:scale-90 transition-transform"
                 >
-                  <div className={`w-16 h-16 rounded-[20px] ${opt.bg} ${opt.text} flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform`}>
-                    <Plus size={30} strokeWidth={2.4} />
+                  <div className={`w-[60px] h-[60px] rounded-full ${opt.bg} ${opt.text} flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform`}>
+                    <Plus size={28} strokeWidth={2.4} />
                   </div>
-                  <span className="text-[11.5px] font-black text-[#1e293b] text-center tracking-tight leading-snug mt-2 max-w-[80px]">
+                  <span className="text-[11.5px] font-bold text-[#1e293b] text-center tracking-tight leading-snug mt-2 max-w-[80px]">
                     {opt.label}
                   </span>
                 </Link>
