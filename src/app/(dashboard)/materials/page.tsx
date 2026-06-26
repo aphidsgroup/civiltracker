@@ -32,6 +32,9 @@ export default async function MaterialsPage() {
             {materials.length} items · {lowStock > 0 ? <span className="text-amber-600 dark:text-amber-400 font-semibold">⚠️ {lowStock} low stock</span> : 'All stocked'}
           </p>
         </div>
+        <a href="/materials/new" className="bg-blue-600 text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-blue-700 transition-colors">
+          + Add Material
+        </a>
       </div>
 
       {/* Stats */}

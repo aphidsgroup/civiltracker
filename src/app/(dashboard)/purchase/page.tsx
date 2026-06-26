@@ -28,8 +28,11 @@ export default async function PurchasePage() {
   return (
     <>
       {/* Top bar */}
-      <div className="flex items-center px-6 py-4 border-b border-slate-200 bg-white">
-        <div className="text-base font-bold text-slate-800">Purchase Requests</div>
+      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white">
+        <div className="text-base font-bold text-slate-800">Purchase Requests & Orders</div>
+        <a href="/purchase/new" className="bg-blue-600 text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-blue-700 transition-colors">
+          + Create PO
+        </a>
       </div>
 
       <div className="p-6">

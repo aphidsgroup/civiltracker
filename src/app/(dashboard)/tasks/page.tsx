@@ -37,6 +37,9 @@ export default async function TasksPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Tasks</h1>
+        <a href="/tasks/new" className="bg-blue-600 text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-blue-700 transition-colors">
+          + Create Task
+        </a>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
