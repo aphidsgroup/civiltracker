@@ -6,6 +6,9 @@ import ResponsiveTable from '@/components/responsive/ResponsiveTable'
 import MobileCardList from '@/components/responsive/MobileCardList'
 import { getApprovalsAction, getApprovalStatsAction } from '@/actions/approvals'
 import { MessageSquare, ArrowRight } from 'lucide-react'
+import ApprovalInlineActions from '@/components/approvals/ApprovalInlineActions'
+import { hasPermission } from '@/lib/permissions'
+import type { Role } from '@prisma/client'
 
 export default async function ApprovalsPage({
   searchParams,
@@ -22,6 +25,10 @@ export default async function ApprovalsPage({
     getApprovalsAction({ status: activeStatus }),
     getApprovalStatsAction(),
   ])
+
+  const userRole = session.user.role as Role
+  const canApprove = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'PROJECT_MANAGER', 'ACCOUNTANT', 'PURCHASE_MANAGER'].includes(userRole)
+  const canPay = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'ACCOUNTANT'].includes(userRole) || hasPermission(userRole, 'salary.markPaid') || hasPermission(userRole, 'payments.manage')
 
   const statusColors: Record<string, string> = {
     PENDING: 'bg-amber-100 text-amber-800',
@@ -151,9 +158,17 @@ export default async function ApprovalsPage({
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <Link href={`/approvals/${app.id}`} className="inline-flex items-center justify-center px-2.5 py-1 text-[11.5px] font-bold text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50 transition-colors shadow-sm no-underline">
-                            Review
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <Link href={`/approvals/${app.id}`} className="inline-flex items-center justify-center px-2.5 py-1 text-[11.5px] font-bold text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50 transition-colors shadow-sm no-underline">
+                              Review
+                            </Link>
+                            <ApprovalInlineActions 
+                              approvalId={app.id} 
+                              status={app.currentStatus} 
+                              canApprove={canApprove} 
+                              canPay={canPay} 
+                            />
+                          </div>
                         </td>
                       </tr>
                     ))

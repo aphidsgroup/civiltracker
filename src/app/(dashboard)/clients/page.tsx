@@ -24,6 +24,9 @@ export default async function ClientsPage() {
     <div className="min-h-screen bg-gray-50/50">
       <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
         <h1 className="text-xl font-semibold text-gray-900">Clients</h1>
+        <a href="/clients/new" className="bg-blue-600 text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-blue-700 transition-colors">
+          + Add Client
+        </a>
       </div>
 
       <div className="p-6">
