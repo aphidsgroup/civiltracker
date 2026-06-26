@@ -99,7 +99,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'materials.view', 'materials.create',
     'dpr.view', 'dpr.create', 'dpr.update', 'dpr.approve',
     'tasks.manage',
-    'reports.view', 'reports.project', 'reports.export',
+    'reports.view', 'reports.project', 'reports.finance', 'reports.vendorPayable', 'reports.clientReceivable', 'reports.export',
     'documents.view', 'documents.upload', 'documents.approve',
     'purchase.approve', 'variations.approve', 'approvals.view',
     'uploads.sign', 'uploads.saveMetadata'
@@ -126,6 +126,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'issues.create',
     'documents.view', 'documents.upload',
     'approvals.view',
+    'reports.view', 'reports.project', 'reports.finance', 'reports.vendorPayable', 'reports.clientReceivable',
     'uploads.sign', 'uploads.saveMetadata'
   ],
   SUPERVISOR: [
@@ -134,6 +135,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'dpr.view', 'dpr.create',
     'sitePhotos.upload',
     'materials.view', 'materials.create',
+    'reports.view', 'reports.project', 'reports.finance', 'reports.vendorPayable', 'reports.clientReceivable',
     'uploads.sign', 'uploads.saveMetadata'
   ],
   PURCHASE_MANAGER: [
@@ -142,6 +144,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'bills.view', 'bills.upload',
     'vendors.view',
     'purchase.approve', 'approvals.view',
+    'reports.view', 'reports.vendorPayable',
     'uploads.sign', 'uploads.saveMetadata'
   ],
   CLIENT: [
