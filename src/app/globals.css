@@ -126,11 +126,7 @@ html, body {
   /* Generic table scroll behavior on mobile if they aren't explicitly wrapped */
   table { display: block; width: 100%; overflow-x: auto; white-space: nowrap; }
 
-  /* Stack main grids on mobile */
-  .grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5, .grid-cols-\[1fr_340px\] { grid-template-columns: 1fr !important; }
-  
-  /* Retain specific tight grids (like date pickers, icon grids) */
-  .grid-cols-7, .preserve-grid { grid-template-columns: inherit !important; }
+  /* Removed global grid stacking that broke the mobile PWA UI grids */
 }
 
 /* Status chips */
