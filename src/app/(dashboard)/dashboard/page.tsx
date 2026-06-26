@@ -13,11 +13,9 @@ function siteStatusChip(progress: number) {
   return { label: 'Needs review', cls: 'bg-[#fbeacb] text-[#a96c08]' }
 }
 
-export default async function CompanyDashboard() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+import { unstable_cache } from 'next/cache'
 
+async function getCachedDashboardData(companyId: string) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const todayEnd = new Date(today)
@@ -25,10 +23,7 @@ export default async function CompanyDashboard() {
 
   const siteIds = await prisma.site.findMany({ where: { companyId }, select: { id: true } }).then(s => s.map(x => x.id))
 
-  const [
-    activeSitesCount, todayExpenseAgg, pendingExpenses,
-    totalLabour, todayAttendance, recentPendingExpenses, recentExpenses, sites,
-  ] = await Promise.all([
+  return Promise.all([
     prisma.site.count({ where: { companyId, deletedAt: null, status: 'ACTIVE' } }),
     prisma.expense.aggregate({ where: { companyId, deletedAt: null, createdAt: { gte: today, lte: todayEnd } }, _sum: { amount: true } }),
     prisma.expense.aggregate({ where: { companyId, deletedAt: null, approvalStatus: 'PENDING' }, _sum: { amount: true }, _count: true }),
@@ -38,6 +33,24 @@ export default async function CompanyDashboard() {
     prisma.expense.findMany({ where: { companyId, deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, approvalStatus: true, category: true, createdAt: true, site: { select: { name: true } } } }),
     prisma.site.findMany({ where: { companyId, deletedAt: null, status: 'ACTIVE' }, orderBy: { spent: 'desc' }, take: 5 }),
   ])
+}
+
+export default async function CompanyDashboard() {
+  const session = await auth()
+  if (!session?.user?.companyId) redirect('/login')
+  const { companyId } = session.user
+
+  // Cache dashboard aggregations for 60 seconds to prevent DB connection exhaustion on free tier
+  const cachedDataFetcher = unstable_cache(
+    async () => getCachedDashboardData(companyId),
+    [`dashboard_data_${companyId}`],
+    { revalidate: 60 }
+  )
+
+  const [
+    activeSitesCount, todayExpenseAgg, pendingExpenses,
+    totalLabour, todayAttendance, recentPendingExpenses, recentExpenses, sites,
+  ] = await cachedDataFetcher()
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
   const pendingCount = pendingExpenses._count

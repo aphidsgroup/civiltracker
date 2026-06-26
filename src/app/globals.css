@@ -107,15 +107,30 @@ html, body {
 }
 
 /* Responsive */
+.responsive-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 @media (max-width: 768px) {
   .hamburger-btn { display: flex; }
-  .admin-sidebar-desktop, .sa-sidebar-desktop { display: none !important; }
+  .admin-sidebar-desktop, .sa-sidebar-desktop, .desktop-sidebar-container { display: none !important; }
   .app { flex-direction: column; overflow-y: auto; height: auto; min-height: 100vh; }
-  .main { width: 100%; overflow-y: visible; }
-  .content { padding: 16px 16px 32px; }
+  .main { width: 100%; overflow-y: visible; overflow-x: hidden; }
+  .content { padding: 16px 16px 32px; overflow-x: hidden; width: 100%; }
   .mobile-layout .sScroll { padding-bottom: 90px; }
   .mobile-layout .mobile-app-wrapper { max-width: 100%; height: auto; min-height: 100vh; overflow: visible; box-shadow: none; }
   .mobile-layout .screen { position: static; }
+
+  /* Generic table scroll behavior on mobile if they aren't explicitly wrapped */
+  table { display: block; width: 100%; overflow-x: auto; white-space: nowrap; }
+
+  /* Stack main grids on mobile */
+  .grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5, .grid-cols-\[1fr_340px\] { grid-template-columns: 1fr !important; }
+  
+  /* Retain specific tight grids (like date pickers, icon grids) */
+  .grid-cols-7, .preserve-grid { grid-template-columns: inherit !important; }
 }
 
 /* Status chips */

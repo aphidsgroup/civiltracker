@@ -4,23 +4,41 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Building2, Users, HardDrive, MessageCircle, TrendingUp, AlertCircle } from 'lucide-react'
 
+import { unstable_cache } from 'next/cache'
+
+async function getCachedSuperAdminData() {
+  return Promise.all([
+    prisma.company.count({ where: { deletedAt: null } }),
+    prisma.company.count({ where: { deletedAt: null, status: 'ACTIVE' } }),
+    prisma.company.count({ where: { deletedAt: null, status: 'TRIAL' } }),
+    prisma.company.count({ where: { deletedAt: null, status: 'SUSPENDED' } }),
+    prisma.site.count({ where: { deletedAt: null } }),
+    prisma.user.count({ where: { deletedAt: null } }),
+    prisma.company.aggregate({ where: { deletedAt: null }, _sum: { storageUsed: true } }),
+    prisma.company.groupBy({ by: ['plan'], where: { deletedAt: null }, _count: true }),
+    prisma.company.findMany({
+      where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 5,
+      include: { _count: { select: { sites: true, members: true } } }
+    })
+  ])
+}
+
 export default async function SuperAdminDashboard() {
   const session = await auth()
   if (session?.user?.role !== 'SUPER_ADMIN') redirect('/dashboard')
 
-  const totalCompanies = await prisma.company.count({ where: { deletedAt: null } })
-  const activeCompanies = await prisma.company.count({ where: { deletedAt: null, status: 'ACTIVE' } })
-  const trialCompanies = await prisma.company.count({ where: { deletedAt: null, status: 'TRIAL' } })
-  const suspendedCompanies = await prisma.company.count({ where: { deletedAt: null, status: 'SUSPENDED' } })
-  const totalSites = await prisma.site.count({ where: { deletedAt: null } })
-  const totalUsers = await prisma.user.count({ where: { deletedAt: null } })
-  const storageAgg = await prisma.company.aggregate({ where: { deletedAt: null }, _sum: { storageUsed: true } })
+  const cachedDataFetcher = unstable_cache(
+    async () => getCachedSuperAdminData(),
+    ['super_admin_dashboard_data'],
+    { revalidate: 60 }
+  )
+
+  const [
+    totalCompanies, activeCompanies, trialCompanies, suspendedCompanies,
+    totalSites, totalUsers, storageAgg, planCounts, topCompanies
+  ] = await cachedDataFetcher()
+
   const totalStorageGb = ((storageAgg._sum.storageUsed || 0) / (1024 * 1024 * 1024)).toFixed(1)
-  const planCounts = await prisma.company.groupBy({ by: ['plan'], where: { deletedAt: null }, _count: true })
-  const topCompanies = await prisma.company.findMany({
-    where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 5,
-    include: { _count: { select: { sites: true, members: true } } }
-  })
 
   const kpis = [
     { label: 'Total Companies', value: totalCompanies, sub: 'Platform total', trend: 'up', featured: true },

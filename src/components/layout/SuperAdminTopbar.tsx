@@ -23,25 +23,27 @@ export default function SuperAdminTopbar() {
   const { title, crumb } = getPageInfo()
 
   return (
-    <div className="h-16 flex-shrink-0 bg-white border-b border-[#e4eaf0] flex items-center gap-4 px-6">
+    <div className="min-h-[64px] flex-shrink-0 bg-white border-b border-[#e4eaf0] flex flex-wrap items-center gap-3 md:gap-4 px-4 py-3 md:py-0 md:px-6">
       <button
-        className="w-9 h-9 rounded-[10px] bg-[#f2f5f8] border border-[#e4eaf0] flex items-center justify-center text-[#16273a] lg:hidden"
+        className="w-9 h-9 rounded-[10px] bg-[#f2f5f8] border border-[#e4eaf0] flex items-center justify-center text-[#16273a] lg:hidden flex-shrink-0"
         onClick={() => document.dispatchEvent(new CustomEvent('toggle-mobile-menu'))}
       >
         <Menu size={18} />
       </button>
 
-      <div>
-        <div className="text-[19px] font-extrabold text-[#16273a] tracking-[-0.02em]">{title}</div>
-        <div className="text-[12px] text-[#647387] font-semibold mt-0.5">{crumb}</div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[17px] md:text-[19px] font-extrabold text-[#16273a] tracking-[-0.02em] truncate">{title}</div>
+        <div className="text-[11px] md:text-[12px] text-[#647387] font-semibold mt-0.5 truncate">{crumb}</div>
       </div>
 
-      <div className="flex items-center gap-2.5 bg-[#f2f5f8] border border-[#e4eaf0] rounded-[11px] px-3 py-2 w-60 text-[#647387] ml-auto">
-        <Search size={16} />
-        <input
-          className="bg-transparent border-none outline-none text-[13px] font-medium text-[#16273a] w-full placeholder:text-[#647387]"
-          placeholder="Search companies, users..."
-        />
+      <div className="w-full md:w-auto md:ml-auto flex items-center gap-2.5 order-last md:order-none mt-1 md:mt-0">
+        <div className="flex items-center gap-2.5 bg-[#f2f5f8] border border-[#e4eaf0] rounded-[11px] px-3 py-2 flex-1 md:w-60 text-[#647387]">
+          <Search size={16} />
+          <input
+            className="bg-transparent border-none outline-none text-[13px] font-medium text-[#16273a] w-full placeholder:text-[#647387]"
+            placeholder="Search companies, users..."
+          />
+        </div>
       </div>
     </div>
   )
