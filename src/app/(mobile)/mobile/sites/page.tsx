@@ -54,7 +54,7 @@ export default async function MobileSitesPage() {
   return (
     <div className="min-h-screen bg-[#f8fafc] pb-28 select-none">
       {/* HEADER */}
-      <div className="bg-gradient-to-br from-[#1a0a00] via-[#7a3310] to-[#fc6e20] text-white px-5 pt-6 pb-16 rounded-b-[32px] shadow-lg shadow-[#fc6e20]/20 relative overflow-hidden">
+      <div className="bg-gradient-to-br from-[#1a0a00] via-[#7a3310] to-[#fc6e20] text-white px-5 pt-6 pb-8 rounded-b-[32px] shadow-lg shadow-[#fc6e20]/20 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.08)_0%,_transparent_60%)] pointer-events-none" />
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-3">
@@ -76,7 +76,7 @@ export default async function MobileSitesPage() {
       </div>
 
       {/* SITES FEED */}
-      <div className="px-4 -mt-5 flex flex-col gap-3.5">
+      <div className="px-4 mt-6 flex flex-col gap-3.5">
         {sites.length === 0 ? (
           <div className="bg-white rounded-[20px] p-8 text-center border border-slate-100 shadow-sm mt-2">
             <div className="w-14 h-14 bg-[#fff7ed] text-[#fc6e20] rounded-2xl flex items-center justify-center mx-auto mb-3">
