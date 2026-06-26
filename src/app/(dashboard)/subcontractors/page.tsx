@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { Users, FileText, CheckCircle2, AlertCircle, HardHat } from 'lucide-react'
@@ -27,14 +27,14 @@ export default async function SubcontractorsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Subcontractors</h1>
-        <a href="/subcontractors/new" className="bg-blue-600 text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-blue-700 transition-colors">
+        <a href="/subcontractors/new" className="bg-[#fc6e20] text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-[#e85b0d] transition-colors">
           + Add Subcontractor
         </a>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Subcontractors', value: subcontractors.length, icon: Users, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/50' },
+          { label: 'Subcontractors', value: subcontractors.length, icon: Users, color: 'text-[#fc6e20] dark:text-blue-400', bg: 'bg-[#fff7ed] dark:bg-blue-950/50' },
           { label: 'Total Work Orders', value: `₹${(totalWork / 100000).toFixed(2)}L`, icon: FileText, color: 'text-slate-900 dark:text-slate-100', bg: 'bg-slate-100 dark:bg-slate-800' },
           { label: 'RA Billed', value: `₹${(totalBilled / 100000).toFixed(2)}L`, icon: CheckCircle2, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/50' },
           { label: 'Outstanding', value: `₹${(outstanding / 100000).toFixed(2)}L`, icon: AlertCircle, color: outstanding > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-slate-100', bg: outstanding > 0 ? 'bg-amber-50 dark:bg-amber-950/50' : 'bg-slate-100 dark:bg-slate-800' },
@@ -56,7 +56,7 @@ export default async function SubcontractorsPage() {
 
       {subcontractors.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-12 text-center shadow-sm flex flex-col items-center justify-center">
-          <div className="p-4 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-full mb-4">
+          <div className="p-4 bg-[#fff7ed] dark:bg-indigo-950/50 text-[#fc6e20] dark:text-[#fc6e20] rounded-full mb-4">
             <HardHat className="w-10 h-10" />
           </div>
           <h2 className="font-bold text-lg text-slate-900 dark:text-slate-100 mb-2">No subcontractors yet</h2>
@@ -92,7 +92,7 @@ export default async function SubcontractorsPage() {
                   <tr key={s.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-4 py-3.5 text-sm">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-sm">
+                        <div className="w-9 h-9 rounded-lg bg-[#fc6e20] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-sm">
                           {s.name.substring(0, 2).toUpperCase()}
                         </div>
                         <div className="font-bold text-slate-900 dark:text-slate-100">{s.name}</div>

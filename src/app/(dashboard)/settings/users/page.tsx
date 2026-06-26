@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -48,7 +48,7 @@ export default async function UsersSettingsPage() {
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 overflow-hidden overflow-x-auto">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-base font-bold text-gray-900">All Members</h2>
-            <Link href="/settings/users/invite" className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm font-medium shadow-sm transition-colors">
+            <Link href="/settings/users/invite" className="inline-flex items-center gap-1.5 bg-[#fc6e20] hover:bg-[#e85b0d] text-white rounded-lg px-4 py-2 text-sm font-medium shadow-sm transition-colors">
               <Plus className="w-4 h-4" /> Invite
             </Link>
           </div>
@@ -67,17 +67,17 @@ export default async function UsersSettingsPage() {
                 <tr key={m.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-[#fc6e20] text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
                         {getInitials(m.user.name ?? m.user.email)}
                       </div>
                       <div>
-                        <Link href={`/settings/users/${m.id}`} className="font-semibold text-sm text-blue-600 hover:underline">{m.user.name ?? '—'}</Link>
+                        <Link href={`/settings/users/${m.id}`} className="font-semibold text-sm text-[#fc6e20] hover:underline">{m.user.name ?? '—'}</Link>
                         <div className="text-xs text-gray-500">{m.user.email}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-xs font-medium">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#fff7ed] text-[#e85b0d] border border-blue-200">
                       {m.role}
                     </span>
                   </td>

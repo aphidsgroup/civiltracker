@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useTransition } from 'react'
 import { approveApprovalAction, rejectApprovalAction, markApprovalPaidAction } from '@/actions/approvals'
@@ -86,7 +86,7 @@ export default function ApprovalInlineActions({
           onClick={handleMarkPaid}
           disabled={isPending}
           title="Mark as Paid"
-          className="flex items-center justify-center p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors disabled:opacity-50"
+          className="flex items-center justify-center p-1.5 text-[#fc6e20] bg-[#fff7ed] hover:bg-[#fff7ed] rounded-md transition-colors disabled:opacity-50"
         >
           <Banknote className="w-4 h-4" />
         </button>

@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -35,8 +35,8 @@ export default async function UploadBillPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col md:col-span-2">
               <label className="text-xs font-bold text-slate-500 mb-1.5">Upload bill document</label>
-              <div className="border-2 border-dashed border-blue-300 rounded-xl p-8 flex flex-col items-center justify-center text-center bg-blue-50/50 hover:bg-blue-50 cursor-pointer transition-colors">
-                <Upload className="w-10 h-10 text-blue-800" />
+              <div className="border-2 border-dashed border-blue-300 rounded-xl p-8 flex flex-col items-center justify-center text-center bg-[#fff7ed]/50 hover:bg-[#fff7ed] cursor-pointer transition-colors">
+                <Upload className="w-10 h-10 text-[#e85b0d]" />
                 <div className="font-bold text-sm mt-1 text-slate-900">Click to upload or drag & drop</div>
                 <div className="text-xs text-slate-500">PDF, JPG, PNG or HEIC (max 10MB)</div>
                 <input type="file" name="file" className="hidden" accept="image/*,.pdf" />
@@ -45,7 +45,7 @@ export default async function UploadBillPage() {
             
             <div className="flex flex-col md:col-span-2">
               <label className="text-xs font-bold text-slate-500 mb-1.5">Project site</label>
-              <select name="siteId" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" required>
+              <select name="siteId" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" required>
                 <option value="">Select site...</option>
                 {sites.map(s => (
                   <option key={s.id} value={s.id}>{s.name} ({s.location})</option>
@@ -55,31 +55,31 @@ export default async function UploadBillPage() {
             
             <div className="flex flex-col">
               <label className="text-xs font-bold text-slate-500 mb-1.5">Vendor / Supplier</label>
-              <input name="vendor" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" placeholder="Vendor name" required />
+              <input name="vendor" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" placeholder="Vendor name" required />
             </div>
             <div className="flex flex-col">
               <label className="text-xs font-bold text-slate-500 mb-1.5">Bill number</label>
-              <input name="billNo" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" placeholder="e.g. INV-2026-001" />
+              <input name="billNo" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" placeholder="e.g. INV-2026-001" />
             </div>
             
             <div className="flex flex-col">
               <label className="text-xs font-bold text-slate-500 mb-1.5">Amount (₹)</label>
-              <input name="amount" type="number" step="0.01" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" placeholder="0.00" required />
+              <input name="amount" type="number" step="0.01" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" placeholder="0.00" required />
             </div>
             <div className="flex flex-col">
               <label className="text-xs font-bold text-slate-500 mb-1.5">Bill Date</label>
-              <input name="date" type="date" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" defaultValue={new Date().toISOString().split('T')[0]} required />
+              <input name="date" type="date" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" defaultValue={new Date().toISOString().split('T')[0]} required />
             </div>
             
             <div className="flex flex-col md:col-span-2">
               <label className="text-xs font-bold text-slate-500 mb-1.5">Notes (Optional)</label>
-              <textarea name="notes" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white min-h-[100px]" placeholder="Any additional information..."></textarea>
+              <textarea name="notes" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white min-h-[100px]" placeholder="Any additional information..."></textarea>
             </div>
           </div>
           
           <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
             <Link href="/dashboard" className="px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition-colors">Cancel</Link>
-            <button type="submit" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 cursor-pointer transition-colors shadow-sm">
+            <button type="submit" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-white bg-[#fc6e20] rounded-lg hover:bg-[#e85b0d] cursor-pointer transition-colors shadow-sm">
               <Check className="w-4 h-4" />
               Upload Bill
             </button>

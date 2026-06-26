@@ -1,4 +1,4 @@
-import { requireUser } from '@/lib/auth/require-user'
+﻿import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
 import { AlertCircle, Plus } from 'lucide-react'
 
@@ -17,7 +17,7 @@ export default async function MaterialsRequestsPage() {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Material Purchase Requests (PR)</h1>
           <p className="text-sm text-slate-500 mt-1">Review site indent requisitions before raising vendor purchase orders</p>
         </div>
-        <button className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-blue-600/20 flex items-center gap-2 active:scale-95 transition-all">
+        <button className="px-4 py-2.5 bg-[#fc6e20] hover:bg-[#e85b0d] text-white font-extrabold text-xs rounded-xl shadow-lg shadow-blue-600/20 flex items-center gap-2 active:scale-95 transition-all">
           <Plus size={16} />
           <span>Raise New Site Indent</span>
         </button>
@@ -50,7 +50,7 @@ export default async function MaterialsRequestsPage() {
                       </span>
                     </td>
                     <td className="py-4 px-6 font-bold text-slate-900">{req.description}</td>
-                    <td className="py-4 px-6 font-extrabold text-blue-600">{Number(req.quantity)} {req.unit || 'Units'}</td>
+                    <td className="py-4 px-6 font-extrabold text-[#fc6e20]">{Number(req.quantity)} {req.unit || 'Units'}</td>
                     <td className="py-4 px-6">
                       <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold">
                         {req.site?.name || 'Main Site'}

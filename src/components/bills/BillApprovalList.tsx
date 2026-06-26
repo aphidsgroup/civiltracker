@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -59,7 +59,7 @@ export default function BillApprovalList({ bills }: { bills: Bill[] }) {
           <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#fff7ed] text-[#e85b0d] dark:bg-blue-900/30 dark:text-blue-400">
                   {CATEGORY_LABELS[bill.category] ?? bill.category}
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
@@ -75,7 +75,7 @@ export default function BillApprovalList({ bills }: { bills: Bill[] }) {
               {bill.billAttachments.length > 0 && (
                 <div className="mt-2.5 flex gap-2 flex-wrap">
                   {bill.billAttachments.map((a, i) => (
-                    <a key={i} href={a.secureUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline">
+                    <a key={i} href={a.secureUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-[#fc6e20] dark:text-blue-400 font-bold hover:underline">
                       <Paperclip className="w-3.5 h-3.5" />
                       <span>View Bill {i + 1}</span>
                     </a>

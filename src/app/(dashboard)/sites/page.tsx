@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { formatCurrency } from '@/lib/utils'
@@ -19,7 +19,7 @@ export default async function SitesPage() {
   const statusChip: Record<string, string> = {
     ACTIVE:    'bg-green-100 text-green-700 border border-green-200',
     PLANNING:  'bg-gray-100 text-gray-500 border border-gray-200',
-    COMPLETED: 'bg-blue-100 text-blue-700 border border-blue-200',
+    COMPLETED: 'bg-[#fff7ed] text-[#e85b0d] border border-blue-200',
     ON_HOLD:   'bg-amber-100 text-amber-700 border border-amber-200',
     CANCELLED: 'bg-red-100 text-red-700 border border-red-200',
   }
@@ -34,7 +34,7 @@ export default async function SitesPage() {
         </div>
         <Link
           href="/sites/new"
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-colors no-underline shadow-sm"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#fc6e20] text-white text-sm font-bold hover:bg-[#e85b0d] transition-colors no-underline shadow-sm"
         >
           + New Site
         </Link>
@@ -84,7 +84,7 @@ export default async function SitesPage() {
                   </div>
                   <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : pct < 30 ? 'bg-amber-400' : 'bg-blue-600'}`}
+                      className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : pct < 30 ? 'bg-amber-400' : 'bg-[#fc6e20]'}`}
                       style={{ width: `${pct}%` }}
                     />
                   </div>
@@ -99,7 +99,7 @@ export default async function SitesPage() {
                     <CreditCard className="w-3 h-3" /> {site._count.expenses} expenses
                   </span>
                   {site.currentStage && (
-                    <span className="text-[11.5px] text-blue-600 font-bold">{site.currentStage}</span>
+                    <span className="text-[11.5px] text-[#fc6e20] font-bold">{site.currentStage}</span>
                   )}
                 </div>
               </div>
@@ -114,7 +114,7 @@ export default async function SitesPage() {
             <div className="text-gray-500 text-sm mb-4">Create your first construction site to get started</div>
             <Link
               href="/sites/new"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-colors no-underline shadow-sm"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#fc6e20] text-white text-sm font-bold hover:bg-[#e85b0d] transition-colors no-underline shadow-sm"
             >
               + New Site
             </Link>

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useState } from 'react'
 import { Check, X, Clock, AlertCircle, Sparkles, Building2, Tag, ShieldCheck, Filter, Search, CheckCircle2, XCircle } from 'lucide-react'
@@ -57,7 +57,7 @@ export default function PurchaseRequestTableClient({ initialRequests }: Purchase
     }
     if (u === 'normal') {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-[#fff7ed] text-[#e85b0d] dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
           Normal
         </span>
       )
@@ -109,7 +109,7 @@ export default function PurchaseRequestTableClient({ initialRequests }: Purchase
             <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Total Requisitions</div>
             <div className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">{requests.length}</div>
           </div>
-          <div className="p-3.5 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400">
+          <div className="p-3.5 rounded-2xl bg-[#fff7ed] dark:bg-blue-950/50 text-[#fc6e20] dark:text-blue-400">
             <Tag className="w-6 h-6" />
           </div>
         </div>
@@ -145,13 +145,13 @@ export default function PurchaseRequestTableClient({ initialRequests }: Purchase
             placeholder="Search material or site..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-slate-100"
+            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#fc6e20] text-slate-900 dark:text-slate-100"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           {toastMessage && (
-            <span className="text-xs font-bold text-blue-600 dark:text-blue-400 inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/50 rounded-xl border border-blue-200 dark:border-blue-800">
+            <span className="text-xs font-bold text-[#fc6e20] dark:text-blue-400 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#fff7ed] dark:bg-blue-950/50 rounded-xl border border-blue-200 dark:border-blue-800">
               <Sparkles className="w-3.5 h-3.5" /> {toastMessage}
             </span>
           )}

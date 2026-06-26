@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { addMobileWorkerAction, updateWorkerAction, saveMobileAttendanceAction, addExistingWorkerToRoster, saveContractorAttendance, removeLabourAttendanceAction, removeContractorAttendanceAction } from '@/actions/mobile-labour'
@@ -394,7 +394,7 @@ export default function MobileAttendanceClient({
           onClick={() => setShowContractorForm(true)}
           className="w-full py-5 bg-white border-2 border-blue-500 rounded-3xl shadow-xl shadow-blue-900/10 active:scale-95 transition-all flex flex-col items-center justify-center gap-2 group cursor-pointer mt-4"
         >
-          <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+          <div className="w-14 h-14 bg-[#fff7ed] rounded-2xl flex items-center justify-center text-[#fc6e20] group-hover:scale-110 transition-transform">
             <Briefcase size={28} strokeWidth={2.5} />
           </div>
           <div className="text-lg font-black text-slate-800">Add Contractor Team</div>
@@ -417,9 +417,9 @@ export default function MobileAttendanceClient({
             <div className="text-sm font-black text-emerald-700">{presentCount + halfCount}</div>
             <div className="text-[9px] font-black text-emerald-600 uppercase">Own</div>
           </div>
-          <div className="bg-blue-50 px-3 py-2 rounded-2xl border border-blue-100">
-            <div className="text-sm font-black text-blue-700">{contractorLabourCount}</div>
-            <div className="text-[9px] font-black text-blue-600 uppercase">Contr.</div>
+          <div className="bg-[#fff7ed] px-3 py-2 rounded-2xl border border-blue-100">
+            <div className="text-sm font-black text-[#e85b0d]">{contractorLabourCount}</div>
+            <div className="text-[9px] font-black text-[#fc6e20] uppercase">Contr.</div>
           </div>
         </div>
       </div>
@@ -446,7 +446,7 @@ export default function MobileAttendanceClient({
             <div className="flex p-1 bg-slate-100 rounded-2xl mb-3">
               <button
                 onClick={() => setAddTab('EXISTING')}
-                className={`flex-1 py-2 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all ${addTab === 'EXISTING' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex-1 py-2 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all ${addTab === 'EXISTING' ? 'bg-white text-[#fc6e20] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Existing List
               </button>
@@ -469,7 +469,7 @@ export default function MobileAttendanceClient({
                         placeholder="Search existing workers..." 
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 box-border"
+                        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] box-border"
                       />
                     </div>
                     <div className="w-28 flex-shrink-0">
@@ -477,7 +477,7 @@ export default function MobileAttendanceClient({
                         type="time" 
                         value={existStartTime}
                         onChange={e => setExistStartTime(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-blue-50/50 border border-blue-200 rounded-xl text-sm font-bold text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 box-border"
+                        className="w-full px-3 py-2.5 bg-[#fff7ed]/50 border border-blue-200 rounded-xl text-sm font-bold text-[#e85b0d] focus:outline-none focus:ring-2 focus:ring-[#fc6e20] box-border"
                       />
                     </div>
                   </div>
@@ -493,7 +493,7 @@ export default function MobileAttendanceClient({
                         <button
                           onClick={() => handleAddExisting(w)}
                           disabled={adding}
-                          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-black rounded-lg active:scale-95 transition-all disabled:opacity-50"
+                          className="px-3 py-1.5 bg-[#fff7ed] hover:bg-[#fff7ed] text-[#e85b0d] text-xs font-black rounded-lg active:scale-95 transition-all disabled:opacity-50"
                         >
                           Add to Roster
                         </button>
@@ -509,14 +509,14 @@ export default function MobileAttendanceClient({
                       <input
                         type="text" required placeholder="e.g. Murugan M"
                         value={newName} onChange={e => setNewName(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 box-border"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#fc6e20] box-border"
                       />
                     </div>
                     <div>
                       <label className="text-[11px] font-bold text-slate-500 block mb-1">Trade</label>
                       <select
                         value={newTrade} onChange={e => setNewTrade(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 box-border"
+                        className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#fc6e20] box-border"
                       >
                         {STANDARD_TRADES.map(t => <option key={t} value={t}>{t}</option>)}
                         <option value="OTHERS">✨ OTHERS (Custom)</option>
@@ -526,7 +526,7 @@ export default function MobileAttendanceClient({
                       <label className="text-[11px] font-bold text-slate-500 block mb-1">Daily Wage (₹)</label>
                       <input
                         type="number" required value={newRate} onChange={e => setNewRate(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 box-border"
+                        className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#fc6e20] box-border"
                       />
                     </div>
                     {newTrade === 'OTHERS' && (
@@ -543,7 +543,7 @@ export default function MobileAttendanceClient({
                       <label className="text-[11px] font-bold text-slate-500 block mb-1">Assigned Site</label>
                       <select
                         value={newSiteId} onChange={e => setNewSiteId(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 box-border"
+                        className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#fc6e20] box-border"
                       >
                         {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
@@ -552,7 +552,7 @@ export default function MobileAttendanceClient({
                       <label className="text-[11px] font-bold text-slate-500 block mb-1">Start Time</label>
                       <input
                         type="time" value={newStartTime} onChange={e => setNewStartTime(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 box-border"
+                        className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#fc6e20] box-border"
                       />
                     </div>
                   </div>
@@ -578,7 +578,7 @@ export default function MobileAttendanceClient({
           const adv = advances[worker.id] || 0
 
           return (
-            <div key={worker.id} className={`rounded-2xl transition-all border overflow-hidden ${isEditing ? 'bg-slate-900 text-white border-blue-500 shadow-xl ring-2 ring-blue-500/30 p-5' : 'bg-white text-slate-900 border-slate-200/80 shadow-sm p-4'}`}>
+            <div key={worker.id} className={`rounded-2xl transition-all border overflow-hidden ${isEditing ? 'bg-slate-900 text-white border-blue-500 shadow-xl ring-2 ring-[#fc6e20]/30 p-5' : 'bg-white text-slate-900 border-slate-200/80 shadow-sm p-4'}`}>
               {!isEditing ? (
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -589,7 +589,7 @@ export default function MobileAttendanceClient({
                       </span>
                       <button
                         onClick={() => { handleStartEdit(worker); setShowAddForm(false); setShowContractorForm(false) }}
-                        className="w-6 h-6 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 flex items-center justify-center border-none cursor-pointer p-0 flex-shrink-0 ml-1 active:scale-90 transition-all"
+                        className="w-6 h-6 rounded-lg bg-[#fff7ed] hover:bg-[#fff7ed] text-[#fc6e20] flex items-center justify-center border-none cursor-pointer p-0 flex-shrink-0 ml-1 active:scale-90 transition-all"
                       >
                         <Edit3 size={13} strokeWidth={2.5} />
                       </button>
@@ -614,7 +614,7 @@ export default function MobileAttendanceClient({
                       {startTimes[worker.id] && (
                         <>
                           <span>·</span>
-                          <span className="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                          <span className="text-[#fc6e20] bg-[#fff7ed] px-1.5 py-0.5 rounded">
                             {startTimes[worker.id]}
                           </span>
                         </>
@@ -675,7 +675,7 @@ export default function MobileAttendanceClient({
                     </div>
                   </div>
                   <div className="flex items-center gap-2 pt-1">
-                    <button type="submit" disabled={updating} className="flex-1 py-2.5 bg-blue-500 text-white font-black text-xs rounded-xl shadow-lg border-none"><Check size={15} className="inline mr-1 -mt-0.5" /> Save Changes</button>
+                    <button type="submit" disabled={updating} className="flex-1 py-2.5 bg-[#fff7ed]0 text-white font-black text-xs rounded-xl shadow-lg border-none"><Check size={15} className="inline mr-1 -mt-0.5" /> Save Changes</button>
                     <button type="button" onClick={() => setEditingId(null)} className="px-4 py-2.5 bg-white/10 text-slate-300 font-bold text-xs rounded-xl border-none">Cancel</button>
                   </div>
                 </form>
@@ -697,12 +697,12 @@ export default function MobileAttendanceClient({
       <div className="space-y-3 mt-8">
         <div className="flex items-center justify-between bg-white p-3.5 rounded-2xl border border-blue-200 shadow-sm">
           <div className="flex items-center gap-2.5 pl-1">
-            <Briefcase size={18} className="text-blue-600" />
+            <Briefcase size={18} className="text-[#fc6e20]" />
             <span className="text-xs font-black text-slate-800 uppercase tracking-wide">Outside Contractors</span>
           </div>
           <button
             onClick={() => { setShowContractorForm(!showContractorForm); setShowAddForm(false); setEditingId(null) }}
-            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-[11px] font-extrabold rounded-xl shadow-md shadow-blue-600/20 flex items-center gap-1.5 transition-all border-none cursor-pointer"
+            className="px-3.5 py-2 bg-[#fc6e20] hover:bg-[#e85b0d] active:scale-95 text-white text-[11px] font-extrabold rounded-xl shadow-md shadow-blue-600/20 flex items-center gap-1.5 transition-all border-none cursor-pointer"
           >
             {showContractorForm ? <X size={14} /> : <Plus size={14} strokeWidth={3} />}
             <span>{showContractorForm ? 'Close' : 'Add Contractor'}</span>
@@ -710,7 +710,7 @@ export default function MobileAttendanceClient({
         </div>
 
         {showContractorForm && (
-          <form onSubmit={handleAddContractor} className="bg-gradient-to-br from-blue-900 to-indigo-950 p-5 rounded-3xl text-white shadow-xl space-y-4 border border-blue-500/30 animate-in zoom-in-95 duration-200">
+          <form onSubmit={handleAddContractor} className="bg-gradient-to-br from-blue-900 to-[#e85b0d]950 p-5 rounded-3xl text-white shadow-xl space-y-4 border border-blue-500/30 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="text-xs font-black uppercase tracking-wider text-blue-300">Log Daily Contractor</div>
               <span className="text-[10px] text-blue-200/50">Today's Headcount</span>
@@ -724,7 +724,7 @@ export default function MobileAttendanceClient({
                 <label className="text-[11px] font-bold text-blue-200 block mb-1">Work Type</label>
                 <select value={conType} onChange={e => setConType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-slate-800 border border-white/15 text-white text-xs font-bold focus:ring-2 focus:ring-blue-400 box-border">
                   {CONTRACTOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  <option value="OTHERS" className="bg-blue-600 font-black">✨ OTHERS (Custom)</option>
+                  <option value="OTHERS" className="bg-[#fc6e20] font-black">✨ OTHERS (Custom)</option>
                 </select>
               </div>
               <div>
@@ -746,7 +746,7 @@ export default function MobileAttendanceClient({
                 <input type="time" value={conStartTime} onChange={e => setConStartTime(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white text-xs font-bold focus:ring-2 focus:ring-blue-400 box-border" />
               </div>
             </div>
-            <button type="submit" disabled={addingContractor} className="w-full py-3 bg-blue-500 hover:bg-blue-600 active:scale-98 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md mt-2 flex justify-center items-center gap-1.5">
+            <button type="submit" disabled={addingContractor} className="w-full py-3 bg-[#fff7ed]0 hover:bg-[#fc6e20] active:scale-98 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md mt-2 flex justify-center items-center gap-1.5">
               {addingContractor ? 'Saving...' : <><Check size={16} strokeWidth={3} /> Save Contractor Log</>}
             </button>
           </form>
@@ -757,14 +757,14 @@ export default function MobileAttendanceClient({
             <div className="flex-1 min-w-0 pr-3">
               <div className="text-sm font-black text-slate-800">{c.name}</div>
               <div className="flex items-center gap-2 mt-1">
-                <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-black uppercase tracking-wider">{c.trade}</span>
+                <span className="px-2 py-0.5 rounded bg-[#fff7ed] text-[#e85b0d] text-[9px] font-black uppercase tracking-wider">{c.trade}</span>
                 {c.advance > 0 && <span className="text-[10px] font-bold text-amber-600">Advance: ₹{c.advance}</span>}
-                {c.startTime && <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{c.startTime}</span>}
+                {c.startTime && <span className="text-[10px] font-bold text-[#fc6e20] bg-[#fff7ed] px-1.5 py-0.5 rounded">{c.startTime}</span>}
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="text-center bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-100">
-                <div className="text-lg font-black text-blue-700 leading-none">{c.labourCount}</div>
+              <div className="text-center bg-[#fff7ed] px-3 py-1.5 rounded-xl border border-blue-100">
+                <div className="text-lg font-black text-[#e85b0d] leading-none">{c.labourCount}</div>
                 <div className="text-[8px] font-black text-blue-500 uppercase tracking-wider mt-0.5">Workers</div>
               </div>
               <button

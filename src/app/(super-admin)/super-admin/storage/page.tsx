@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { HardDrive, Cloud, FileCode, Building2 } from 'lucide-react'
@@ -30,7 +30,7 @@ export default async function StoragePage() {
     <>
       <div className="flex items-center justify-between px-8 py-5 border-b border-slate-200 bg-white">
         <div className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <HardDrive className="text-blue-600" size={20} />
+          <HardDrive className="text-[#fc6e20]" size={20} />
           Platform Storage Meter
         </div>
       </div>
@@ -40,7 +40,7 @@ export default async function StoragePage() {
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Used</div>
             <div className="text-2xl font-black text-slate-800 mt-1">{totalUsedMb.toFixed(1)} MB</div>
-            <div className="text-xs font-semibold text-blue-600 mt-0.5">Cloudinary storage</div>
+            <div className="text-xs font-semibold text-[#fc6e20] mt-0.5">Cloudinary storage</div>
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Allocated</div>
@@ -82,7 +82,7 @@ export default async function StoragePage() {
                   return (
                     <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="py-4 px-6 font-bold text-slate-900 flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-extrabold text-xs flex-shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-[#fc6e20] text-white flex items-center justify-center font-extrabold text-xs flex-shrink-0">
                           {c.name.substring(0, 2).toUpperCase()}
                         </div>
                         <span>{c.name}</span>
@@ -100,7 +100,7 @@ export default async function StoragePage() {
                           <span className="font-semibold text-slate-500">{pct.toFixed(1)}%</span>
                         </div>
                         <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${isHigh ? 'bg-rose-500' : 'bg-blue-600'}`} style={{ width: `${pct}%` }} />
+                          <div className={`h-full rounded-full ${isHigh ? 'bg-rose-500' : 'bg-[#fc6e20]'}`} style={{ width: `${pct}%` }} />
                         </div>
                       </td>
                       <td className="py-4 px-6">

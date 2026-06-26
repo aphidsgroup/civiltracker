@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { Layers, CheckCircle2 } from 'lucide-react'
@@ -37,7 +37,7 @@ export default async function ModuleControlsPage() {
     <>
       <div className="flex items-center justify-between px-8 py-5 border-b border-slate-200 bg-white">
         <div className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <Layers className="text-blue-600" size={20} />
+          <Layers className="text-[#fc6e20]" size={20} />
           Module Controls
         </div>
       </div>
@@ -55,7 +55,7 @@ export default async function ModuleControlsPage() {
                   <div className="font-semibold text-sm text-slate-800">{mod.label}</div>
                   <div className="text-xs text-slate-500 mt-1 leading-relaxed">{mod.desc}</div>
                 </div>
-                <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-blue-100 text-blue-700">Core</span>
+                <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-[#fff7ed] text-[#e85b0d]">Core</span>
               </div>
             ))}
           </div>

@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { formatDate } from '@/lib/utils'
@@ -24,7 +24,7 @@ export default async function SettingsPage() {
   if (!company) redirect('/login')
 
   const roleColors: Record<string, string> = {
-    COMPANY_ADMIN: 'bg-blue-50 text-blue-700 border-blue-200',
+    COMPANY_ADMIN: 'bg-[#fff7ed] text-[#e85b0d] border-blue-200',
     PROJECT_MANAGER: 'bg-purple-50 text-purple-700 border-purple-200',
     ACCOUNTANT: 'bg-amber-50 text-amber-700 border-amber-200',
     SITE_ENGINEER: 'bg-emerald-50 text-emerald-700 border-emerald-200',

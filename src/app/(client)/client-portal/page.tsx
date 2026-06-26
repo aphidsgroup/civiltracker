@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { MapPin, CheckCircle2, Clock, Check, AlertCircle, ImageIcon, CreditCard, ChevronRight, FolderX, Sparkles } from 'lucide-react'
@@ -47,7 +47,7 @@ export default async function ClientPortal() {
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6 pb-24 min-h-screen bg-gray-50">
       {/* Hero section */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-[#e85b0d]950 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 rounded-full bg-white/5 blur-3xl pointer-events-none"></div>
         <form action={async () => {
           'use server'
@@ -92,7 +92,7 @@ export default async function ClientPortal() {
           </div>
 
           <div className="flex justify-center md:justify-end">
-            <div className="relative w-36 h-36 md:w-44 md:h-44 flex items-center justify-center rounded-full bg-gradient-to-tr from-amber-500/20 to-indigo-500/20 p-2 border border-white/10 shadow-inner">
+            <div className="relative w-36 h-36 md:w-44 md:h-44 flex items-center justify-center rounded-full bg-gradient-to-tr from-amber-500/20 to-[#e85b0d]500/20 p-2 border border-white/10 shadow-inner">
               <div className="w-full h-full rounded-full bg-slate-900/90 flex flex-col items-center justify-center text-center backdrop-blur-md border border-white/5">
                 <span className="text-3xl md:text-4xl font-black text-white">{progress}%</span>
                 <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider mt-0.5">Complete</span>

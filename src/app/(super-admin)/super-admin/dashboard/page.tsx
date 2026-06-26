@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -49,7 +49,7 @@ export default async function SuperAdminDashboard() {
   ]
 
   const miniStats = [
-    { Icon: Building2, bg: 'bg-[#e7f0fb]', color: 'text-[#13558e]', value: totalSites, label: 'Total sites' },
+    { Icon: Building2, bg: 'bg-[#e7f0fb]', color: 'text-[#fc6e20]', value: totalSites, label: 'Total sites' },
     { Icon: Users, bg: 'bg-[#ece8fa]', color: 'text-[#5b47b8]', value: totalUsers, label: 'Total users' },
     { Icon: HardDrive, bg: 'bg-[#e2f3ea]', color: 'text-[#0f7a45]', value: `${totalStorageGb} GB`, label: 'Cloudinary storage' },
     { Icon: MessageCircle, bg: 'bg-[#fbe6e3]', color: 'text-[#cf3f31]', value: 7, label: 'Open tickets' },
@@ -69,7 +69,7 @@ export default async function SuperAdminDashboard() {
         {kpis.map(k => (
           <div key={k.label} className={`rounded-[16px] p-4 border ${
             k.featured
-              ? 'bg-gradient-to-br from-[#0d3a63] to-[#1a64a6] border-transparent text-white shadow-[0_8px_24px_-8px_rgba(13,58,99,0.5)]'
+              ? 'bg-gradient-to-br from-[#0d3a63] to-[#fc6e20] border-transparent text-white shadow-[0_8px_24px_-8px_rgba(13,58,99,0.5)]'
               : 'bg-white border-[#e4eaf0] shadow-[0_2px_5px_rgba(16,40,70,0.04)]'
           }`}>
             <div className={`text-[11px] font-bold uppercase tracking-[0.03em] ${k.featured ? 'text-white/70' : 'text-[#647387]'}`}>{k.label}</div>
@@ -108,12 +108,12 @@ export default async function SuperAdminDashboard() {
               <div className="text-[15px] font-extrabold text-[#16273a] tracking-[-0.02em]">Companies</div>
               <div className="text-[11.5px] text-[#647387] font-semibold mt-0.5">{totalCompanies} total · sorted by recent</div>
             </div>
-            <Link href="/super-admin/companies" className="text-[12.5px] font-bold text-[#13558e] no-underline">Manage all</Link>
+            <Link href="/super-admin/companies" className="text-[12.5px] font-bold text-[#fc6e20] no-underline">Manage all</Link>
           </div>
           <div>
             {topCompanies.map(c => (
               <div key={c.id} className="flex items-center gap-3 px-5 py-3.5 border-b border-[#e4eaf0] last:border-0 hover:bg-[#fafbfc] transition-colors">
-                <div className="w-[38px] h-[38px] rounded-[11px] bg-[#13558e] text-white font-extrabold text-[13px] flex items-center justify-center flex-shrink-0">
+                <div className="w-[38px] h-[38px] rounded-[11px] bg-[#fc6e20] text-white font-extrabold text-[13px] flex items-center justify-center flex-shrink-0">
                   {c.name.substring(0, 2).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -165,7 +165,7 @@ export default async function SuperAdminDashboard() {
                 {totalStorageGb} <span className="text-[14px] text-[#647387] font-semibold">GB / 500 GB</span>
               </div>
               <div className="h-2.5 bg-[#eef2f6] rounded-full overflow-hidden my-3.5">
-                <div className="h-full bg-gradient-to-r from-[#13558e] to-[#1d6fb5] rounded-full" style={{ width: `${Math.min((Number(totalStorageGb)/500)*100,100)}%` }} />
+                <div className="h-full bg-gradient-to-r from-[#fc6e20] to-[#e85b0d] rounded-full" style={{ width: `${Math.min((Number(totalStorageGb)/500)*100,100)}%` }} />
               </div>
               <div className="text-[11.5px] text-[#647387] font-semibold">Cloudinary · {((Number(totalStorageGb)/500)*100).toFixed(1)}% of plan capacity used</div>
             </div>

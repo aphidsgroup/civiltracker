@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 
@@ -45,7 +45,7 @@ export default async function VendorsPage() {
             <div className="text-sm font-bold text-slate-800">All Vendors</div>
             <a
               href="/vendors/new"
-              className="bg-blue-600 text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-blue-700 transition-colors"
+              className="bg-[#fc6e20] text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-[#e85b0d] transition-colors"
             >
               + Add Vendor
             </a>

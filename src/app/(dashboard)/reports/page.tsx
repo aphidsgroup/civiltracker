@@ -1,4 +1,4 @@
-import { getFounderDashboardStats } from '@/actions/reports'
+﻿import { getFounderDashboardStats } from '@/actions/reports'
 import { Card } from '@/components/ui/card'
 import { requireUser } from '@/lib/auth/require-user'
 import { formatCompactINR } from '@/lib/reports/money'
@@ -18,14 +18,14 @@ export default async function ReportsDashboard() {
         </div>
         <div className="flex gap-2">
           <Link href="/reports/export-history" className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors inline-flex items-center justify-center">Export History</Link>
-          <Link href="/reports/site-cost" className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm transition-colors inline-flex items-center justify-center">Detailed Reports</Link>
+          <Link href="/reports/site-cost" className="px-4 py-2 text-sm font-medium bg-[#fc6e20] hover:bg-[#e85b0d] text-white rounded-lg shadow-sm transition-colors inline-flex items-center justify-center">Detailed Reports</Link>
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center gap-3 mb-2 text-gray-500">
-            <Building2 className="w-5 h-5 text-blue-600" />
+            <Building2 className="w-5 h-5 text-[#fc6e20]" />
             <h3 className="font-semibold text-sm uppercase tracking-wider">Active Sites</h3>
           </div>
           <p className="text-2xl font-bold text-gray-900">{stats.totalActiveSites}</p>
@@ -78,10 +78,10 @@ export default async function ReportsDashboard() {
           <p className="text-2xl font-bold text-red-900">{formatCompactINR(stats.vendorPayable)}</p>
         </Card>
 
-        <Card className="p-4 rounded-xl border border-blue-100 shadow-sm bg-blue-50/50">
+        <Card className="p-4 rounded-xl border border-blue-100 shadow-sm bg-[#fff7ed]/50">
           <div className="flex items-center gap-3 mb-2">
-            <Users className="w-5 h-5 text-blue-600" />
-            <h3 className="font-semibold text-sm uppercase tracking-wider text-blue-800">Salary Payable</h3>
+            <Users className="w-5 h-5 text-[#fc6e20]" />
+            <h3 className="font-semibold text-sm uppercase tracking-wider text-[#e85b0d]">Salary Payable</h3>
           </div>
           <p className="text-2xl font-bold text-blue-900">{formatCompactINR(stats.salaryPayable)}</p>
         </Card>

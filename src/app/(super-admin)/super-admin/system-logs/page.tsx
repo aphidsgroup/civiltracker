@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { ScrollText, Activity, ShieldAlert } from 'lucide-react'
@@ -23,7 +23,7 @@ export default async function SystemLogsPage() {
 
   function actionBadge(action: string) {
     if (action === 'CREATE') return 'bg-emerald-100 text-emerald-800'
-    if (action === 'UPDATE') return 'bg-blue-100 text-blue-800'
+    if (action === 'UPDATE') return 'bg-[#fff7ed] text-[#e85b0d]'
     if (action === 'DELETE') return 'bg-rose-100 text-rose-800'
     if (action === 'LOGIN') return 'bg-amber-100 text-amber-800'
     return 'bg-slate-100 text-slate-700'
@@ -33,7 +33,7 @@ export default async function SystemLogsPage() {
     <>
       <div className="flex items-center justify-between px-8 py-5 border-b border-slate-200 bg-white">
         <div className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <ScrollText className="text-blue-600" size={20} />
+          <ScrollText className="text-[#fc6e20]" size={20} />
           System Audit Logs
         </div>
       </div>
@@ -41,7 +41,7 @@ export default async function SystemLogsPage() {
       <div className="p-8 max-w-7xl mx-auto space-y-8">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
+            <div className="w-12 h-12 rounded-xl bg-[#fff7ed] text-[#e85b0d] flex items-center justify-center flex-shrink-0">
               <ScrollText size={24} />
             </div>
             <div>

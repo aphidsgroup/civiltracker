@@ -1,10 +1,10 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { FileText, FolderOpen } from 'lucide-react'
 
 const CAT_COLOR: Record<string, string> = {
-  CONTRACT: 'bg-blue-50 text-blue-700 border-blue-200',
+  CONTRACT: 'bg-[#fff7ed] text-[#e85b0d] border-blue-200',
   DRAWING: 'bg-purple-50 text-purple-700 border-purple-200',
   PERMIT: 'bg-amber-50 text-amber-700 border-amber-200',
   REPORT: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -50,7 +50,7 @@ export default async function DocumentsPage() {
 
         {docs.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center flex flex-col items-center justify-center">
-            <div className="p-4 bg-blue-50 text-blue-600 rounded-full mb-4">
+            <div className="p-4 bg-[#fff7ed] text-[#fc6e20] rounded-full mb-4">
               <FolderOpen className="w-8 h-8" />
             </div>
             <h3 className="text-lg font-bold text-gray-900 mb-1">No documents yet</h3>
@@ -73,7 +73,7 @@ export default async function DocumentsPage() {
                   <tr key={d.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-[#fff7ed] text-[#fc6e20] flex items-center justify-center flex-shrink-0">
                           <FileText className="w-4 h-4" />
                         </div>
                         <div className="font-medium text-sm text-gray-900">{d.name}</div>

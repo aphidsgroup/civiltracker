@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
@@ -103,7 +103,7 @@ export default async function ClientPortalPaymentsPage() {
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8 pb-24 min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* Hero Header */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden border border-white/10">
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-[#e85b0d]950 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden border border-white/10">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-3 max-w-2xl">
@@ -135,7 +135,7 @@ export default async function ClientPortalPaymentsPage() {
             <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-slate-100">{formatCurrency(totalBilled)}</div>
             <div className="text-xs text-slate-500 mt-1 font-medium">{displayInvoices.length} Issued Invoices</div>
           </div>
-          <div className="p-3.5 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400">
+          <div className="p-3.5 rounded-2xl bg-[#fff7ed] dark:bg-blue-950/50 text-[#fc6e20] dark:text-blue-400">
             <Receipt className="w-7 h-7" />
           </div>
         </div>
@@ -167,7 +167,7 @@ export default async function ClientPortalPaymentsPage() {
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
         <div className="p-5 px-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <FileText className="w-5 h-5 text-[#fc6e20] dark:text-blue-400" />
             <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 m-0">Project Invoice Ledger</h2>
           </div>
           <span className="text-xs font-semibold text-slate-400">Showing all {displayInvoices.length} billing entries</span>
@@ -189,7 +189,7 @@ export default async function ClientPortalPaymentsPage() {
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-sm">
               {displayInvoices.map((inv: any) => (
                 <tr key={inv.id} className="hover:bg-slate-50/75 dark:hover:bg-slate-800/50 transition-colors">
-                  <td className="py-4 px-6 font-mono font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                  <td className="py-4 px-6 font-mono font-bold text-[#fc6e20] dark:text-blue-400 whitespace-nowrap">
                     {inv.invoiceNumber}
                   </td>
                   <td className="py-4 px-6">

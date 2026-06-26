@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 
@@ -19,8 +19,8 @@ export default async function PurchasePage() {
 
   const statusStyles: Record<string, string> = {
     PENDING: 'bg-amber-100 text-amber-700',
-    PM_APPROVED: 'bg-blue-100 text-blue-700',
-    PO_CREATED: 'bg-blue-100 text-blue-700',
+    PM_APPROVED: 'bg-[#fff7ed] text-[#e85b0d]',
+    PO_CREATED: 'bg-[#fff7ed] text-[#e85b0d]',
     DELIVERED: 'bg-green-100 text-green-700',
     CANCELLED: 'bg-red-100 text-red-600',
   }
@@ -30,7 +30,7 @@ export default async function PurchasePage() {
       {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white">
         <div className="text-base font-bold text-slate-800">Purchase Requests & Orders</div>
-        <a href="/purchase/new" className="bg-blue-600 text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-blue-700 transition-colors">
+        <a href="/purchase/new" className="bg-[#fc6e20] text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-[#e85b0d] transition-colors">
           + Create PO
         </a>
       </div>

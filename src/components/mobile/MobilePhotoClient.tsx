@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { uploadMobileSitePhotoAction } from '@/actions/mobile-photo'
@@ -231,7 +231,7 @@ export default function MobilePhotoClient({
                     <button
                       type="button"
                       onClick={handleSimulatePC}
-                      className="block mt-3 text-[10.5px] font-bold text-blue-600 bg-transparent border-none cursor-pointer hover:underline mx-auto"
+                      className="block mt-3 text-[10.5px] font-bold text-[#fc6e20] bg-transparent border-none cursor-pointer hover:underline mx-auto"
                     >
                       <Sparkles size={11} className="inline mr-1" />
                       Simulate PC snapshot

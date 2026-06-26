@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 
@@ -56,7 +56,7 @@ export default async function SAUsersPage() {
                 <tr key={m.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-[#fc6e20] text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
                         {getInitials(m.user.name ?? m.user.email)}
                       </div>
                       <div>
@@ -67,7 +67,7 @@ export default async function SAUsersPage() {
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">{m.company.name}</td>
                   <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#fff7ed] text-[#e85b0d] border border-blue-200">
                       {m.role}
                     </span>
                   </td>

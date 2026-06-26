@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { usePathname } from 'next/navigation'
 import type { SessionUser } from '@/types'
@@ -77,19 +77,19 @@ export default function DashboardTopbar({
         </Link>
 
         {pathname === '/bills' && (
-          <Link href="/bills/upload" className="flex items-center gap-2 bg-gradient-to-r from-[#13558e] to-[#1d6fb5] text-white text-[13.5px] font-bold px-3 py-2.5 md:px-4 rounded-[11px] shadow-[0_8px_16px_-8px_rgba(19,85,142,0.6)] flex-shrink-0">
+          <Link href="/bills/upload" className="flex items-center gap-2 bg-gradient-to-r from-[#fc6e20] to-[#e85b0d] text-white text-[13.5px] font-bold px-3 py-2.5 md:px-4 rounded-[11px] shadow-[0_8px_16px_-8px_rgba(252,110,32,0.6)] flex-shrink-0">
             <Plus size={16} />
             <span className="hidden md:inline">Upload Bill</span>
           </Link>
         )}
         {pathname === '/expenses' && (
-          <Link href="/expenses/new" className="flex items-center gap-2 bg-gradient-to-r from-[#13558e] to-[#1d6fb5] text-white text-[13.5px] font-bold px-3 py-2.5 md:px-4 rounded-[11px] shadow-[0_8px_16px_-8px_rgba(19,85,142,0.6)] flex-shrink-0">
+          <Link href="/expenses/new" className="flex items-center gap-2 bg-gradient-to-r from-[#fc6e20] to-[#e85b0d] text-white text-[13.5px] font-bold px-3 py-2.5 md:px-4 rounded-[11px] shadow-[0_8px_16px_-8px_rgba(252,110,32,0.6)] flex-shrink-0">
             <Plus size={16} />
             <span className="hidden md:inline">Add Expense</span>
           </Link>
         )}
         {pathname === '/sites' && (
-          <Link href="/sites/new" className="flex items-center gap-2 bg-gradient-to-r from-[#13558e] to-[#1d6fb5] text-white text-[13.5px] font-bold px-3 py-2.5 md:px-4 rounded-[11px] shadow-[0_8px_16px_-8px_rgba(19,85,142,0.6)] flex-shrink-0">
+          <Link href="/sites/new" className="flex items-center gap-2 bg-gradient-to-r from-[#fc6e20] to-[#e85b0d] text-white text-[13.5px] font-bold px-3 py-2.5 md:px-4 rounded-[11px] shadow-[0_8px_16px_-8px_rgba(252,110,32,0.6)] flex-shrink-0">
             <Plus size={16} />
             <span className="hidden md:inline">New Site</span>
           </Link>

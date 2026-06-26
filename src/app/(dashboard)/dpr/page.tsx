@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { formatDate } from '@/lib/utils'
@@ -29,7 +29,7 @@ export default async function DprPage() {
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Daily Progress Reports</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{dprs.length} reports</p>
         </div>
-        <Link href="/mobile/dpr" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm transition-colors shadow-sm">
+        <Link href="/mobile/dpr" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#fc6e20] hover:bg-[#e85b0d] text-white font-semibold text-sm transition-colors shadow-sm">
           <Plus className="w-4 h-4" />
           Add DPR
         </Link>
@@ -69,7 +69,7 @@ export default async function DprPage() {
         ))}
         {dprs.length === 0 && (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-12 text-center shadow-sm flex flex-col items-center justify-center">
-            <div className="p-4 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 rounded-full mb-4">
+            <div className="p-4 bg-[#fff7ed] dark:bg-blue-950/50 text-[#fc6e20] dark:text-blue-400 rounded-full mb-4">
               <FileText className="w-10 h-10" />
             </div>
             <h2 className="font-bold text-base text-slate-900 dark:text-slate-100 mb-1">No DPRs yet</h2>

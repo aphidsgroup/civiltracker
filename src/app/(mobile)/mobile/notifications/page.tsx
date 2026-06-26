@@ -1,4 +1,4 @@
-import { requireUser } from '@/lib/auth/require-user'
+﻿import { requireUser } from '@/lib/auth/require-user'
 import Link from 'next/link'
 import { Bell, ShieldAlert, FileCheck, Camera, HardHat, CheckCheck, ArrowLeft, Sparkles, ChevronRight, AlertTriangle } from 'lucide-react'
 
@@ -48,7 +48,7 @@ export default async function MobileNotificationsPage() {
       time: '2h ago',
       type: 'LABOUR',
       icon: HardHat,
-      color: 'bg-blue-50 text-blue-600 border-blue-200 border-l-blue-500',
+      color: 'bg-[#fff7ed] text-[#fc6e20] border-blue-200 border-l-blue-500',
       href: '/mobile/attendance'
     }
   ]
@@ -68,7 +68,7 @@ export default async function MobileNotificationsPage() {
       {/* Hero Banner */}
       <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-b-[32px] shadow-xl space-y-3 mb-4">
         <div className="flex items-center justify-between">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-[10px] font-black uppercase tracking-wider text-blue-300">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#fff7ed]0/20 border border-blue-400/30 text-[10px] font-black uppercase tracking-wider text-blue-300">
             <Sparkles size={12} />
             <span>Telemetry Dispatch</span>
           </div>
@@ -88,7 +88,7 @@ export default async function MobileNotificationsPage() {
           <span className="px-3 py-1.5 rounded-xl bg-white text-slate-600 text-xs font-bold border border-slate-200">Approvals</span>
         </div>
 
-        <button className="text-[11px] font-bold text-blue-600 bg-transparent border-none cursor-pointer flex items-center gap-1 active:scale-95 whitespace-nowrap">
+        <button className="text-[11px] font-bold text-[#fc6e20] bg-transparent border-none cursor-pointer flex items-center gap-1 active:scale-95 whitespace-nowrap">
           <CheckCheck size={14} />
           <span>Read All</span>
         </button>

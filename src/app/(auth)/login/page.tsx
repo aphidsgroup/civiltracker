@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
@@ -13,7 +13,7 @@ const FEATURES = [
 
 const DEMO_USERS = [
   { role: 'Super Admin', email: 'admin@civiltracker.in', password: 'Admin@123456', color: '#5b47b8' },
-  { role: 'Company Admin', email: 'arun@madras-crafters.in', password: 'Admin@123456', color: '#13558e' },
+  { role: 'Company Admin', email: 'arun@madras-crafters.in', password: 'Admin@123456', color: '#fc6e20' },
   { role: 'Site Engineer', email: 'murugan@madras-crafters.in', password: 'Admin@123456', color: '#138a4e' },
   { role: 'Client', email: 'client@annanagar.in', password: 'Admin@123456', color: '#fc6e20' },
 ]

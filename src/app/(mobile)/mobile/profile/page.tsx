@@ -1,4 +1,4 @@
-import { requireUser } from '@/lib/auth/require-user'
+﻿import { requireUser } from '@/lib/auth/require-user'
 import { signOut } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import Link from 'next/link'
@@ -42,7 +42,7 @@ export default async function MobileProfilePage() {
       </div>
 
       {/* USER PROFILE ID CARD */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-[#0d3a63] via-[#13558e] to-[#1a64a6] rounded-[28px] p-6 text-white shadow-xl shadow-[#0d3a63]/25 border border-white/10 mb-5">
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#0d3a63] via-[#fc6e20] to-[#fc6e20] rounded-[28px] p-6 text-white shadow-xl shadow-[#0d3a63]/25 border border-white/10 mb-5">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-[20px] bg-gradient-to-tr from-amber-400 to-orange-500 text-white font-black text-2xl flex items-center justify-center shadow-lg shadow-orange-500/30 border-2 border-white/20">
@@ -99,7 +99,7 @@ export default async function MobileProfilePage() {
           <div className="text-sm font-black text-[#16273a]">General Site Shift (Day)</div>
           <div className="text-xs text-[#647387] font-medium mt-1 flex items-center justify-between">
             <span>09:00 AM – 06:00 PM</span>
-            <span className="font-bold text-[#13558e]">Mon – Sat</span>
+            <span className="font-bold text-[#fc6e20]">Mon – Sat</span>
           </div>
         </div>
       </div>
@@ -111,7 +111,7 @@ export default async function MobileProfilePage() {
           className="flex items-center justify-between p-4 bg-white rounded-[20px] border border-[#e4eaf0] shadow-sm active:scale-[0.98] transition-all hover:border-[#cbd5e1]"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[14px] bg-[#f0f4f8] text-[#13558e] flex items-center justify-center">
+            <div className="w-10 h-10 rounded-[14px] bg-[#f0f4f8] text-[#fc6e20] flex items-center justify-center">
               <HelpCircle size={20} />
             </div>
             <div>

@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { Users } from 'lucide-react'
@@ -24,7 +24,7 @@ export default async function ClientsPage() {
     <div className="min-h-screen bg-gray-50/50">
       <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
         <h1 className="text-xl font-semibold text-gray-900">Clients</h1>
-        <a href="/clients/new" className="bg-blue-600 text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-blue-700 transition-colors">
+        <a href="/clients/new" className="bg-[#fc6e20] text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-[#e85b0d] transition-colors">
           + Add Client
         </a>
       </div>
@@ -51,7 +51,7 @@ export default async function ClientsPage() {
 
         {clients.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center flex flex-col items-center justify-center">
-            <div className="p-4 bg-blue-50 text-blue-600 rounded-full mb-4">
+            <div className="p-4 bg-[#fff7ed] text-[#fc6e20] rounded-full mb-4">
               <Users className="w-8 h-8" />
             </div>
             <h3 className="text-lg font-bold text-gray-900 mb-1">No clients yet</h3>

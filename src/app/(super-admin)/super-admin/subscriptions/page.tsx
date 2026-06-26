@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { CreditCard, Building2, Layers, CheckCircle2 } from 'lucide-react'
@@ -35,7 +35,7 @@ export default async function SubscriptionsPage() {
     <>
       <div className="flex items-center justify-between px-8 py-5 border-b border-slate-200 bg-white">
         <div className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <CreditCard className="text-blue-600" size={20} />
+          <CreditCard className="text-[#fc6e20]" size={20} />
           Subscription Plans & Billing
         </div>
       </div>
@@ -61,7 +61,7 @@ export default async function SubscriptionsPage() {
               <div key={p.id} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
                 <div>
                   <div className="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
-                    <Layers size={18} className="text-blue-600" />
+                    <Layers size={18} className="text-[#fc6e20]" />
                     {p.name}
                   </div>
                   <div className="text-3xl font-black text-slate-800 my-4">

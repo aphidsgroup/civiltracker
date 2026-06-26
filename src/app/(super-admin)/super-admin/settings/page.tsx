@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { Settings, Sliders, AlertTriangle } from 'lucide-react'
 
@@ -39,7 +39,7 @@ export default async function SettingsPage() {
     <>
       <div className="flex items-center justify-between px-8 py-5 border-b border-slate-200 bg-white">
         <div className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <Settings className="text-blue-600" size={20} />
+          <Settings className="text-[#fc6e20]" size={20} />
           Platform Settings
         </div>
       </div>

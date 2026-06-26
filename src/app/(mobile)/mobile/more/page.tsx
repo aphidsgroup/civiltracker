@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronRight, Grid, ShieldAlert } from 'lucide-react'
@@ -31,7 +31,7 @@ export default async function MobileMorePage() {
     <div className="p-4 pb-28 max-w-lg mx-auto bg-slate-50 min-h-screen select-none">
       <div className="flex items-center justify-between mb-5 pt-2">
         <div className="flex items-center gap-2.5">
-          <div className="p-2.5 bg-blue-600 text-white rounded-2xl shadow-md shadow-blue-600/20">
+          <div className="p-2.5 bg-[#fc6e20] text-white rounded-2xl shadow-md shadow-blue-600/20">
             <Grid className="w-5 h-5" />
           </div>
           <div>

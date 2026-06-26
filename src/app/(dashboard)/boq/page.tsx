@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { ClipboardList, FileSpreadsheet, DollarSign, Receipt } from 'lucide-react'
@@ -27,14 +27,14 @@ export default async function BOQPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Bill of Quantities</h1>
-        <a href="/boq/new" className="bg-blue-600 text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-blue-700 transition-colors">
+        <a href="/boq/new" className="bg-[#fc6e20] text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-[#e85b0d] transition-colors">
           + Add BOQ Item
         </a>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'BOQ Items', value: items.length, icon: ClipboardList, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/50' },
+          { label: 'BOQ Items', value: items.length, icon: ClipboardList, color: 'text-[#fc6e20] dark:text-blue-400', bg: 'bg-[#fff7ed] dark:bg-blue-950/50' },
           { label: 'Base Amount', value: `₹${(totalAmount / 100000).toFixed(2)}L`, icon: FileSpreadsheet, color: 'text-slate-900 dark:text-slate-100', bg: 'bg-slate-100 dark:bg-slate-800' },
           { label: 'With GST', value: `₹${(totalWithGst / 100000).toFixed(2)}L`, icon: DollarSign, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/50' },
           { label: 'GST Amount', value: `₹${((totalWithGst - totalAmount) / 100000).toFixed(2)}L`, icon: Receipt, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/50' },
@@ -56,7 +56,7 @@ export default async function BOQPage() {
 
       {items.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-12 text-center shadow-sm flex flex-col items-center justify-center">
-          <div className="p-4 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 rounded-full mb-4">
+          <div className="p-4 bg-[#fff7ed] dark:bg-blue-950/50 text-[#fc6e20] dark:text-blue-400 rounded-full mb-4">
             <ClipboardList className="w-10 h-10" />
           </div>
           <h2 className="font-bold text-lg text-slate-900 dark:text-slate-100 mb-2">No BOQ items yet</h2>
@@ -94,7 +94,7 @@ export default async function BOQPage() {
                     <td className="px-4 py-3.5 text-sm font-bold text-slate-900 dark:text-slate-100">₹{Number(item.rate).toLocaleString('en-IN')}</td>
                     <td className="px-4 py-3.5 text-sm font-bold text-slate-900 dark:text-slate-100">₹{Number(item.amount).toLocaleString('en-IN')}</td>
                     <td className="px-4 py-3.5 text-xs text-slate-500 dark:text-slate-400">{item.gstPercent}%</td>
-                    <td className="px-4 py-3.5 text-sm font-extrabold text-blue-600 dark:text-blue-400">₹{Number(item.totalWithGst).toLocaleString('en-IN')}</td>
+                    <td className="px-4 py-3.5 text-sm font-extrabold text-[#fc6e20] dark:text-blue-400">₹{Number(item.totalWithGst).toLocaleString('en-IN')}</td>
                   </tr>
                 ))}
               </tbody>

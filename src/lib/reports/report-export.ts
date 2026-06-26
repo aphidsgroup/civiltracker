@@ -1,4 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+﻿// eslint-disable-next-line @typescript-eslint/no-require-imports
 const PdfPrinter = require('pdfmake')
 import ExcelJS from 'exceljs'
 // Define standard fonts for pdfmake
@@ -47,7 +47,7 @@ export async function generatePDFBuffer(
       { text: 'Filters Applied: ' + JSON.stringify(filters), style: 'filters', margin: [0, 0, 0, 20] }
     ],
     styles: {
-      headerCompany: { fontSize: 14, bold: true, color: '#13558e' },
+      headerCompany: { fontSize: 14, bold: true, color: '#fc6e20' },
       headerTitle: { fontSize: 18, bold: true },
       filters: { fontSize: 9, color: '#647387' },
       summaryLabel: { bold: true },

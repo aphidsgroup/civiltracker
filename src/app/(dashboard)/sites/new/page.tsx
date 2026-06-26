@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
@@ -50,22 +50,22 @@ export default async function NewSitePage() {
               <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-slate-500 mb-1.5">Site Name *</label>
                 <input name="name" required placeholder="e.g. Marina Towers Block A"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-slate-500 mb-1.5">Location *</label>
                 <input name="location" required placeholder="e.g. Chennai, Tamil Nadu"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-slate-500 mb-1.5">Address</label>
                 <input name="address" placeholder="Full street address"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1.5">Project Type</label>
                 <select name="projectType"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white">
                   <option value="">Select type</option>
                   <option>RESIDENTIAL</option><option>COMMERCIAL</option>
                   <option>INFRASTRUCTURE</option><option>INDUSTRIAL</option><option>RENOVATION</option>
@@ -74,11 +74,11 @@ export default async function NewSitePage() {
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1.5">Budget (₹)</label>
                 <input name="budget" type="number" min="0" placeholder="5000000"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" />
               </div>
             </div>
             <div className="mt-6 flex items-center gap-3">
-              <button type="submit" className="bg-blue-600 text-white border-none rounded-lg px-6 py-2.5 text-sm font-bold hover:bg-blue-700 cursor-pointer transition-colors">Create Site</button>
+              <button type="submit" className="bg-[#fc6e20] text-white border-none rounded-lg px-6 py-2.5 text-sm font-bold hover:bg-[#e85b0d] cursor-pointer transition-colors">Create Site</button>
               <Link href="/sites" className="bg-slate-100 text-slate-700 border border-slate-200 rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-slate-200 text-center transition-colors">Cancel</Link>
             </div>
           </form>

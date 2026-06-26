@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -26,13 +26,13 @@ export default async function LabourPage() {
   const active = labour.filter(l => l.isActive).length
 
   const tradeColors: Record<string, string> = {
-    MASON: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+    MASON: 'bg-[#fff7ed] text-[#e85b0d] dark:bg-blue-900/30 dark:text-blue-400',
     HELPER: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300',
     CARPENTER: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
     BAR_BENDER: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
     ELECTRICIAN: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
     PLUMBER: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
-    PAINTER: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
+    PAINTER: 'bg-[#fff7ed] text-[#e85b0d] dark:bg-indigo-900/30 dark:text-[#fc6e20]',
     SUPERVISOR: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
   }
 
@@ -48,7 +48,7 @@ export default async function LabourPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: 'Total Workers', value: labour.length, icon: Users, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/50' },
+          { label: 'Total Workers', value: labour.length, icon: Users, color: 'text-[#fc6e20] dark:text-blue-400', bg: 'bg-[#fff7ed] dark:bg-blue-950/50' },
           { label: 'Active', value: active, icon: UserCheck, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/50' },
           { label: 'Inactive', value: labour.length - active, icon: UserMinus, color: 'text-slate-600 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-800' },
         ].map(s => {

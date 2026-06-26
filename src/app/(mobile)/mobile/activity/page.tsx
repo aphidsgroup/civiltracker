@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { FileText, Image as ImageIcon, Users, IndianRupee, Clock } from 'lucide-react'
 
@@ -35,9 +35,9 @@ function ActivityIcon({ type }: { type: ActivityType }) {
 
 function activityColor(type: ActivityType) {
   if (type === 'ATTENDANCE') return 'bg-emerald-100 text-emerald-600'
-  if (type === 'ATTENDANCE_CON') return 'bg-blue-100 text-blue-600'
+  if (type === 'ATTENDANCE_CON') return 'bg-[#fff7ed] text-[#fc6e20]'
   if (type === 'EXPENSE') return 'bg-red-100 text-red-600'
-  if (type === 'DPR') return 'bg-blue-100 text-blue-600'
+  if (type === 'DPR') return 'bg-[#fff7ed] text-[#fc6e20]'
   if (type === 'PHOTO') return 'bg-[#fff7ed] text-[#fc6e20]'
   return 'bg-slate-100 text-slate-600'
 }

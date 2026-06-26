@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { LifeBuoy, Clock, CheckCircle, Building } from 'lucide-react'
@@ -37,7 +37,7 @@ export default async function SupportPage() {
     <>
       <div className="flex items-center justify-between px-8 py-5 border-b border-slate-200 bg-white">
         <div className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <LifeBuoy className="text-blue-600" size={20} />
+          <LifeBuoy className="text-[#fc6e20]" size={20} />
           Support & Approvals
         </div>
       </div>
@@ -67,7 +67,7 @@ export default async function SupportPage() {
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
+            <div className="w-12 h-12 rounded-xl bg-[#fff7ed] text-[#e85b0d] flex items-center justify-center flex-shrink-0">
               <Building size={24} />
             </div>
             <div>

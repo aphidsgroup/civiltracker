@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -212,7 +212,7 @@ export default function MobileUploadBillClient({
             <button
               type="button"
               onClick={handleDemoBillSnap}
-              className="mt-4 text-[10.5px] font-bold text-blue-600 bg-transparent border-none cursor-pointer hover:underline flex items-center justify-center gap-1 mx-auto"
+              className="mt-4 text-[10.5px] font-bold text-[#fc6e20] bg-transparent border-none cursor-pointer hover:underline flex items-center justify-center gap-1 mx-auto"
             >
               <Sparkles size={12} />
               <span>Simulate instant scan for PC evaluation</span>
@@ -234,7 +234,7 @@ export default function MobileUploadBillClient({
 
             {/* GPS Auto-Tag Pill */}
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10.5px] font-black mx-auto">
-              {gpsLoading ? <Loader2 size={12} className="animate-spin text-blue-600" /> : <MapPin size={12} className="text-emerald-600" />}
+              {gpsLoading ? <Loader2 size={12} className="animate-spin text-[#fc6e20]" /> : <MapPin size={12} className="text-emerald-600" />}
               <span>{gpsLoading ? 'Acquiring GPS...' : `GPS Tagged: ${gpsCoords || '28.5355° N, 77.3910° E'} ✓`}</span>
             </div>
           </div>

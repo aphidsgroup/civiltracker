@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -9,7 +9,7 @@ import {
 
 function siteStatusChip(progress: number) {
   if (progress >= 75) return { label: 'On track', cls: 'bg-[#e2f3ea] text-[#0f7a45]' }
-  if (progress >= 40) return { label: 'In progress', cls: 'bg-[#e7f0fb] text-[#13558e]' }
+  if (progress >= 40) return { label: 'In progress', cls: 'bg-[#e7f0fb] text-[#fc6e20]' }
   return { label: 'Needs review', cls: 'bg-[#fbeacb] text-[#a96c08]' }
 }
 
@@ -83,7 +83,7 @@ export default async function CompanyDashboard() {
   }
 
   const quickActions = [
-    { href: '/sites/new', Icon: Plus, label: 'Add Site', color: 'text-[#13558e]', bg: 'bg-[#e7f0fb]' },
+    { href: '/sites/new', Icon: Plus, label: 'Add Site', color: 'text-[#fc6e20]', bg: 'bg-[#e7f0fb]' },
     { href: '/bills/upload', Icon: Upload, label: 'Upload Bill', color: 'text-[#0f7a45]', bg: 'bg-[#e2f3ea]' },
     { href: '/expenses/new', Icon: Receipt, label: 'Add Expense', color: 'text-[#b6740a]', bg: 'bg-[#fcefd4]' },
     { href: '/labour', Icon: CheckSquare, label: 'Mark Attendance', color: 'text-[#5b47b8]', bg: 'bg-[#ece8fa]' },
@@ -120,7 +120,7 @@ export default async function CompanyDashboard() {
         {kpis.map(k => (
           <div key={k.label} className={`rounded-[16px] p-4 border ${
             k.featured
-              ? 'bg-gradient-to-br from-[#0d3a63] to-[#1a64a6] border-transparent text-white shadow-[0_8px_24px_-8px_rgba(13,58,99,0.5)]'
+              ? 'bg-gradient-to-br from-[#0d3a63] to-[#fc6e20] border-transparent text-white shadow-[0_8px_24px_-8px_rgba(13,58,99,0.5)]'
               : 'bg-white border-[#e4eaf0] shadow-[0_2px_5px_rgba(16,40,70,0.04)]'
           }`}>
             <div className={`text-[11px] font-bold uppercase tracking-[0.03em] ${k.featured ? 'text-white/70' : 'text-[#647387]'}`}>{k.label}</div>
@@ -146,7 +146,7 @@ export default async function CompanyDashboard() {
               <div className="text-[15px] font-extrabold text-[#16273a] tracking-[-0.02em]">Site-wise cost summary</div>
               <div className="text-[11.5px] text-[#647387] font-semibold mt-0.5">{activeSitesCount} active sites</div>
             </div>
-            <Link href="/sites" className="text-[12.5px] font-bold text-[#13558e] no-underline">View all</Link>
+            <Link href="/sites" className="text-[12.5px] font-bold text-[#fc6e20] no-underline">View all</Link>
           </div>
           <div className="p-0">
             {sites.length === 0 ? (
@@ -166,7 +166,7 @@ export default async function CompanyDashboard() {
                     const spent = Number(site.spent)
                     const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : site.progress
                     const st = siteStatusChip(site.progress)
-                    const barColor = pct > 80 ? 'bg-gradient-to-r from-[#d9483b] to-[#ef6f63]' : pct > 60 ? 'bg-gradient-to-r from-[#e08a0b] to-[#f3b43a]' : 'bg-gradient-to-r from-[#13558e] to-[#1d6fb5]'
+                    const barColor = pct > 80 ? 'bg-gradient-to-r from-[#d9483b] to-[#ef6f63]' : pct > 60 ? 'bg-gradient-to-r from-[#e08a0b] to-[#f3b43a]' : 'bg-gradient-to-r from-[#fc6e20] to-[#e85b0d]'
                     return (
                       <tr key={site.id} className="border-b border-[#e4eaf0] last:border-0 hover:bg-[#fafbfc] transition-colors">
                         <td className="px-4 py-3">
@@ -205,7 +205,7 @@ export default async function CompanyDashboard() {
                 <div className="text-[15px] font-extrabold text-[#16273a] tracking-[-0.02em]">Pending approval</div>
                 <div className="text-[11.5px] text-[#647387] font-semibold mt-0.5">{pendingCount} items · {fmtAmt(pendingTotal)}</div>
               </div>
-              <Link href="/approvals" className="text-[12.5px] font-bold text-[#13558e] no-underline">Open</Link>
+              <Link href="/approvals" className="text-[12.5px] font-bold text-[#fc6e20] no-underline">Open</Link>
             </div>
             <div>
               {recentPendingExpenses.length === 0 ? (
@@ -229,14 +229,14 @@ export default async function CompanyDashboard() {
           <div className="bg-white border border-[#e4eaf0] rounded-[18px] shadow-[0_2px_6px_rgba(16,40,70,0.04)]">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#e4eaf0]">
               <div className="text-[15px] font-extrabold text-[#16273a] tracking-[-0.02em]">Recent bill uploads</div>
-              <Link href="/bills" className="text-[12.5px] font-bold text-[#13558e] no-underline">All</Link>
+              <Link href="/bills" className="text-[12.5px] font-bold text-[#fc6e20] no-underline">All</Link>
             </div>
             <div>
               {recentExpenses.length === 0 ? (
                 <div className="py-6 text-center text-[#647387] text-[13px]">No recent bills</div>
               ) : recentExpenses.map(e => (
                 <div key={e.id} className="flex items-center gap-3 px-4 py-3 border-b border-[#e4eaf0] last:border-0">
-                  <div className="w-9 h-9 rounded-[10px] bg-[#f0f4f8] text-[#13558e] text-[11px] font-extrabold flex items-center justify-center flex-shrink-0">
+                  <div className="w-9 h-9 rounded-[10px] bg-[#f0f4f8] text-[#fc6e20] text-[11px] font-extrabold flex items-center justify-center flex-shrink-0">
                     {(e.category ?? 'BI').substring(0, 2)}
                   </div>
                   <div className="flex-1 min-w-0">

@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+﻿import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -22,7 +22,7 @@ export default async function ExpensesPage() {
   const statusColors: Record<string, string> = {
     PENDING: 'bg-amber-100 text-amber-800',
     APPROVED: 'bg-emerald-100 text-emerald-800',
-    PAID: 'bg-blue-100 text-blue-800',
+    PAID: 'bg-[#fff7ed] text-[#e85b0d]',
     REJECTED: 'bg-red-100 text-red-800',
     DRAFT: 'bg-slate-100 text-slate-700',
   }
@@ -44,7 +44,7 @@ export default async function ExpensesPage() {
           <h1 className="text-2xl font-extrabold m-0 mb-1 tracking-tight text-slate-900">Expenses & Bills</h1>
           <p className="text-slate-500 text-xs m-0">{expenses.length} records · {pending} pending approval</p>
         </div>
-        <Link href="/mobile/add/expense" className="inline-flex items-center gap-1.5 bg-blue-600 text-white rounded-lg px-4 py-2.5 text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm no-underline">
+        <Link href="/mobile/add/expense" className="inline-flex items-center gap-1.5 bg-[#fc6e20] text-white rounded-lg px-4 py-2.5 text-sm font-bold hover:bg-[#e85b0d] transition-colors shadow-sm no-underline">
           <Plus className="w-4 h-4" /> Add Expense
         </Link>
       </div>
@@ -52,7 +52,7 @@ export default async function ExpensesPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         {[
-          { label: 'Total Recorded', value: formatCurrency(total), color: 'text-blue-600' },
+          { label: 'Total Recorded', value: formatCurrency(total), color: 'text-[#fc6e20]' },
           { label: 'Approved / Paid', value: formatCurrency(approved), color: 'text-emerald-600' },
           { label: 'Pending Approval', value: String(pending) + ' bills', color: 'text-amber-600' },
         ].map(c => (
@@ -92,7 +92,7 @@ export default async function ExpensesPage() {
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500 font-semibold">{e.site.name}</td>
                       <td className="px-4 py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-[#fff7ed] text-[#e85b0d] border border-blue-200">
                           {categoryLabels[e.category] ?? e.category}
                         </span>
                       </td>

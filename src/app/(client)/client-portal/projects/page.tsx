@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
@@ -84,8 +84,8 @@ export default async function ClientPortalProjectsPage() {
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8 pb-24 min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* Hero Header */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden border border-white/10">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-[#e85b0d]950 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden border border-white/10">
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 rounded-full bg-[#fff7ed]0/10 blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-3 max-w-2xl">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-amber-300 text-xs font-bold backdrop-blur-md border border-white/10">
@@ -115,7 +115,7 @@ export default async function ClientPortalProjectsPage() {
       {/* Projects Grid */}
       <div className="space-y-8">
         <h2 className="text-lg font-extrabold text-slate-900 dark:text-slate-100 tracking-tight flex items-center gap-2 px-1">
-          <Layers className="w-5 h-5 text-blue-600 dark:text-blue-400" /> Construction Progress Overview
+          <Layers className="w-5 h-5 text-[#fc6e20] dark:text-blue-400" /> Construction Progress Overview
         </h2>
 
         <div className="grid grid-cols-1 gap-8">
@@ -129,19 +129,19 @@ export default async function ClientPortalProjectsPage() {
                 key={proj.id}
                 className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm hover:shadow-md transition-all space-y-8 relative overflow-hidden"
               >
-                <div className="absolute top-0 left-0 w-2 h-full bg-blue-600" />
+                <div className="absolute top-0 left-0 w-2 h-full bg-[#fc6e20]" />
 
                 {/* Card Top: Title & Meta */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-6">
                   <div className="space-y-1.5 pl-2">
                     <div className="flex items-center gap-2">
                       <span className={`px-3 py-0.5 rounded-full text-xs font-black tracking-wider border ${
-                        proj.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800' : 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-300'
+                        proj.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800' : 'bg-[#fff7ed] text-[#e85b0d] dark:bg-blue-950/60 dark:text-blue-300 border-blue-300'
                       }`}>
                         {proj.status} STAGE
                       </span>
                       {proj.currentStage && (
-                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-0.5 rounded-lg">
+                        <span className="text-xs font-bold text-[#fc6e20] dark:text-blue-400 bg-[#fff7ed] dark:bg-blue-950/40 px-2.5 py-0.5 rounded-lg">
                           📍 {proj.currentStage}
                         </span>
                       )}
@@ -171,9 +171,9 @@ export default async function ClientPortalProjectsPage() {
                 <div className="space-y-3 bg-slate-50 dark:bg-slate-800/40 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Overall Physical Completion Progress
+                      <TrendingUp className="w-4 h-4 text-[#fc6e20] dark:text-blue-400" /> Overall Physical Completion Progress
                     </span>
-                    <span className="text-lg font-black text-blue-600 dark:text-blue-400 font-mono">{prog}%</span>
+                    <span className="text-lg font-black text-[#fc6e20] dark:text-blue-400 font-mono">{prog}%</span>
                   </div>
                   <div className="w-full h-3.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden p-0.5">
                     <div
@@ -205,12 +205,12 @@ export default async function ClientPortalProjectsPage() {
                             isDone
                               ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/80 text-emerald-900 dark:text-emerald-200'
                               : isCurrent
-                              ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-800 text-blue-900 dark:text-blue-200 shadow-sm ring-1 ring-blue-400'
+                              ? 'bg-[#fff7ed] dark:bg-blue-950/40 border-blue-300 dark:border-blue-800 text-blue-900 dark:text-blue-200 shadow-sm ring-1 ring-blue-400'
                               : 'bg-slate-50/50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-800 text-slate-400'
                           }`}
                         >
                           <div className={`w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                            isDone ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30' : isCurrent ? 'bg-blue-600 text-white animate-pulse' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                            isDone ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30' : isCurrent ? 'bg-[#fc6e20] text-white animate-pulse' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
                           }`}>
                             {isDone ? <Check className="w-4 h-4 stroke-[3]" /> : isCurrent ? <CircleDot className="w-4 h-4 animate-spin" /> : <span className="text-xs font-bold">{mIdx + 1}</span>}
                           </div>
@@ -231,7 +231,7 @@ export default async function ClientPortalProjectsPage() {
                 <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-800/80">
                   <Link
                     href={`/client-portal/photos`}
-                    className="inline-flex items-center gap-2 text-xs font-extrabold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 no-underline"
+                    className="inline-flex items-center gap-2 text-xs font-extrabold text-[#fc6e20] dark:text-blue-400 hover:text-[#e85b0d] dark:hover:text-blue-300 no-underline"
                   >
                     <span>View Site Gallery & Quality Reports</span>
                     <ArrowRight className="w-4 h-4" />

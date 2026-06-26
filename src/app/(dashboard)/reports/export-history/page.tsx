@@ -1,4 +1,4 @@
-import { requireUser } from '@/lib/auth/require-user'
+﻿import { requireUser } from '@/lib/auth/require-user'
 import { hasPermission } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 import { FileText, Table, ArrowLeft } from 'lucide-react'
@@ -22,7 +22,7 @@ export default async function ExportHistoryPage() {
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
       <div>
-        <Link href="/reports" className="text-sm text-blue-600 hover:underline mb-2 inline-flex items-center gap-1.5 font-medium">
+        <Link href="/reports" className="text-sm text-[#fc6e20] hover:underline mb-2 inline-flex items-center gap-1.5 font-medium">
           <ArrowLeft className="w-4 h-4" /> Back to Dashboard
         </Link>
         <h1 className="text-2xl font-bold text-gray-900">Export History</h1>
