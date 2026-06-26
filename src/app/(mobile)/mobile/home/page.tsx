@@ -231,7 +231,7 @@ export default async function MobileHome() {
           </Link>
 
           <Link
-            href="/labour/attendance"
+            href="/mobile/attendance"
             className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-3.5 no-underline group"
           >
             <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
