@@ -1,26 +1,36 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import fs from 'fs'
-import path from 'path'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const migrationPath = path.join(process.cwd(), 'prisma/migrations/20260626000002_add_missing_phase9_columns/migration.sql')
-    const sql = fs.readFileSync(migrationPath, 'utf8')
+    const rawSql = [
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "userLimit" INTEGER NOT NULL DEFAULT 5;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "siteLimit" INTEGER NOT NULL DEFAULT 1;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "storageLimitMb" INTEGER NOT NULL DEFAULT 100;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "storageUsed" FLOAT NOT NULL DEFAULT 0;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "modulesJson" JSONB;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "createdById" TEXT;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "logo" TEXT;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "slug" TEXT;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "gst" TEXT;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "phone" TEXT;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "email" TEXT;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "address" TEXT;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "city" TEXT;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "state" TEXT;`,
+      `ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "pincode" TEXT;`
+    ]
     
-    // Execute each statement
-    const statements = sql.split(';').filter(s => s.trim().length > 0)
     const results = []
     
-    for (const stmt of statements) {
-      if (stmt.trim().startsWith('--')) continue; // Skip full comment blocks if they are standalone
+    for (const stmt of rawSql) {
       try {
         await prisma.$executeRawUnsafe(stmt)
-        results.push({ stmt: stmt.substring(0, 50) + '...', status: 'success' })
+        results.push({ stmt: stmt, status: 'success' })
       } catch (err: any) {
-        results.push({ stmt: stmt.substring(0, 50) + '...', status: 'error', error: err.message })
+        results.push({ stmt: stmt, status: 'error', error: err.message })
       }
     }
     
