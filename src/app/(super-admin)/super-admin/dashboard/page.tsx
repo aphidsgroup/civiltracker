@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { Building2, Users, HardDrive, MessageCircle, TrendingUp, AlertCircle } from 'lucide-react'
 
 export default async function SuperAdminDashboard() {
   const session = await auth()
@@ -11,146 +12,144 @@ export default async function SuperAdminDashboard() {
   const activeCompanies = await prisma.company.count({ where: { deletedAt: null, status: 'ACTIVE' } })
   const trialCompanies = await prisma.company.count({ where: { deletedAt: null, status: 'TRIAL' } })
   const suspendedCompanies = await prisma.company.count({ where: { deletedAt: null, status: 'SUSPENDED' } })
-
   const totalSites = await prisma.site.count({ where: { deletedAt: null } })
   const totalUsers = await prisma.user.count({ where: { deletedAt: null } })
-  
-  const storageAgg = await prisma.company.aggregate({
-    where: { deletedAt: null },
-    _sum: { storageUsed: true }
-  })
+  const storageAgg = await prisma.company.aggregate({ where: { deletedAt: null }, _sum: { storageUsed: true } })
   const totalStorageGb = ((storageAgg._sum.storageUsed || 0) / (1024 * 1024 * 1024)).toFixed(1)
-
-  // Plan distribution
-  const planCounts = await prisma.company.groupBy({
-    by: ['plan'],
-    where: { deletedAt: null },
-    _count: true,
-  })
-
+  const planCounts = await prisma.company.groupBy({ by: ['plan'], where: { deletedAt: null }, _count: true })
   const topCompanies = await prisma.company.findMany({
-    where: { deletedAt: null },
-    orderBy: { createdAt: 'desc' },
-    take: 5,
-    include: {
-      _count: {
-        select: { sites: true, members: true }
-      }
-    }
+    where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 5,
+    include: { _count: { select: { sites: true, members: true } } }
   })
+
+  const kpis = [
+    { label: 'Total Companies', value: totalCompanies, sub: 'Platform total', trend: 'up', featured: true },
+    { label: 'Active', value: activeCompanies, sub: `${Math.round((activeCompanies/(totalCompanies||1))*100)}% of base`, trend: 'up' },
+    { label: 'On Trial', value: trialCompanies, sub: 'Free trials', trend: 'warn' },
+    { label: 'Suspended', value: suspendedCompanies, sub: 'Billing failed', trend: 'down' },
+    { label: 'Monthly Revenue', value: '₹6.4 L', sub: '+12% MoM', trend: 'up' },
+  ]
+
+  const miniStats = [
+    { Icon: Building2, bg: 'bg-[#e7f0fb]', color: 'text-[#13558e]', value: totalSites, label: 'Total sites' },
+    { Icon: Users, bg: 'bg-[#ece8fa]', color: 'text-[#5b47b8]', value: totalUsers, label: 'Total users' },
+    { Icon: HardDrive, bg: 'bg-[#e2f3ea]', color: 'text-[#0f7a45]', value: `${totalStorageGb} GB`, label: 'Cloudinary storage' },
+    { Icon: MessageCircle, bg: 'bg-[#fbe6e3]', color: 'text-[#cf3f31]', value: 7, label: 'Open tickets' },
+  ]
+
+  const planColors: Record<string, string> = { ENTERPRISE: '#7c3aed', GROWTH: '#059669', STARTER: '#0284c7', TRIAL: '#d97706' }
+  const statusChip = (s: string) => {
+    if (s === 'ACTIVE') return 'bg-[#e2f3ea] text-[#0f7a45]'
+    if (s === 'TRIAL') return 'bg-[#fbeacb] text-[#a96c08]'
+    return 'bg-[#fbe6e3] text-[#c4392c]'
+  }
 
   return (
     <>
-      <div className="kpis">
-        <div className="kpi feat">
-          <div className="klbl">Total companies</div>
-          <div className="knum">{totalCompanies}</div>
-          <div className="ksub"><span>▲</span>Platform total</div>
-        </div>
-        <div className="kpi">
-          <div className="klbl">Active</div>
-          <div className="knum">{activeCompanies}</div>
-          <div className="ksub up"><span>●</span>{Math.round((activeCompanies / (totalCompanies || 1)) * 100)}% of base</div>
-        </div>
-        <div className="kpi">
-          <div className="klbl">On trial</div>
-          <div className="knum">{trialCompanies}</div>
-          <div className="ksub warn"><span>●</span>Free trials</div>
-        </div>
-        <div className="kpi">
-          <div className="klbl">Suspended</div>
-          <div className="knum">{suspendedCompanies}</div>
-          <div className="ksub down"><span>●</span>Billing failed</div>
-        </div>
-        <div className="kpi">
-          <div className="klbl">Monthly revenue</div>
-          <div className="knum">₹6.4 L</div>
-          <div className="ksub up"><span>▲</span>+12% MoM</div>
-        </div>
-      </div>
-      
-      <div className="minirow">
-        <div className="mini">
-          <div className="miic ic-blue">
-            <svg className="svg22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2"/></svg>
-          </div>
-          <div><div className="min">{totalSites}</div><div className="mil">Total sites</div></div>
-        </div>
-        <div className="mini">
-          <div className="miic ic-violet">
-            <svg className="svg22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 5.5a3 3 0 0 1 0 5"/></svg>
-          </div>
-          <div><div className="min">{totalUsers}</div><div className="mil">Total users</div></div>
-        </div>
-        <div className="mini">
-          <div className="miic ic-green">
-            <svg className="svg22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/></svg>
-          </div>
-          <div><div className="min">{totalStorageGb} GB</div><div className="mil">Cloudinary storage</div></div>
-        </div>
-        <div className="mini">
-          <div className="miic ic-red">
-            <svg className="svg22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          </div>
-          <div><div className="min">7</div><div className="mil">Open tickets</div></div>
-        </div>
-      </div>
-      
-      <div className="dgrid">
-        <div className="colL">
-          <div className="card">
-            <div className="chead">
-              <div><div className="ctitle">Companies</div><div className="csub">{totalCompanies} total · sorted by recent</div></div>
-              <Link href="/super-admin/companies" className="clink">Manage all</Link>
+      {/* KPI Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5 mb-4">
+        {kpis.map(k => (
+          <div key={k.label} className={`rounded-[16px] p-4 border ${
+            k.featured
+              ? 'bg-gradient-to-br from-[#0d3a63] to-[#1a64a6] border-transparent text-white shadow-[0_8px_24px_-8px_rgba(13,58,99,0.5)]'
+              : 'bg-white border-[#e4eaf0] shadow-[0_2px_5px_rgba(16,40,70,0.04)]'
+          }`}>
+            <div className={`text-[11px] font-bold uppercase tracking-[0.03em] ${k.featured ? 'text-white/70' : 'text-[#647387]'}`}>{k.label}</div>
+            <div className={`text-[25px] font-black tracking-[-0.03em] mt-2.5 leading-none tabular ${k.featured ? '' : 'text-[#16273a]'}`}>{k.value}</div>
+            <div className={`text-[11.5px] font-bold mt-2 flex items-center gap-1.5 ${
+              k.trend === 'up' ? (k.featured ? 'text-white/85' : 'text-[#138a4e]') : k.trend === 'warn' ? 'text-[#e08a0b]' : k.trend === 'down' ? 'text-[#d9483b]' : k.featured ? 'text-white/70' : 'text-[#647387]'
+            }`}>
+              {k.trend === 'up' ? <TrendingUp size={12}/> : k.trend === 'warn' || k.trend === 'down' ? <AlertCircle size={12}/> : null}
+              {k.sub}
             </div>
-            <div className="cbody" style={{ paddingTop: '4px' }}>
-              {topCompanies.map(c => (
-                <div key={c.id} className="lrow">
-                  <div className="lava" style={{ background: '#13558e', color: '#fff' }}>{c.name.substring(0, 2).toUpperCase()}</div>
-                  <div className="lmain">
-                    <div className="lt1">{c.name}</div>
-                    <div className="lt2">{c.city || 'Unknown'} · {c._count.sites} sites · {c._count.members} users</div>
-                  </div>
-                  <div className="schip mut">{c.plan}</div>
-                  <div className={`schip ${c.status === 'ACTIVE' ? 'green' : c.status === 'TRIAL' ? 'amber' : 'red'}`} style={{ marginLeft: '8px' }}>
-                    <span className="sdot"></span>{c.status}
-                  </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Mini stat row */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3.5 mb-4">
+        {miniStats.map(m => (
+          <div key={m.label} className="bg-white border border-[#e4eaf0] rounded-[14px] p-4 flex items-center gap-3 shadow-[0_2px_5px_rgba(16,40,70,0.04)]">
+            <div className={`w-10 h-10 rounded-[11px] flex items-center justify-center flex-shrink-0 ${m.bg} ${m.color}`}>
+              <m.Icon size={20} strokeWidth={1.8}/>
+            </div>
+            <div>
+              <div className="text-[20px] font-extrabold text-[#16273a] leading-none tabular">{m.value}</div>
+              <div className="text-[11px] text-[#647387] font-bold mt-1">{m.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Main grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4 items-start">
+        {/* Companies list */}
+        <div className="bg-white border border-[#e4eaf0] rounded-[18px] shadow-[0_2px_6px_rgba(16,40,70,0.04)]">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[#e4eaf0]">
+            <div>
+              <div className="text-[15px] font-extrabold text-[#16273a] tracking-[-0.02em]">Companies</div>
+              <div className="text-[11.5px] text-[#647387] font-semibold mt-0.5">{totalCompanies} total · sorted by recent</div>
+            </div>
+            <Link href="/super-admin/companies" className="text-[12.5px] font-bold text-[#13558e] no-underline">Manage all</Link>
+          </div>
+          <div>
+            {topCompanies.map(c => (
+              <div key={c.id} className="flex items-center gap-3 px-5 py-3.5 border-b border-[#e4eaf0] last:border-0 hover:bg-[#fafbfc] transition-colors">
+                <div className="w-[38px] h-[38px] rounded-[11px] bg-[#13558e] text-white font-extrabold text-[13px] flex items-center justify-center flex-shrink-0">
+                  {c.name.substring(0, 2).toUpperCase()}
                 </div>
-              ))}
-            </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-bold text-[#16273a] truncate">{c.name}</div>
+                  <div className="text-[11px] text-[#647387] font-semibold mt-0.5 truncate">{c.city || 'Unknown'} · {c._count.sites} sites · {c._count.members} users</div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="schip mut">{c.plan}</span>
+                  <span className={`inline-flex items-center gap-1 text-[10.5px] font-extrabold px-2 py-1 rounded-[8px] ${statusChip(c.status)}`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-current" />{c.status}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-        
-        <div className="colR">
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div className="chead"><div className="ctitle">Plan distribution</div></div>
-            <div className="cbody" style={{ paddingTop: 8 }}>
-              {(['ENTERPRISE', 'GROWTH', 'STARTER', 'TRIAL'] as const).map(plan => {
+
+        {/* Right panel */}
+        <div className="flex flex-col gap-4">
+          {/* Plan distribution */}
+          <div className="bg-white border border-[#e4eaf0] rounded-[18px] shadow-[0_2px_6px_rgba(16,40,70,0.04)]">
+            <div className="px-5 py-4 border-b border-[#e4eaf0]">
+              <div className="text-[15px] font-extrabold text-[#16273a] tracking-[-0.02em]">Plan distribution</div>
+            </div>
+            <div className="px-5 py-4">
+              {(['ENTERPRISE','GROWTH','STARTER','TRIAL'] as const).map(plan => {
                 const count = planCounts.find(p => p.plan === plan)?._count ?? 0
                 const pct = totalCompanies > 0 ? Math.round((count / totalCompanies) * 100) : 0
-                const colors: Record<string, string> = { ENTERPRISE: '#7c3aed', GROWTH: '#059669', STARTER: '#0284c7', TRIAL: '#d97706' }
                 return (
-                  <div key={plan} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                    <div style={{ width: 68, fontSize: 12, color: 'var(--mut)', flexShrink: 0 }}>{plan.charAt(0) + plan.slice(1).toLowerCase()}</div>
-                    <div style={{ flex: 1, height: 6, background: 'var(--line)', borderRadius: 4, overflow: 'hidden' }}>
-                      <div style={{ width: `${pct}%`, height: '100%', background: colors[plan], borderRadius: 4 }}></div>
+                  <div key={plan} className="flex items-center gap-2.5 mb-3 last:mb-0">
+                    <div className="text-[12.5px] font-bold text-[#647387] w-[72px] flex-shrink-0">{plan.charAt(0)+plan.slice(1).toLowerCase()}</div>
+                    <div className="flex-1 h-[9px] bg-[#eef2f6] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: planColors[plan] }} />
                     </div>
-                    <div style={{ width: 20, textAlign: 'right', fontSize: 13, fontWeight: 700 }}>{count}</div>
+                    <div className="text-[12px] font-extrabold text-[#16273a] tabular w-5 text-right">{count}</div>
                   </div>
                 )
               })}
             </div>
           </div>
-          <div className="card">
-            <div className="chead"><div className="ctitle">Storage usage</div></div>
-            <div className="cbody">
-              <div className="storebig">{totalStorageGb} GB <small>/ 500 GB</small></div>
-              <div className="stract">
-                <div className="sttrack">
-                  <div className="sfill" style={{ width: `${Math.min((Number(totalStorageGb) / 500) * 100, 100)}%` }}></div>
-                </div>
+
+          {/* Storage */}
+          <div className="bg-white border border-[#e4eaf0] rounded-[18px] shadow-[0_2px_6px_rgba(16,40,70,0.04)]">
+            <div className="px-5 py-4 border-b border-[#e4eaf0]">
+              <div className="text-[15px] font-extrabold text-[#16273a] tracking-[-0.02em]">Storage usage</div>
+            </div>
+            <div className="px-5 py-4">
+              <div className="text-[28px] font-extrabold text-[#16273a] tracking-[-0.02em] tabular">
+                {totalStorageGb} <span className="text-[14px] text-[#647387] font-semibold">GB / 500 GB</span>
               </div>
-              <div className="smeta">Cloudinary · {((Number(totalStorageGb) / 500) * 100).toFixed(1)}% of plan capacity used</div>
+              <div className="h-2.5 bg-[#eef2f6] rounded-full overflow-hidden my-3.5">
+                <div className="h-full bg-gradient-to-r from-[#13558e] to-[#1d6fb5] rounded-full" style={{ width: `${Math.min((Number(totalStorageGb)/500)*100,100)}%` }} />
+              </div>
+              <div className="text-[11.5px] text-[#647387] font-semibold">Cloudinary · {((Number(totalStorageGb)/500)*100).toFixed(1)}% of plan capacity used</div>
             </div>
           </div>
         </div>

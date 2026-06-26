@@ -17,48 +17,69 @@ export default async function PurchasePage() {
   const inProgress = requests.filter(r => r.status === 'PM_APPROVED' || r.status === 'PO_CREATED').length
   const delivered = requests.filter(r => r.status === 'DELIVERED').length
 
-  const statusChip: Record<string, string> = {
-    PENDING: 'chip-amber',
-    PM_APPROVED: 'chip-blue',
-    PO_CREATED: 'chip-blue',
-    DELIVERED: 'chip-green',
-    CANCELLED: 'chip-red',
+  const statusStyles: Record<string, string> = {
+    PENDING: 'bg-amber-100 text-amber-700',
+    PM_APPROVED: 'bg-blue-100 text-blue-700',
+    PO_CREATED: 'bg-blue-100 text-blue-700',
+    DELIVERED: 'bg-green-100 text-green-700',
+    CANCELLED: 'bg-red-100 text-red-600',
   }
 
   return (
     <>
-      <div className="topbar"><div className="title">Purchase Requests</div></div>
-      <div style={{ padding: '24px' }}>
-        <div className="kpis" style={{ marginBottom: 24 }}>
+      {/* Top bar */}
+      <div className="flex items-center px-6 py-4 border-b border-slate-200 bg-white">
+        <div className="text-base font-bold text-slate-800">Purchase Requests</div>
+      </div>
+
+      <div className="p-6">
+        {/* KPI cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
             { label: 'Total', value: requests.length },
             { label: 'Pending', value: pending },
             { label: 'In Progress', value: inProgress },
             { label: 'Delivered', value: delivered },
           ].map(k => (
-            <div key={k.label} className="kpi">
-              <div className="klbl">{k.label}</div>
-              <div className="knum" style={{ fontSize: 18 }}>{k.value}</div>
+            <div key={k.label} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{k.label}</div>
+              <div className="text-lg font-bold text-slate-800">{k.value}</div>
             </div>
           ))}
         </div>
-        <div className="ct-card" style={{ overflowX: 'auto' }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>All Purchase Requests</div>
-          <table className="ct-table">
+
+        {/* Table card */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+          <div className="p-4 text-sm font-bold text-slate-800">All Purchase Requests</div>
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr><th>Description</th><th>Site</th><th>Qty</th><th>Urgency</th><th>Status</th></tr>
+              <tr className="border-t border-slate-100 bg-slate-50">
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Description</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Site</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Qty</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Urgency</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+              </tr>
             </thead>
             <tbody>
               {requests.map(r => (
-                <tr key={r.id}>
-                  <td style={{ fontWeight: 600, fontSize: 13 }}>{r.description}</td>
-                  <td style={{ fontSize: 12, color: 'var(--mut)' }}>{r.site?.name ?? '—'}</td>
-                  <td style={{ fontSize: 13 }}>{Number(r.quantity)} {r.unit ?? ''}</td>
-                  <td style={{ fontSize: 12 }}>{r.urgency}</td>
-                  <td><span className={`chip ${statusChip[r.status] ?? 'chip-amber'}`} style={{ fontSize: 11 }}>{r.status.replace('_', ' ')}</span></td>
+                <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
+                  <td className="px-4 py-3 font-semibold text-sm text-slate-800">{r.description}</td>
+                  <td className="px-4 py-3 text-xs text-slate-400">{r.site?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-sm text-slate-600">{Number(r.quantity)} {r.unit ?? ''}</td>
+                  <td className="px-4 py-3 text-xs text-slate-600">{r.urgency}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${statusStyles[r.status] ?? 'bg-amber-100 text-amber-700'}`}>
+                      {r.status.replace('_', ' ')}
+                    </span>
+                  </td>
                 </tr>
               ))}
-              {requests.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: 32, color: 'var(--mut)' }}>No purchase requests yet.</td></tr>}
+              {requests.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400">No purchase requests yet.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

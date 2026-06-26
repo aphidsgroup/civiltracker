@@ -1,13 +1,16 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
-
 import { redirect } from 'next/navigation'
+import {
+  Building2, DollarSign, Clock, Users, Wallet, CreditCard,
+  Plus, Upload, Receipt, CheckSquare, FileText, BarChart3, TrendingUp, AlertCircle
+} from 'lucide-react'
 
-function siteStatus(progress: number): { label: string; cls: string } {
-  if (progress >= 75) return { label: 'On track', cls: 'chip-green' }
-  if (progress >= 40) return { label: 'In progress', cls: 'chip-blue' }
-  return { label: 'Needs review', cls: 'chip-amber' }
+function siteStatusChip(progress: number) {
+  if (progress >= 75) return { label: 'On track', cls: 'bg-[#e2f3ea] text-[#0f7a45]' }
+  if (progress >= 40) return { label: 'In progress', cls: 'bg-[#e7f0fb] text-[#13558e]' }
+  return { label: 'Needs review', cls: 'bg-[#fbeacb] text-[#a96c08]' }
 }
 
 export default async function CompanyDashboard() {
@@ -20,71 +23,20 @@ export default async function CompanyDashboard() {
   const todayEnd = new Date(today)
   todayEnd.setHours(23, 59, 59, 999)
 
-  // Fetch site IDs first for labourAttendance
   const siteIds = await prisma.site.findMany({ where: { companyId }, select: { id: true } }).then(s => s.map(x => x.id))
 
   const [
-    activeSitesCount,
-    todayExpenseAgg,
-    pendingExpenses,
-    totalLabour,
-    todayAttendance,
-    recentPendingExpenses,
-    recentExpenses,
-    sites,
+    activeSitesCount, todayExpenseAgg, pendingExpenses,
+    totalLabour, todayAttendance, recentPendingExpenses, recentExpenses, sites,
   ] = await Promise.all([
     prisma.site.count({ where: { companyId, deletedAt: null, status: 'ACTIVE' } }),
-
-    prisma.expense.aggregate({
-      where: { companyId, deletedAt: null, createdAt: { gte: today, lte: todayEnd } },
-      _sum: { amount: true },
-    }),
-
-    prisma.expense.aggregate({
-      where: { companyId, deletedAt: null, approvalStatus: 'PENDING' },
-      _sum: { amount: true },
-      _count: true,
-    }),
-
+    prisma.expense.aggregate({ where: { companyId, deletedAt: null, createdAt: { gte: today, lte: todayEnd } }, _sum: { amount: true } }),
+    prisma.expense.aggregate({ where: { companyId, deletedAt: null, approvalStatus: 'PENDING' }, _sum: { amount: true }, _count: true }),
     prisma.labour.count({ where: { companyId, isActive: true } }),
-
-    prisma.labourAttendance.count({
-      where: {
-        siteId: { in: siteIds },
-        date: { gte: today, lte: todayEnd },
-        status: 'PRESENT',
-      },
-    }),
-
-    // Pending approvals for right panel
-    prisma.expense.findMany({
-      where: { companyId, deletedAt: null, approvalStatus: 'PENDING' },
-      orderBy: { createdAt: 'desc' },
-      take: 4,
-      select: {
-        id: true, description: true, amount: true, paidTo: true, category: true,
-        site: { select: { name: true } },
-        createdAt: true,
-      },
-    }),
-
-    // Recent bill uploads for right panel
-    prisma.expense.findMany({
-      where: { companyId, deletedAt: null },
-      orderBy: { createdAt: 'desc' },
-      take: 4,
-      select: {
-        id: true, description: true, amount: true, paidTo: true,
-        approvalStatus: true, category: true, createdAt: true,
-        site: { select: { name: true } },
-      },
-    }),
-
-    prisma.site.findMany({
-      where: { companyId, deletedAt: null, status: 'ACTIVE' },
-      orderBy: { spent: 'desc' },
-      take: 5,
-    }),
+    prisma.labourAttendance.count({ where: { siteId: { in: siteIds }, date: { gte: today, lte: todayEnd }, status: 'PRESENT' } }),
+    prisma.expense.findMany({ where: { companyId, deletedAt: null, approvalStatus: 'PENDING' }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, category: true, site: { select: { name: true } }, createdAt: true } }),
+    prisma.expense.findMany({ where: { companyId, deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, approvalStatus: true, category: true, createdAt: true, site: { select: { name: true } } } }),
+    prisma.site.findMany({ where: { companyId, deletedAt: null, status: 'ACTIVE' }, orderBy: { spent: 'desc' }, take: 5 }),
   ])
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
@@ -99,9 +51,9 @@ export default async function CompanyDashboard() {
   }
 
   function statusChipCls(s: string) {
-    if (s === 'APPROVED') return 'schip green'
-    if (s === 'REJECTED') return 'schip red'
-    return 'schip amber'
+    if (s === 'APPROVED') return 'bg-[#e2f3ea] text-[#0f7a45]'
+    if (s === 'REJECTED') return 'bg-[#fbe6e3] text-[#c4392c]'
+    return 'bg-[#fbeacb] text-[#a96c08]'
   }
 
   function statusLabel(s: string) {
@@ -117,171 +69,172 @@ export default async function CompanyDashboard() {
     return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
   }
 
+  const quickActions = [
+    { href: '/sites/new', Icon: Plus, label: 'Add Site', color: 'text-[#13558e]', bg: 'bg-[#e7f0fb]' },
+    { href: '/bills/upload', Icon: Upload, label: 'Upload Bill', color: 'text-[#0f7a45]', bg: 'bg-[#e2f3ea]' },
+    { href: '/expenses/new', Icon: Receipt, label: 'Add Expense', color: 'text-[#b6740a]', bg: 'bg-[#fcefd4]' },
+    { href: '/labour', Icon: CheckSquare, label: 'Mark Attendance', color: 'text-[#5b47b8]', bg: 'bg-[#ece8fa]' },
+    { href: '/dpr', Icon: FileText, label: 'Create DPR', color: 'text-[#0369a1]', bg: 'bg-[#e0f2fe]' },
+    { href: '/reports', Icon: BarChart3, label: 'Generate Report', color: 'text-[#be123c]', bg: 'bg-[#ffe4e6]' },
+  ]
+
+  const kpis = [
+    { label: 'Active Sites', value: activeSitesCount, sub: 'Active this month', trend: 'up', Icon: Building2 },
+    { label: "Today's Expense", value: fmtAmt(todaySpend), sub: 'Across all sites today', trend: 'up', Icon: DollarSign, featured: true },
+    { label: 'Bills Pending', value: pendingCount, sub: `${fmtAmt(pendingTotal)} to approve`, trend: 'warn', Icon: Clock },
+    { label: 'Labour Present', value: `${todayAttendance}/${totalLabour || '—'}`, sub: `${totalLabour > 0 ? Math.round((todayAttendance / totalLabour) * 100) : 0}% attendance`, trend: 'up', Icon: Users },
+    { label: 'Salary Due', value: '—', sub: 'No run scheduled', trend: 'flat', Icon: Wallet },
+    { label: 'Client Receivable', value: '—', sub: 'No overdue invoices', trend: 'flat', Icon: CreditCard },
+  ]
+
   return (
     <>
-      {/* QUICK ACTIONS ROW */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
-        {[
-          { href: '/sites/new', icon: 'M12 5v14M5 12h14', label: 'Add Site', color: 'var(--p)' },
-          { href: '/bills/upload', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', icon2: 'M14 2v6h6M12 18v-6M9 15h6', label: 'Upload Bill', color: '#0f7a45' },
-          { href: '/expenses/new', icon: 'M3 7a2 2 0 0 1 2-2h12v4M3 7v10a2 2 0 0 0 2 2h14V9H5a2 2 0 0 1-2-2Z', label: 'Add Expense', color: '#b45309' },
-          { href: '/labour', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2', icon2: 'M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', label: 'Mark Attendance', color: '#6d28d9' },
-          { href: '/dpr/new', icon: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7', icon2: 'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z', label: 'Create DPR', color: '#0369a1' },
-          { href: '/reports', icon: 'M21 21l-4-4m0 0A7 7 0 1 0 3 3a7 7 0 0 0 14 14z', label: 'Generate Report', color: '#be123c' },
-        ].map(a => (
-          <Link key={a.href} href={a.href} style={{
-            display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px',
-            background: '#fff', border: '1.5px solid var(--line)', borderRadius: 10,
-            fontSize: 13, fontWeight: 600, color: 'var(--ink)', textDecoration: 'none',
-            whiteSpace: 'nowrap', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={a.color} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-              <path d={a.icon}/>
-              {a.icon2 && <path d={a.icon2}/>}
-            </svg>
+      {/* Quick Actions */}
+      <div className="flex gap-2.5 flex-wrap mb-5">
+        {quickActions.map(a => (
+          <Link key={a.href} href={a.href}
+            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-[#e4eaf0] rounded-[11px] text-[13px] font-semibold text-[#16273a] shadow-[0_1px_3px_rgba(0,0,0,0.05)] hover:border-[#b0c8e0] hover:shadow-[0_3px_8px_-2px_rgba(16,40,70,0.1)] transition-all whitespace-nowrap no-underline">
+            <div className={`w-[26px] h-[26px] rounded-[8px] flex items-center justify-center ${a.bg} ${a.color} flex-shrink-0`}>
+              <a.Icon size={14} strokeWidth={2.2} />
+            </div>
             {a.label}
           </Link>
         ))}
       </div>
 
-      {/* 6 KPI CARDS */}
-      <div className="kpis">
-        <div className="kpi">
-          <div className="klbl">Active Sites</div>
-          <div className="knum">{activeSitesCount}</div>
-          <div className="ksub up"><span>●</span>Active this month</div>
-        </div>
-        <div className="kpi feat">
-          <div className="klbl">Today&apos;s Expense</div>
-          <div className="knum">{fmtAmt(todaySpend)}</div>
-          <div className="ksub"><span>▲</span>Across all sites today</div>
-        </div>
-        <div className="kpi">
-          <div className="klbl">Bills Pending</div>
-          <div className="knum">{pendingCount}</div>
-          <div className="ksub warn"><span>▲</span>{fmtAmt(pendingTotal)} to approve</div>
-        </div>
-        <div className="kpi">
-          <div className="klbl">Labour Present</div>
-          <div className="knum">{todayAttendance}/{totalLabour || '—'}</div>
-          <div className="ksub up"><span>●</span>{totalLabour > 0 ? Math.round((todayAttendance / totalLabour) * 100) : 0}% attendance</div>
-        </div>
-        <div className="kpi">
-          <div className="klbl">Salary Due</div>
-          <div className="knum">—</div>
-          <div className="ksub mut"><span>●</span>No run scheduled</div>
-        </div>
-        <div className="kpi">
-          <div className="klbl">Client Receivable</div>
-          <div className="knum">—</div>
-          <div className="ksub mut"><span>●</span>No overdue invoices</div>
-        </div>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5 mb-5">
+        {kpis.map(k => (
+          <div key={k.label} className={`rounded-[16px] p-4 border ${
+            k.featured
+              ? 'bg-gradient-to-br from-[#0d3a63] to-[#1a64a6] border-transparent text-white shadow-[0_8px_24px_-8px_rgba(13,58,99,0.5)]'
+              : 'bg-white border-[#e4eaf0] shadow-[0_2px_5px_rgba(16,40,70,0.04)]'
+          }`}>
+            <div className={`text-[11px] font-bold uppercase tracking-[0.03em] ${k.featured ? 'text-white/70' : 'text-[#647387]'}`}>{k.label}</div>
+            <div className={`text-[25px] font-black tracking-[-0.03em] mt-2.5 leading-none tabular ${k.featured ? '' : 'text-[#16273a]'}`}>{k.value}</div>
+            <div className={`text-[11.5px] font-bold mt-2 flex items-center gap-1.5 ${
+              k.trend === 'up' ? (k.featured ? 'text-white/85' : 'text-[#138a4e]')
+              : k.trend === 'warn' ? 'text-[#e08a0b]'
+              : k.featured ? 'text-white/70' : 'text-[#647387]'
+            }`}>
+              {k.trend === 'up' ? <TrendingUp size={12} /> : k.trend === 'warn' ? <AlertCircle size={12} /> : null}
+              {k.sub}
+            </div>
+          </div>
+        ))}
       </div>
 
-      <div className="dgrid">
-        <div className="colL">
-          <div className="card">
-            <div className="chead">
-              <div>
-                <div className="ctitle">Site-wise cost summary</div>
-                <div className="csub">{activeSitesCount} active sites</div>
-              </div>
-              <Link href="/sites" className="clink">View all sites</Link>
+      {/* Main grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4 items-start">
+        {/* Left: Sites table */}
+        <div className="bg-white border border-[#e4eaf0] rounded-[18px] shadow-[0_2px_6px_rgba(16,40,70,0.04)]">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[#e4eaf0]">
+            <div>
+              <div className="text-[15px] font-extrabold text-[#16273a] tracking-[-0.02em]">Site-wise cost summary</div>
+              <div className="text-[11.5px] text-[#647387] font-semibold mt-0.5">{activeSitesCount} active sites</div>
             </div>
-            <div className="cbody" style={{ padding: 0 }}>
-              {sites.length === 0 ? (
-                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--mut)' }}>No active sites</div>
-              ) : (
-                <table className="ct-table">
-                  <thead>
-                    <tr>
-                      <th>Site</th>
-                      <th>Budget</th>
-                      <th>Spend</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sites.map(site => {
-                      const budget = Number(site.budget)
-                      const spent = Number(site.spent)
-                      const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : site.progress
-                      const st = siteStatus(site.progress)
-                      return (
-                        <tr key={site.id}>
-                          <td>
-                            <div className="conm">{site.name}</div>
-                            <div className="csub">{site.location}</div>
-                          </td>
-                          <td style={{ minWidth: 120 }}>
-                            <div className="ct-progress" style={{ width: 110 }}>
-                              <div className={`ct-progress-fill ${pct > 80 ? 'red' : pct > 60 ? 'amber' : ''}`} style={{ width: `${pct}%` }}></div>
-                            </div>
-                            <div className="csub" style={{ marginTop: 3 }}>
-                              {budget > 0 ? `${fmtAmt(spent)} of ${fmtAmt(budget)}` : `${pct}% complete`}
-                            </div>
-                          </td>
-                          <td className="conm" style={{ fontWeight: 700 }}>{fmtAmt(spent)}</td>
-                          <td><span className={`chip ${st.cls}`}><span className="chip-dot"></span>{st.label}</span></td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
+            <Link href="/sites" className="text-[12.5px] font-bold text-[#13558e] no-underline">View all</Link>
+          </div>
+          <div className="p-0">
+            {sites.length === 0 ? (
+              <div className="py-10 text-center text-[#647387] text-[13px]">No active sites</div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr>
+                    {['Site', 'Budget & Progress', 'Spend', 'Status'].map(h => (
+                      <th key={h} className="text-left text-[11px] font-bold text-[#647387] uppercase tracking-[0.03em] px-4 py-3 border-b border-[#e4eaf0]">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sites.map(site => {
+                    const budget = Number(site.budget)
+                    const spent = Number(site.spent)
+                    const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : site.progress
+                    const st = siteStatusChip(site.progress)
+                    const barColor = pct > 80 ? 'bg-gradient-to-r from-[#d9483b] to-[#ef6f63]' : pct > 60 ? 'bg-gradient-to-r from-[#e08a0b] to-[#f3b43a]' : 'bg-gradient-to-r from-[#13558e] to-[#1d6fb5]'
+                    return (
+                      <tr key={site.id} className="border-b border-[#e4eaf0] last:border-0 hover:bg-[#fafbfc] transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="text-[13.5px] font-bold text-[#16273a]">{site.name}</div>
+                          <div className="text-[11px] text-[#647387] font-semibold mt-0.5">{site.location}</div>
+                        </td>
+                        <td className="px-4 py-3 min-w-[140px]">
+                          <div className="h-[7px] bg-[#eef2f6] rounded-full overflow-hidden w-28">
+                            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                          </div>
+                          <div className="text-[11px] text-[#647387] font-semibold mt-1">
+                            {budget > 0 ? `${fmtAmt(spent)} of ${fmtAmt(budget)}` : `${pct}% complete`}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-[13.5px] font-extrabold text-[#16273a] tabular">{fmtAmt(spent)}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2 py-1 rounded-[7px] ${st.cls}`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current" />{st.label}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 
-        <div className="colR">
+        {/* Right panel */}
+        <div className="flex flex-col gap-4">
           {/* Pending Approval */}
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div className="chead">
+          <div className="bg-white border border-[#e4eaf0] rounded-[18px] shadow-[0_2px_6px_rgba(16,40,70,0.04)]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#e4eaf0]">
               <div>
-                <div className="ctitle">Pending approval</div>
-                <div className="csub">{pendingCount} items · {fmtAmt(pendingTotal)}</div>
+                <div className="text-[15px] font-extrabold text-[#16273a] tracking-[-0.02em]">Pending approval</div>
+                <div className="text-[11.5px] text-[#647387] font-semibold mt-0.5">{pendingCount} items · {fmtAmt(pendingTotal)}</div>
               </div>
-              <Link href="/approvals" className="clink" style={{ color: 'var(--p)', fontSize: 13 }}>Open</Link>
+              <Link href="/approvals" className="text-[12.5px] font-bold text-[#13558e] no-underline">Open</Link>
             </div>
-            <div className="cbody" style={{ padding: '4px 0 0' }}>
+            <div>
               {recentPendingExpenses.length === 0 ? (
-                <div style={{ padding: '16px', textAlign: 'center', color: 'var(--mut)', fontSize: 13 }}>No pending items</div>
+                <div className="py-6 text-center text-[#647387] text-[13px]">No pending items</div>
               ) : recentPendingExpenses.map(e => (
-                <div key={e.id} className="lrow" style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)' }}>
-                  <div className="lava" style={{ background: '#fff3e0', color: '#e07a1f', width: 34, height: 34, fontSize: 12 }}>
+                <div key={e.id} className="flex items-center gap-3 px-4 py-3 border-b border-[#e4eaf0] last:border-0">
+                  <div className="w-9 h-9 rounded-[10px] bg-[#fff3e0] text-[#e07a1f] text-[11px] font-extrabold flex items-center justify-center flex-shrink-0">
                     {(e.category ?? 'EX').substring(0, 2)}
                   </div>
-                  <div className="lmain">
-                    <div className="lt1" style={{ fontSize: 13 }}>{e.description}</div>
-                    <div className="lt2">{e.paidTo ?? e.site?.name ?? '—'} · {e.site?.name}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-bold text-[#16273a] truncate">{e.description}</div>
+                    <div className="text-[11px] text-[#647387] font-semibold mt-0.5 truncate">{e.paidTo ?? e.site?.name ?? '—'} · {e.site?.name}</div>
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', flexShrink: 0 }}>{fmtAmt(Number(e.amount))}</div>
+                  <div className="text-[13px] font-bold text-[#16273a] tabular flex-shrink-0">{fmtAmt(Number(e.amount))}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Recent bill uploads */}
-          <div className="card">
-            <div className="chead">
-              <div className="ctitle">Recent bill uploads</div>
-              <Link href="/bills" className="clink">All</Link>
+          {/* Recent Bills */}
+          <div className="bg-white border border-[#e4eaf0] rounded-[18px] shadow-[0_2px_6px_rgba(16,40,70,0.04)]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#e4eaf0]">
+              <div className="text-[15px] font-extrabold text-[#16273a] tracking-[-0.02em]">Recent bill uploads</div>
+              <Link href="/bills" className="text-[12.5px] font-bold text-[#13558e] no-underline">All</Link>
             </div>
-            <div className="cbody" style={{ padding: '4px 0 0' }}>
+            <div>
               {recentExpenses.length === 0 ? (
-                <div style={{ padding: '16px', textAlign: 'center', color: 'var(--mut)', fontSize: 13 }}>No recent bills</div>
+                <div className="py-6 text-center text-[#647387] text-[13px]">No recent bills</div>
               ) : recentExpenses.map(e => (
-                <div key={e.id} className="lrow" style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)' }}>
-                  <div className="lava" style={{ background: '#f0f4f8', color: 'var(--p)', width: 34, height: 34, fontSize: 11 }}>
+                <div key={e.id} className="flex items-center gap-3 px-4 py-3 border-b border-[#e4eaf0] last:border-0">
+                  <div className="w-9 h-9 rounded-[10px] bg-[#f0f4f8] text-[#13558e] text-[11px] font-extrabold flex items-center justify-center flex-shrink-0">
                     {(e.category ?? 'BI').substring(0, 2)}
                   </div>
-                  <div className="lmain">
-                    <div className="lt1" style={{ fontSize: 13 }}>{e.paidTo ?? e.description}</div>
-                    <div className="lt2">{e.category} · {timeAgo(e.createdAt)}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-bold text-[#16273a] truncate">{e.paidTo ?? e.description}</div>
+                    <div className="text-[11px] text-[#647387] font-semibold mt-0.5 truncate">{e.category} · {timeAgo(e.createdAt)}</div>
                   </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>{fmtAmt(Number(e.amount))}</div>
-                    <div className={statusChipCls(e.approvalStatus)} style={{ marginTop: 4 }}>{statusLabel(e.approvalStatus)}</div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-[13px] font-bold text-[#16273a] tabular">{fmtAmt(Number(e.amount))}</div>
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-[7px] mt-1 ${statusChipCls(e.approvalStatus)}`}>
+                      {statusLabel(e.approvalStatus)}
+                    </span>
                   </div>
                 </div>
               ))}
