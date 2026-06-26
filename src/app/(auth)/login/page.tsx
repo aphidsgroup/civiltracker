@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { Eye, EyeOff, Mail, ArrowRight } from 'lucide-react'
 
 const FEATURES = [
   { icon: '📋', title: 'Daily Progress Reports', desc: 'Site DPRs, photo logs and work tracking in real-time' },
@@ -17,97 +17,7 @@ const DEMO_USERS = [
   { role: 'Site Engineer', email: 'murugan@madras-crafters.in', password: 'Admin@123456', color: '#138a4e' },
 ]
 
-const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  .login-root {
-    min-height: 100vh;
-    display: flex;
-    font-family: 'Inter', system-ui, sans-serif;
-  }
-
-  /* LEFT PANEL */
-  .login-left {
-    width: 460px;
-    flex-shrink: 0;
-    background: linear-gradient(160deg,#091e36 0%,#0d3259 45%,#155291 100%);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 48px 44px;
-  }
-
-  /* RIGHT PANEL */
-  .login-right {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 48px 32px;
-    background: #f0f4f8;
-    min-height: 100vh;
-  }
-
-  .login-card {
-    width: 100%;
-    max-width: 420px;
-  }
-
-  /* INPUT FOCUS */
-  .login-input:focus {
-    border-color: #13558e !important;
-    box-shadow: 0 0 0 3px rgba(19,85,142,0.12);
-  }
-
-  /* DEMO CARD HOVER */
-  .demo-card:hover {
-    border-color: #13558e !important;
-    background: #f5f8fc !important;
-  }
-
-  /* SUBMIT BUTTON HOVER */
-  .login-btn:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 14px 32px -10px rgba(19,85,142,0.65) !important;
-  }
-
-  /* MOBILE STACKED LAYOUT */
-  @media (max-width: 768px) {
-    .login-root {
-      flex-direction: column;
-    }
-    .login-left {
-      width: 100%;
-      padding: 32px 24px;
-      flex: 0 0 auto;
-    }
-    .login-right {
-      width: 100%;
-      padding: 32px 24px;
-      align-items: flex-start;
-      background: #f0f4f8;
-      min-height: auto;
-      flex: 1;
-    }
-    .login-card {
-      background: #fff;
-      border-radius: 20px;
-      padding: 32px 24px;
-      box-shadow: 0 8px 32px -8px rgba(0,0,0,0.1);
-    }
-  }
-
-  @media (max-width: 400px) {
-    .login-left { padding: 24px 16px; }
-    .login-right { padding: 24px 16px; }
-    .login-card { padding: 24px 18px; border-radius: 16px; }
-  }
-`
-
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -127,7 +37,6 @@ export default function LoginPage() {
         setError('Invalid email or password. Please try again.')
         setLoading(false)
       } else {
-        // Force full page load to bypass Next.js App Router cache for unauthenticated state
         window.location.href = '/'
       }
     } catch {
@@ -136,144 +45,102 @@ export default function LoginPage() {
     }
   }
 
-  function fillDemo(u: typeof DEMO_USERS[0]) {
-    setEmail(u.email)
-    setPassword(u.password)
-    setError('')
-  }
-
   return (
-    <>
-      <style dangerouslySetInnerHTML={{ __html: css }} />
-      <div className="login-root">
-
-        {/* LEFT PANEL — hidden on mobile via CSS */}
-        <div className="login-left">
-          <div>
-            <div style={{ width: 52, height: 52, borderRadius: 16, background: 'linear-gradient(135deg,#f3b43a,#e08a0b)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 12px 28px -6px rgba(243,180,58,0.45)', marginBottom: 20 }}>
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3a2a05" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/>
-              </svg>
+    <div className="min-h-screen flex font-sans">
+      {/* LEFT PANEL */}
+      <div className="w-[460px] flex-shrink-0 hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-[#091e36] via-[#0d3259] to-[#155291]">
+        <div>
+          <div className="flex items-center gap-3 mb-10">
+            <div className="w-[52px] h-[52px] rounded-[16px] bg-gradient-to-br from-[#f3b43a] to-[#e08a0b] flex items-center justify-center shadow-[0_12px_28px_-6px_rgba(243,180,58,0.45)]">
+              <span className="text-[#3a2a05] text-2xl">📋</span>
             </div>
-            <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', marginBottom: 6 }}>Civil Tracker</div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Construction Management Platform</div>
-            <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {FEATURES.map(f => (
-                <div key={f.title} style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{f.icon}</div>
-                  <div>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: '#fff', marginBottom: 3 }}>{f.title}</div>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.5)', lineHeight: 1.45 }}>{f.desc}</div>
-                  </div>
-                </div>
-              ))}
+            <div>
+              <div className="text-white text-[26px] font-black tracking-[-0.03em]">Civil Tracker</div>
+              <div className="text-white/50 text-[11px] font-semibold tracking-[0.06em] uppercase">Construction Management</div>
             </div>
           </div>
-          <div style={{ fontSize: 11.5, fontWeight: 600, color: 'rgba(255,255,255,0.3)', paddingTop: 32, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-            © 2026 Civil Tracker · Built for Indian construction teams
+          <div className="flex flex-col gap-5">
+            {FEATURES.map(f => (
+              <div key={f.title} className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-[12px] bg-white/[0.08] border border-white/[0.1] flex items-center justify-center text-lg flex-shrink-0">{f.icon}</div>
+                <div>
+                  <div className="text-[13.5px] font-bold text-white mb-0.5">{f.title}</div>
+                  <div className="text-[12px] font-medium text-white/50 leading-[1.45]">{f.desc}</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
+        <div className="text-[11.5px] font-semibold text-white/30 pt-8 border-t border-white/[0.08]">
+          © 2026 Civil Tracker · Built for Indian construction teams
+        </div>
+      </div>
 
-        {/* RIGHT PANEL */}
-        <div className="login-right">
-          <div className="login-card">
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#16273a', letterSpacing: '-0.03em', marginBottom: 6 }}>Welcome back</div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: '#647387', marginBottom: 32 }}>Sign in to your workspace</div>
+      {/* RIGHT PANEL */}
+      <div className="flex-1 flex items-start lg:items-center justify-center p-6 pt-12 lg:p-12 bg-gradient-to-br from-[#091e36] via-[#0d3259] to-[#155291] lg:bg-[#f0f4f8]" style={{background: undefined}}>
+        <div className="w-full max-w-[420px] bg-white rounded-[20px] p-8 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.12)]">
+          <div className="text-[28px] font-black text-[#16273a] tracking-[-0.03em] mb-1">Welcome back</div>
+          <div className="text-[14px] font-medium text-[#647387] mb-8">Sign in to your workspace</div>
 
-            {error && (
-              <div style={{ background: '#fef0ee', color: '#c4392c', border: '1px solid #f5c6c1', borderRadius: 10, padding: '12px 14px', fontSize: 13, fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                {error}
+          {error && (
+            <div className="bg-[#fef0ee] text-[#c4392c] border border-[#f5c6c1] rounded-[10px] px-3.5 py-3 text-[13px] font-semibold mb-5 flex items-center gap-2">
+              <span>⚠️</span> {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div>
+              <label className="block text-[12.5px] font-bold text-[#4a5a6a] mb-1.5">Email address</label>
+              <div className="relative">
+                <input type="email" placeholder="you@company.com" value={email}
+                  onChange={e => setEmail(e.target.value)} required autoFocus autoComplete="email"
+                  className="w-full bg-white border-[1.5px] border-[#dde5ee] rounded-[12px] py-[13px] pl-4 pr-11 text-[15px] font-medium text-[#16273a] outline-none transition-all focus:border-[#13558e] focus:shadow-[0_0_0_3px_rgba(19,85,142,0.12)]"
+                />
+                <Mail size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8a9ab0] pointer-events-none" />
               </div>
-            )}
-
-            <form onSubmit={handleSubmit}>
-              <div style={{ marginBottom: 18 }}>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#4a5a6a', marginBottom: 7 }}>Email address</label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    className="login-input"
-                    type="email"
-                    placeholder="you@company.com"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    required
-                    autoFocus
-                    autoComplete="email"
-                    style={{ width: '100%', background: '#fff', border: '1.5px solid #dde5ee', borderRadius: 12, padding: '13px 44px 13px 16px', fontSize: 15, fontWeight: 500, fontFamily: 'inherit', color: '#16273a', outline: 'none', transition: 'border-color 0.15s, box-shadow 0.15s' }}
-                  />
-                  <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: '#8a9ab0', display: 'flex', pointerEvents: 'none' }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                  </span>
-                </div>
+            </div>
+            <div>
+              <label className="block text-[12.5px] font-bold text-[#4a5a6a] mb-1.5">Password</label>
+              <div className="relative">
+                <input type={showPass ? 'text' : 'password'} placeholder="••••••••" value={password}
+                  onChange={e => setPassword(e.target.value)} required autoComplete="current-password"
+                  className="w-full bg-white border-[1.5px] border-[#dde5ee] rounded-[12px] py-[13px] pl-4 pr-11 text-[15px] font-medium text-[#16273a] outline-none transition-all focus:border-[#13558e] focus:shadow-[0_0_0_3px_rgba(19,85,142,0.12)]"
+                />
+                <button type="button" tabIndex={-1} onClick={() => setShowPass(v => !v)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8a9ab0] bg-transparent border-none cursor-pointer p-1">
+                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
+            </div>
+            <button type="submit" disabled={loading || !hydrated}
+              className="w-full bg-gradient-to-r from-[#13558e] to-[#1d6fb5] text-white text-[15px] font-bold py-[15px] rounded-[13px] flex items-center justify-center gap-2 shadow-[0_10px_28px_-10px_rgba(19,85,142,0.55)] hover:-translate-y-px hover:shadow-[0_14px_32px_-10px_rgba(19,85,142,0.65)] transition-all disabled:opacity-60 disabled:cursor-not-allowed mt-2">
+              {loading ? 'Signing in…' : (<>Sign in <ArrowRight size={16} /></>)}
+            </button>
+          </form>
 
-              <div style={{ marginBottom: 18 }}>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#4a5a6a', marginBottom: 7 }}>Password</label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    className="login-input"
-                    type={showPass ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    required
-                    autoComplete="current-password"
-                    style={{ width: '100%', background: '#fff', border: '1.5px solid #dde5ee', borderRadius: 12, padding: '13px 44px 13px 16px', fontSize: 15, fontWeight: 500, fontFamily: 'inherit', color: '#16273a', outline: 'none', transition: 'border-color 0.15s, box-shadow 0.15s' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPass(v => !v)}
-                    tabIndex={-1}
-                    aria-label={showPass ? 'Hide password' : 'Show password'}
-                    style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: '#8a9ab0', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 4 }}
-                  >
-                    {showPass
-                      ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                      : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    }
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="login-btn"
-                disabled={loading || !hydrated}
-                style={{ width: '100%', background: loading || !hydrated ? '#c5d1dd' : 'linear-gradient(135deg,#13558e 0%,#1d6fb5 100%)', color: '#fff', fontSize: 15, fontWeight: 700, padding: '15px', borderRadius: 13, border: 'none', cursor: loading || !hydrated ? 'not-allowed' : 'pointer', fontFamily: 'inherit', boxShadow: loading || !hydrated ? 'none' : '0 10px 28px -10px rgba(19,85,142,0.55)', marginTop: 8, letterSpacing: '-0.01em', transition: 'all 0.2s' }}
-              >
-                {loading ? 'Signing in…' : 'Sign in →'}
-              </button>
-            </form>
-
-            <div style={{ marginTop: 28 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8a9ab0', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ flex: 1, height: 1, background: '#e4eaf0' }}></span>
-                Try with demo account
-                <span style={{ flex: 1, height: 1, background: '#e4eaf0' }}></span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {DEMO_USERS.map(u => (
-                  <button
-                    key={u.email}
-                    type="button"
-                    className="demo-card"
-                    onClick={() => fillDemo(u)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 11, border: '1.5px solid #e4eaf0', background: '#fff', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', width: '100%', transition: 'all 0.15s' }}
-                  >
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: u.color, flexShrink: 0 }}></div>
-                    <div>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: '#16273a' }}>{u.role}</div>
-                      <div style={{ fontSize: 11.5, color: '#7a8fa3', fontWeight: 500, marginTop: 1 }}>{u.email}</div>
-                    </div>
-                    <div style={{ marginLeft: 'auto', color: '#b0bec8', fontSize: 14 }}>↗</div>
-                  </button>
-                ))}
-              </div>
+          <div className="mt-7">
+            <div className="flex items-center gap-2 mb-2.5">
+              <span className="flex-1 h-px bg-[#e4eaf0]" />
+              <span className="text-[11px] font-bold text-[#8a9ab0] uppercase tracking-[0.08em]">Try demo account</span>
+              <span className="flex-1 h-px bg-[#e4eaf0]" />
+            </div>
+            <div className="flex flex-col gap-2">
+              {DEMO_USERS.map(u => (
+                <button key={u.email} type="button"
+                  onClick={() => { setEmail(u.email); setPassword(u.password); setError('') }}
+                  className="flex items-center gap-3 px-3.5 py-[11px] rounded-[11px] border-[1.5px] border-[#e4eaf0] bg-white hover:border-[#13558e] hover:bg-[#f5f8fc] text-left w-full transition-all cursor-pointer">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: u.color }} />
+                  <div>
+                    <div className="text-[12.5px] font-bold text-[#16273a]">{u.role}</div>
+                    <div className="text-[11.5px] text-[#7a8fa3] font-medium mt-0.5">{u.email}</div>
+                  </div>
+                  <div className="ml-auto text-[#b0bec8] text-sm">↗</div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }

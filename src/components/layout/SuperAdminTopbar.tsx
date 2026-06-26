@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
+import { Search, Menu } from 'lucide-react'
 
 export default function SuperAdminTopbar() {
   const pathname = usePathname()
@@ -22,21 +23,25 @@ export default function SuperAdminTopbar() {
   const { title, crumb } = getPageInfo()
 
   return (
-    <div className="topbar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <button className="hamburger-btn" onClick={() => document.dispatchEvent(new CustomEvent('toggle-mobile-menu'))}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" width="20" height="20">
-            <path d="M4 6h16M4 12h16M4 18h16"/>
-          </svg>
-        </button>
-        <div>
-          <div className="ptitle">{title}</div>
-          <div className="pcrumb">{crumb}</div>
-        </div>
+    <div className="h-16 flex-shrink-0 bg-white border-b border-[#e4eaf0] flex items-center gap-4 px-6">
+      <button
+        className="w-9 h-9 rounded-[10px] bg-[#f2f5f8] border border-[#e4eaf0] flex items-center justify-center text-[#16273a] lg:hidden"
+        onClick={() => document.dispatchEvent(new CustomEvent('toggle-mobile-menu'))}
+      >
+        <Menu size={18} />
+      </button>
+
+      <div>
+        <div className="text-[19px] font-extrabold text-[#16273a] tracking-[-0.02em]">{title}</div>
+        <div className="text-[12px] text-[#647387] font-semibold mt-0.5">{crumb}</div>
       </div>
-      <div className="search" style={{ marginLeft: 'auto' }}>
-        <svg className="svg18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input placeholder="Search companies, users..." />
+
+      <div className="flex items-center gap-2.5 bg-[#f2f5f8] border border-[#e4eaf0] rounded-[11px] px-3 py-2 w-60 text-[#647387] ml-auto">
+        <Search size={16} />
+        <input
+          className="bg-transparent border-none outline-none text-[13px] font-medium text-[#16273a] w-full placeholder:text-[#647387]"
+          placeholder="Search companies, users..."
+        />
       </div>
     </div>
   )

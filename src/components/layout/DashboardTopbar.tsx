@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation'
 import type { SessionUser } from '@/types'
 import Link from 'next/link'
+import { Search, Bell, Plus, Menu } from 'lucide-react'
 
 export default function DashboardTopbar({
   user,
@@ -42,47 +43,57 @@ export default function DashboardTopbar({
   const { title, crumb } = getPageInfo()
 
   return (
-    <div className="topbar">
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        <button className="hamburger-btn" onClick={() => document.dispatchEvent(new CustomEvent('toggle-mobile-menu'))}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" width="20" height="20">
-            <path d="M4 6h16M4 12h16M4 18h16"/>
-          </svg>
-        </button>
-        <div>
-          <div className="ptitle">{title}</div>
-          <div className="pcrumb">{crumb}</div>
+    <div className="h-16 flex-shrink-0 bg-white border-b border-[#e4eaf0] flex items-center gap-4 px-6">
+      <button
+        className="w-9 h-9 rounded-[10px] bg-[#f2f5f8] border border-[#e4eaf0] flex items-center justify-center text-[#16273a] lg:hidden"
+        onClick={() => document.dispatchEvent(new CustomEvent('toggle-mobile-menu'))}
+      >
+        <Menu size={18} />
+      </button>
+
+      <div>
+        <div className="text-[19px] font-extrabold text-[#16273a] tracking-[-0.02em]">{title}</div>
+        <div className="text-[12px] text-[#647387] font-semibold mt-0.5">{crumb}</div>
+      </div>
+
+      <div className="ml-auto flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 bg-[#f2f5f8] border border-[#e4eaf0] rounded-[11px] px-3 py-2 w-60 text-[#647387]">
+          <Search size={16} />
+          <input
+            className="bg-transparent border-none outline-none text-[13px] font-medium text-[#16273a] w-full placeholder:text-[#647387]"
+            placeholder="Search sites, bills, vendors..."
+          />
         </div>
+
+        <Link
+          href="/approvals"
+          className="w-10 h-10 rounded-[11px] bg-[#f2f5f8] border border-[#e4eaf0] flex items-center justify-center text-[#16273a] relative"
+        >
+          <Bell size={18} />
+          {pendingApprovalsCount > 0 && (
+            <span className="absolute top-2 right-2 w-[7px] h-[7px] rounded-full bg-[#d9483b] border-[1.5px] border-white" />
+          )}
+        </Link>
+
+        {pathname === '/bills' && (
+          <Link href="/bills/upload" className="flex items-center gap-2 bg-gradient-to-r from-[#13558e] to-[#1d6fb5] text-white text-[13.5px] font-bold px-4 py-2.5 rounded-[11px] shadow-[0_8px_16px_-8px_rgba(19,85,142,0.6)]">
+            <Plus size={16} />
+            Upload Bill
+          </Link>
+        )}
+        {pathname === '/expenses' && (
+          <Link href="/expenses/new" className="flex items-center gap-2 bg-gradient-to-r from-[#13558e] to-[#1d6fb5] text-white text-[13.5px] font-bold px-4 py-2.5 rounded-[11px] shadow-[0_8px_16px_-8px_rgba(19,85,142,0.6)]">
+            <Plus size={16} />
+            Add Expense
+          </Link>
+        )}
+        {pathname === '/sites' && (
+          <Link href="/sites/new" className="flex items-center gap-2 bg-gradient-to-r from-[#13558e] to-[#1d6fb5] text-white text-[13.5px] font-bold px-4 py-2.5 rounded-[11px] shadow-[0_8px_16px_-8px_rgba(19,85,142,0.6)]">
+            <Plus size={16} />
+            New Site
+          </Link>
+        )}
       </div>
-
-      <div className="search">
-        <svg className="svg18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-        <input placeholder="Search sites, bills, vendors..." />
-      </div>
-
-      <Link href="/approvals" className="tbtn" style={{ textDecoration: 'none', position: 'relative' }}>
-        <svg className="svg18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        {pendingApprovalsCount > 0 && <b>{pendingApprovalsCount}</b>}
-      </Link>
-
-      {pathname === '/bills' && (
-        <Link href="/bills/upload" className="addbtn">
-          <svg className="svg18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          Upload Bill
-        </Link>
-      )}
-      {pathname === '/expenses' && (
-        <Link href="/expenses/new" className="addbtn">
-          <svg className="svg18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          Add Expense
-        </Link>
-      )}
-      {pathname === '/sites' && (
-        <Link href="/sites/new" className="addbtn">
-          <svg className="svg18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          New Site
-        </Link>
-      )}
     </div>
   )
 }
