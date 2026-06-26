@@ -115,7 +115,6 @@ export default function MobileAttendanceClient({
   const [updating, setUpdating] = useState(false)
 
   // Contractor State
-  const [showContractorForm, setShowContractorForm] = useState(false)
   const [conName, setConName] = useState('')
   const [conType, setConType] = useState('SHUTTERING')
   const [conCustomType, setConCustomType] = useState('')
