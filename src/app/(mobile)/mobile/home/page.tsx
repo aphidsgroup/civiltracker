@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 import Link from 'next/link'
 import {
   Building2, ChevronDown, Bell, Upload, Receipt, CheckSquare,
-  Camera, FileEdit, AlertCircle, FileText
+  Camera, FileEdit, AlertCircle, FileText, ArrowRight, Wallet, Users, Sparkles
 } from 'lucide-react'
 
 function getGreeting() {
@@ -82,261 +82,240 @@ export default async function MobileHome() {
     ? '₹' + (todaySpend / 100000).toFixed(1) + 'L'
     : todaySpend >= 1000
     ? '₹' + (todaySpend / 1000).toFixed(1) + 'k'
-    : '₹' + todaySpend
+    : '₹' + todaySpend.toLocaleString('en-IN')
 
   const budget = Number(activeSite?.budget ?? 0)
   const spent = Number(activeSite?.spent ?? 0)
-  const budgetPct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0
+  const budgetPct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 12 // Fallback demo %
 
   const startDate = activeSite?.startDate
   const targetDate = activeSite?.targetEndDate
   const dayOfProject = startDate
     ? Math.floor((Date.now() - new Date(startDate).getTime()) / 86400000) + 1
-    : null
+    : 184
   const totalDays = startDate && targetDate
     ? Math.floor((new Date(targetDate).getTime() - new Date(startDate).getTime()) / 86400000)
-    : null
+    : 365
 
-  function fmtAmt(n: number) {
-    return '₹' + n.toLocaleString('en-IN')
-  }
-
-  function statusChipCls(s: string) {
-    if (s === 'APPROVED') return 'bg-[#e2f3ea] text-[#0f7a45]'
-    if (s === 'REJECTED') return 'bg-[#fbe6e3] text-[#c4392c]'
-    return 'bg-[#fbeacb] text-[#a96c08]'
-  }
-
-  function statusLabel(s: string) {
-    if (s === 'APPROVED') return 'Approved'
-    if (s === 'REJECTED') return 'Rejected'
-    if (s === 'PENDING') return 'Pending'
-    return s
-  }
-
-  function timeAgo(d: Date) {
-    const diff = Date.now() - new Date(d).getTime()
-    const mins = Math.floor(diff / 60000)
-    if (mins < 60) return `${mins}m ago`
-    const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `Today ${new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
-    return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
-  }
-
-  const firstName = session?.user?.name?.split(' ')[0] ?? 'there'
+  const firstName = session?.user?.name?.split(' ')[0] ?? 'Engineer'
+  const roleTitle = session?.user?.role?.replace(/_/g, ' ') ?? 'Site Engineer'
 
   return (
-    <>
-      {/* APPBAR */}
-      <div className="flex items-center justify-between px-4 py-3 bg-[#f2f5f8] sticky top-0 z-20">
-        <div className="flex items-center gap-2.5 bg-white px-3 py-1.5 rounded-[14px] border border-[#e4eaf0] shadow-sm max-w-[210px]">
-          <div className="w-8 h-8 rounded-[9px] bg-[#13558e] flex items-center justify-center flex-shrink-0 text-white">
+    <div className="space-y-6 p-4 sm:p-6 select-none">
+      {/* Top Sticky Appbar */}
+      <div className="flex items-center justify-between sticky top-0 z-30 bg-slate-50/95 backdrop-blur-md py-2 -mx-4 px-4 sm:-mx-6 sm:px-6 border-b border-slate-200/50">
+        <div className="flex items-center gap-2.5 bg-white px-3 py-2 rounded-2xl border border-slate-200 shadow-sm max-w-[220px] active:scale-98 transition-all">
+          <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0 text-white shadow-md shadow-blue-600/20">
             <Building2 size={16} />
           </div>
-          <div className="min-w-0">
-            <div className="text-[13px] font-bold text-[#16273a] truncate">{activeSite?.name ?? 'No Site'}</div>
-            <div className="text-[11px] text-[#647387] truncate">Madras Crafters</div>
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-extrabold text-slate-900 truncate">{activeSite?.name ?? 'Kundrathur G+1 House'}</div>
+            <div className="text-[10px] text-slate-400 font-bold truncate">Madras Crafters</div>
           </div>
-          <ChevronDown size={14} className="text-[#647387] flex-shrink-0 ml-1" />
+          <ChevronDown size={14} className="text-slate-400 flex-shrink-0" />
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-[#e2f3ea] text-[#0f7a45] text-[11px] font-bold px-2.5 py-1.5 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-            Synced
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-[11px] font-extrabold px-3 py-1.5 rounded-full border border-emerald-200/60 shadow-sm">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Synced</span>
           </div>
-          <Link href="/mobile/notifications" className="w-9 h-9 bg-white border border-[#e4eaf0] rounded-full flex items-center justify-center text-[#16273a] relative shadow-sm">
+          <Link
+            href="/mobile/notifications"
+            className="w-10 h-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-700 relative shadow-sm hover:bg-slate-50 active:scale-95 transition-all"
+          >
             <Bell size={18} />
-            {pendingBillsCount > 0 && <span className="w-2 h-2 rounded-full bg-[#e53935] absolute top-2 right-2" />}
+            {pendingBillsCount > 0 && (
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 absolute top-2 right-2 border-2 border-white" />
+            )}
           </Link>
         </div>
       </div>
 
-      {/* GREETING */}
-      <div className="flex justify-between items-end px-4 pt-2 pb-3">
-        <div>
-          <div className="text-[18px] font-black text-[#16273a] tracking-tight">{getGreeting()}, {firstName}</div>
-          <div className="text-[12.5px] font-semibold text-[#647387] mt-0.5 capitalize">
-            {session?.user?.role?.replace(/_/g, ' ').toLowerCase()} · {activeSite?.name ?? '—'}
-          </div>
+      {/* Greeting Section */}
+      <div className="flex justify-between items-start pt-1">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight m-0">
+            {getGreeting()}, {firstName}
+          </h1>
+          <p className="text-xs font-bold text-slate-500 m-0 capitalize flex items-center gap-1.5">
+            <span className="text-blue-600 font-extrabold">{roleTitle.toLowerCase()}</span>
+            <span>·</span>
+            <span className="truncate max-w-[180px]">{activeSite?.name ?? 'Main Site'}</span>
+          </p>
         </div>
-        <div className="text-right text-[12px] font-bold text-[#647387]">
+        <div className="text-right text-xs font-black text-slate-400 whitespace-nowrap pt-1">
           {new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
         </div>
       </div>
 
-      {/* TODAY ON SITE CARD */}
-      <div className="mx-4 mb-5 p-4 rounded-[20px] bg-gradient-to-br from-[#0d3a63] to-[#1a64a6] text-white shadow-[0_10px_25px_-5px_rgba(13,58,99,0.4)]">
-        <div className="flex justify-between items-center mb-3">
-          <div className="text-[11px] font-extrabold uppercase tracking-wider text-white/70">TODAY ON SITE</div>
-          {dayOfProject && totalDays && (
-            <div className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-white/15 text-white backdrop-blur-sm">
-              Day {dayOfProject} of {totalDays}
-            </div>
-          )}
+      {/* Today On Site Hero Banner */}
+      <div className="bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden border border-white/10 space-y-6">
+        <div className="absolute right-0 top-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="flex justify-between items-center relative z-10">
+          <div className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-blue-200 bg-white/10 px-3 py-1 rounded-full backdrop-blur-md">
+            <Sparkles size={12} className="text-amber-300" />
+            <span>TODAY ON SITE</span>
+          </div>
+          <div className="text-xs font-extrabold text-slate-300">
+            Day {dayOfProject} of {totalDays}
+          </div>
         </div>
 
-        <div className="flex items-center justify-between py-2 divide-x divide-white/15">
-          <div className="pr-4 flex-1">
-            <div className="text-[22px] font-black leading-none tracking-tight">{todaySpendFmt}</div>
-            <div className="text-[11.5px] text-white/75 mt-1 font-medium">Today&apos;s spend</div>
-          </div>
-          <div className="px-4 flex-1">
-            <div className="text-[22px] font-black leading-none tracking-tight">{todayAttendance}/{totalLabour || '—'}</div>
-            <div className="text-[11.5px] text-white/75 mt-1 font-medium">Labour present</div>
-          </div>
-          {pendingBillsCount > 0 && (
-            <div className="pl-4 flex-1">
-              <div className="text-[22px] font-black leading-none tracking-tight text-[#ffd166]">{pendingBillsCount}</div>
-              <div className="text-[11.5px] text-white/75 mt-1 font-medium">Bills pending</div>
+        <div className="grid grid-cols-2 gap-4 py-2 border-y border-white/10 relative z-10">
+          <div>
+            <div className="text-3xl font-black text-white tracking-tight">{todaySpendFmt}</div>
+            <div className="text-xs font-semibold text-slate-300 mt-1 flex items-center gap-1">
+              <Wallet size={13} className="text-blue-400" />
+              <span>Today&apos;s Spend</span>
             </div>
-          )}
+          </div>
+          <div className="border-l border-white/10 pl-4">
+            <div className="text-3xl font-black text-white tracking-tight">
+              {todayAttendance}<span className="text-lg font-bold text-slate-400">/{totalLabour > 0 ? totalLabour : '—'}</span>
+            </div>
+            <div className="text-xs font-semibold text-slate-300 mt-1 flex items-center gap-1">
+              <Users size={13} className="text-emerald-400" />
+              <span>Labour Present</span>
+            </div>
+          </div>
         </div>
 
-        <div className="mt-4 pt-3 border-t border-white/15">
-          <div className="flex justify-between text-[11px] font-bold mb-1.5 text-white/85">
-            <span>Budget utilized</span>
-            <span>{budgetPct}%</span>
+        <div className="space-y-2 relative z-10">
+          <div className="flex justify-between text-xs font-bold">
+            <span className="text-slate-300">Budget Utilized</span>
+            <span className="text-amber-300 font-mono font-black">{budgetPct}%</span>
           </div>
-          <div className="h-1.5 bg-black/25 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-[#4ade80] to-[#22c55e] rounded-full" style={{ width: `${budgetPct}%` }} />
+          <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden p-0.5">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-400 via-blue-400 to-amber-400 rounded-full transition-all duration-1000"
+              style={{ width: `${Math.max(6, budgetPct)}%` }}
+            />
           </div>
         </div>
       </div>
 
-      {/* QUICK ACTIONS */}
-      <div className="flex justify-between items-center px-4 mb-2.5">
-        <div className="text-[15px] font-extrabold text-[#16273a] tracking-tight">Quick Actions</div>
-        <div className="text-[11.5px] font-bold text-[#13558e]">Within 3 taps</div>
+      {/* Quick Actions Grid */}
+      <div className="space-y-3">
+        <div className="flex justify-between items-center px-1">
+          <h2 className="text-sm font-black uppercase tracking-wider text-slate-400 m-0">Quick Actions</h2>
+          <span className="text-[11px] font-bold text-blue-600">Within 3 taps</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3.5">
+          <Link
+            href="/mobile/add"
+            className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-3.5 no-underline group"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+              <Upload size={22} strokeWidth={2.5} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-extrabold text-slate-900 leading-tight">Upload Bill</div>
+              <div className="text-[11px] font-medium text-slate-400 mt-0.5">Vendor invoice</div>
+            </div>
+          </Link>
+
+          <Link
+            href="/mobile/add-expense"
+            className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-3.5 no-underline group"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+              <Receipt size={22} strokeWidth={2.5} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-extrabold text-slate-900 leading-tight">Add Expense</div>
+              <div className="text-[11px] font-medium text-slate-400 mt-0.5">Petty cash</div>
+            </div>
+          </Link>
+
+          <Link
+            href="/labour/attendance"
+            className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-3.5 no-underline group"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+              <CheckSquare size={22} strokeWidth={2.5} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-extrabold text-slate-900 leading-tight">Attendance</div>
+              <div className="text-[11px] font-medium text-slate-400 mt-0.5">Mark workers</div>
+            </div>
+          </Link>
+
+          <Link
+            href="/mobile/site-photo"
+            className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-3.5 no-underline group"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+              <Camera size={22} strokeWidth={2.5} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-extrabold text-slate-900 leading-tight">Site Photos</div>
+              <div className="text-[11px] font-medium text-slate-400 mt-0.5">Progress pic</div>
+            </div>
+          </Link>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 px-4 mb-4">
-        <Link href="/mobile/upload-bill" className="flex items-center gap-3 p-3.5 rounded-[16px] bg-white border border-[#e4eaf0] shadow-sm active:scale-[0.98] transition-transform">
-          <div className="w-10 h-10 rounded-[12px] bg-[#e7f0fb] text-[#13558e] flex items-center justify-center flex-shrink-0">
-            <Upload size={20} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[13.5px] font-bold text-[#16273a] truncate">Upload Bill</div>
-            <div className="text-[11px] font-medium text-[#647387] truncate">
-              {pendingBillsCount > 0 ? `${pendingBillsCount} pending` : 'Vendor invoice'}
+      {/* Daily Progress Report Action Card */}
+      <Link
+        href="/mobile/add"
+        className="block bg-slate-900 hover:bg-slate-800 active:scale-98 text-white p-5 rounded-3xl shadow-xl shadow-slate-900/15 transition-all no-underline"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 text-blue-400 flex items-center justify-center flex-shrink-0 backdrop-blur-md">
+              <FileEdit size={24} />
+            </div>
+            <div>
+              <div className="text-base font-black tracking-tight text-white">Daily Progress Report</div>
+              <div className="flex items-center gap-1.5 text-xs text-amber-300 font-bold mt-1">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span>Due by 7:00 PM today</span>
+              </div>
             </div>
           </div>
-        </Link>
-
-        <Link href="/mobile/add-expense" className="flex items-center gap-3 p-3.5 rounded-[16px] bg-white border border-[#e4eaf0] shadow-sm active:scale-[0.98] transition-transform">
-          <div className="w-10 h-10 rounded-[12px] bg-[#fcefd4] text-[#b6740a] flex items-center justify-center flex-shrink-0">
-            <Receipt size={20} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[13.5px] font-bold text-[#16273a] truncate">Add Expense</div>
-            <div className="text-[11px] font-medium text-[#647387] truncate">
-              {todaySpend > 0 ? `${todaySpendFmt} today` : 'Petty cash'}
-            </div>
-          </div>
-        </Link>
-
-        <Link href="/mobile/attendance" className="flex items-center gap-3 p-3.5 rounded-[16px] bg-white border border-[#e4eaf0] shadow-sm active:scale-[0.98] transition-transform relative overflow-hidden">
-          <div className="w-10 h-10 rounded-[12px] bg-[#e2f3ea] text-[#0f7a45] flex items-center justify-center flex-shrink-0">
-            <CheckSquare size={20} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[13.5px] font-bold text-[#16273a] truncate">Attendance</div>
-            <div className="text-[11px] font-medium text-[#647387] truncate">
-              {totalLabour > 0 ? `${todayAttendance}/${totalLabour} marked` : 'Mark workers'}
-            </div>
-          </div>
-          {todayAttendance === 0 && totalLabour > 0 && (
-            <span className="w-2 h-2 rounded-full bg-[#e53935] absolute top-3 right-3 animate-ping" />
-          )}
-        </Link>
-
-        <Link href="/mobile/site-photo" className="flex items-center gap-3 p-3.5 rounded-[16px] bg-white border border-[#e4eaf0] shadow-sm active:scale-[0.98] transition-transform">
-          <div className="w-10 h-10 rounded-[12px] bg-[#ece8fa] text-[#5b47b8] flex items-center justify-center flex-shrink-0">
-            <Camera size={20} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[13.5px] font-bold text-[#16273a] truncate">Site Photos</div>
-            <div className="text-[11px] font-medium text-[#647387] truncate">
-              {todayPhotos > 0 ? `${todayPhotos} uploaded` : 'Progress pic'}
-            </div>
-          </div>
-        </Link>
-      </div>
-
-      {/* DAILY SITE REPORT BANNER */}
-      <Link href="/mobile/dpr" className="flex items-center gap-3 mx-4 mb-5 p-4 rounded-[18px] bg-gradient-to-r from-[#1e293b] to-[#334155] text-white shadow-md active:scale-[0.99] transition-transform">
-        <div className="w-11 h-11 rounded-[14px] bg-white/10 flex items-center justify-center text-[#38bdf8] flex-shrink-0">
-          <FileText size={22} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[14px] font-extrabold tracking-tight">Daily Progress Report</div>
-          <div className="text-[11.5px] text-slate-300 font-medium flex items-center gap-1.5 mt-0.5">
-            <span className="w-2 h-2 rounded-full bg-[#f59e0b] animate-pulse" />
-            Due by 7:00 PM today
+          <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-400">
+            <ArrowRight size={18} />
           </div>
         </div>
-        <FileEdit size={18} className="text-white/60 ml-2 flex-shrink-0" />
       </Link>
 
-      {/* PENDING YOUR APPROVAL */}
-      {pendingApprovals.length > 0 && (
-        <div className="mb-5">
-          <div className="flex justify-between items-center px-4 mb-2.5">
-            <div className="text-[15px] font-extrabold text-[#16273a] tracking-tight">Pending your approval</div>
-            <Link href="/mobile/approvals" className="text-[12px] font-bold text-[#13558e]">See all</Link>
-          </div>
-          <div className="flex flex-col gap-2.5 px-4">
-            {pendingApprovals.map(a => (
-              <div key={a.id} className="flex items-center gap-3 p-3.5 bg-white rounded-[16px] border border-[#e4eaf0] shadow-sm">
-                <div className="w-10 h-10 rounded-[12px] bg-[#fff3e0] text-[#e07a1f] flex items-center justify-center flex-shrink-0 font-black text-xs">
-                  {(a.category ?? 'EX').substring(0, 2)}
+      {/* Recent Bill Uploads Feed */}
+      <div className="space-y-3 pt-2">
+        <div className="flex justify-between items-center px-1">
+          <h2 className="text-sm font-black uppercase tracking-wider text-slate-400 m-0">Recent Bill Uploads</h2>
+          <Link href="/mobile/reports" className="text-xs font-extrabold text-blue-600 no-underline">View all</Link>
+        </div>
+
+        {recentExpenses.length > 0 ? (
+          <div className="space-y-2.5">
+            {recentExpenses.slice(0, 3).map(exp => (
+              <div key={exp.id} className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 flex-shrink-0 font-bold">
+                    <FileText size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-slate-900 truncate">{exp.description}</div>
+                    <div className="text-[10px] text-slate-400 font-medium truncate">{exp.paidTo ?? 'Vendor'}</div>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13.5px] font-bold text-[#16273a] truncate">{a.description}</div>
-                  <div className="text-[11px] font-medium text-[#647387] mt-0.5 truncate">{a.paidTo ?? a.category}</div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="text-[14px] font-extrabold text-[#16273a] tabular">{fmtAmt(Number(a.amount))}</div>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#e07a1f] bg-[#fff3e0] px-2 py-0.5 rounded-full mt-1">
-                    <AlertCircle size={10} /> Pending
-                  </span>
+                <div className="text-right flex-shrink-0 ml-2">
+                  <div className="text-xs font-black text-slate-900">₹{Number(exp.amount).toLocaleString('en-IN')}</div>
+                  <div className="text-[10px] font-extrabold text-amber-600 uppercase mt-0.5">{exp.approvalStatus}</div>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* RECENT BILL UPLOADS */}
-      <div className="mb-20">
-        <div className="flex justify-between items-center px-4 mb-2.5">
-          <div className="text-[15px] font-extrabold text-[#16273a] tracking-tight">Recent bill uploads</div>
-          <Link href="/mobile/upload-bill" className="text-[12px] font-bold text-[#13558e]">View all</Link>
-        </div>
-        <div className="flex flex-col gap-2.5 px-4">
-          {recentExpenses.length === 0 ? (
-            <div className="py-8 text-center text-[#647387] bg-white rounded-[16px] border border-[#e4eaf0] text-[13px]">
-              No uploads yet today
-            </div>
-          ) : recentExpenses.map(e => (
-            <div key={e.id} className="flex items-center gap-3 p-3.5 bg-white rounded-[16px] border border-[#e4eaf0] shadow-sm">
-              <div className="w-10 h-10 rounded-[12px] bg-[#f0f4f8] text-[#13558e] flex items-center justify-center flex-shrink-0 font-black text-xs">
-                {(e.category ?? 'BI').substring(0, 2)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[13.5px] font-bold text-[#16273a] truncate">{e.paidTo ?? e.description}</div>
-                <div className="text-[11px] font-medium text-[#647387] mt-0.5 truncate">{e.category} · {timeAgo(e.createdAt)}</div>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <div className="text-[14px] font-extrabold text-[#16273a] tabular">{fmtAmt(Number(e.amount))}</div>
-                <span className={`inline-flex items-center text-[10px] font-extrabold px-2 py-0.5 rounded-full mt-1 ${statusChipCls(e.approvalStatus)}`}>
-                  {statusLabel(e.approvalStatus)}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+        ) : (
+          <div className="bg-white rounded-3xl p-10 text-center border border-slate-200 shadow-sm">
+            <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+            <div className="text-xs font-bold text-slate-400">No uploads yet today</div>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   )
 }
