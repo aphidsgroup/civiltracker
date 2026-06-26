@@ -21,6 +21,13 @@ export default async function SuperAdminDashboard() {
   })
   const totalStorageGb = ((storageAgg._sum.storageUsed || 0) / (1024 * 1024 * 1024)).toFixed(1)
 
+  // Plan distribution
+  const planCounts = await prisma.company.groupBy({
+    by: ['plan'],
+    where: { deletedAt: null },
+    _count: true,
+  })
+
   const topCompanies = await prisma.company.findMany({
     where: { deletedAt: null },
     orderBy: { createdAt: 'desc' },
@@ -115,6 +122,25 @@ export default async function SuperAdminDashboard() {
         </div>
         
         <div className="colR">
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="chead"><div className="ctitle">Plan distribution</div></div>
+            <div className="cbody" style={{ paddingTop: 8 }}>
+              {(['ENTERPRISE', 'GROWTH', 'STARTER', 'TRIAL'] as const).map(plan => {
+                const count = planCounts.find(p => p.plan === plan)?._count ?? 0
+                const pct = totalCompanies > 0 ? Math.round((count / totalCompanies) * 100) : 0
+                const colors: Record<string, string> = { ENTERPRISE: '#7c3aed', GROWTH: '#059669', STARTER: '#0284c7', TRIAL: '#d97706' }
+                return (
+                  <div key={plan} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <div style={{ width: 68, fontSize: 12, color: 'var(--mut)', flexShrink: 0 }}>{plan.charAt(0) + plan.slice(1).toLowerCase()}</div>
+                    <div style={{ flex: 1, height: 6, background: 'var(--line)', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{ width: `${pct}%`, height: '100%', background: colors[plan], borderRadius: 4 }}></div>
+                    </div>
+                    <div style={{ width: 20, textAlign: 'right', fontSize: 13, fontWeight: 700 }}>{count}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
           <div className="card">
             <div className="chead"><div className="ctitle">Storage usage</div></div>
             <div className="cbody">

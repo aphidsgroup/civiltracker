@@ -5,7 +5,19 @@ import { usePathname } from 'next/navigation'
 import type { SessionUser } from '@/types'
 import { getInitials } from '@/lib/utils'
 
-export default function DashboardSidebar({ user, pendingApprovalsCount = 0 }: { user: SessionUser; pendingApprovalsCount?: number }) {
+export default function DashboardSidebar({
+  user,
+  pendingApprovalsCount = 0,
+  companyName,
+  companyPlan,
+  companyCity,
+}: {
+  user: SessionUser
+  pendingApprovalsCount?: number
+  companyName?: string
+  companyPlan?: string
+  companyCity?: string
+}) {
   const pathname = usePathname()
 
   const navs = [
@@ -46,32 +58,26 @@ export default function DashboardSidebar({ user, pendingApprovalsCount = 0 }: { 
         <div className="bname">Civil Tracker</div>
       </div>
 
-      <div className="nav">
-        {navs.map((n, i) => {
-          if ('type' in n && n.type === 'group') {
-            return <div key={i} className="ngroup">{n.label}</div>
-          }
-          if (!('href' in n)) return null
-          const active = pathname === n.href || (n.href !== '/dashboard' && pathname.startsWith(n.href + '/'))
-          return (
-            <Link key={n.href} href={n.href} className={`navi ${active ? 'on' : ''}`}>
-              {n.icon}
-              <span>{n.label}</span>
-              {'badge' in n && n.badge && (
-                <span className="badge">{n.badge}</span>
-              )}
-            </Link>
-          )
-        })}
-      </div>
-
-      <div className="suser">
-        <div className="suav">{getInitials(user.name ?? user.email ?? '?')}</div>
-        <div className="suinfo">
-          <div className="suname">{user.name ?? 'User'}</div>
-          <div className="surole">{user.role?.replace(/_/g, ' ')}</div>
-        </div>
-      </div>
-    </div>
-  )
-}
+      {companyName && (
+        <div style={{
+          margin: '0 10px 6px',
+          padding: '8px 10px',
+          background: 'rgba(255,255,255,0.08)',
+          borderRadius: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 9,
+        }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 7,
+            background: 'var(--p)', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 11, fontWeight: 800, flexShrink: 0,
+          }}>
+            {companyName.substring(0, 2).toUpperCase()}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {companyName}
+            </div>
+            <div style={{ font

@@ -9,16 +9,38 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const session = await auth()
   if (!session?.user) redirect('/login')
 
-  const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : { companyId: session.user.companyId }
-  const pendingApprovalsCount = await prisma.approval.count({
-    where: { ...companyFilter, currentStatus: 'PENDING', deletedAt: null },
-  })
+  const companyId = session.user.companyId
+  const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : { companyId }
+
+  const [pendingApprovalsCount, company] = await Promise.all([
+    prisma.approval.count({
+      where: { ...companyFilter, currentStatus: 'PENDING', deletedAt: null },
+    }),
+    companyId ? prisma.company.findUnique({
+      where: { id: companyId },
+      select: { name: true, plan: true, city: true },
+    }) : Promise.resolve(null),
+  ])
 
   return (
     <ResponsiveShell
       layoutClass="admin-layout"
-      sidebar={<DashboardSidebar user={session.user} pendingApprovalsCount={pendingApprovalsCount} />}
-      topbar={<DashboardTopbar user={session.user} pendingApprovalsCount={pendingApprovalsCount} />}
+      sidebar={
+        <DashboardSidebar
+          user={session.user}
+          pendingApprovalsCount={pendingApprovalsCount}
+          companyName={company?.name}
+          companyPlan={company?.plan}
+          companyCity={company?.city ?? undefined}
+        />
+      }
+      topbar={
+        <DashboardTopbar
+          user={session.user}
+          pendingApprovalsCount={pendingApprovalsCount}
+          companyName={company?.name}
+        />
+      }
     >
       {children}
     </ResponsiveShell>

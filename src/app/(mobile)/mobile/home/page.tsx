@@ -159,7 +159,7 @@ export default async function MobileHome() {
         <div>
           <div className="gname">{getGreeting()}, {firstName}</div>
           <div className="grole" style={{ color: 'var(--mut)', fontSize: 12.5, marginTop: 2 }}>
-            {session?.user?.role?.replace('_', ' ')} · {activeSite?.name ?? '—'}
+            {session?.user?.role?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())} · {activeSite?.name ?? '—'}
           </div>
         </div>
         <div className="gdate">
