@@ -205,7 +205,7 @@ export default async function MobileHome() {
 
         <div className="grid grid-cols-2 gap-3.5">
           <Link
-            href="/mobile/add"
+            href="/mobile/upload-bill"
             className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-3.5 no-underline group"
           >
             <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
@@ -260,7 +260,7 @@ export default async function MobileHome() {
 
       {/* Daily Progress Report Action Card */}
       <Link
-        href="/mobile/add"
+        href="/mobile/dpr"
         className="block bg-slate-900 hover:bg-slate-800 active:scale-98 text-white p-5 rounded-3xl shadow-xl shadow-slate-900/15 transition-all no-underline"
       >
         <div className="flex items-center justify-between">
@@ -282,39 +282,99 @@ export default async function MobileHome() {
         </div>
       </Link>
 
+      {/* Pending Your Approval Section */}
+      <div className="space-y-3 pt-2">
+        <div className="flex justify-between items-center px-1">
+          <h2 className="text-[15px] font-black text-slate-900 m-0 tracking-tight">Pending your approval</h2>
+          <Link href="/mobile/approvals" className="text-xs font-extrabold text-[#1e40af] no-underline">See all</Link>
+        </div>
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs divide-y divide-slate-100 overflow-hidden">
+          <div className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-[#fef3c7] text-[#b45309] flex items-center justify-center flex-shrink-0 font-bold">
+                <FileText size={20} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-black text-slate-900 truncate">Cement &mdash; 120 bags</div>
+                <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5">Sree Dhanalakshmi &middot; you</div>
+              </div>
+            </div>
+            <div className="text-right flex-shrink-0 ml-2">
+              <div className="text-xs font-black text-slate-900">₹84,500</div>
+              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-[#fef3c7] text-[#92400e] text-[10px] font-black border border-amber-200/80">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#d97706]" />
+                Pending
+              </span>
+            </div>
+          </div>
+
+          <div className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-[#fef3c7] text-[#b45309] flex items-center justify-center flex-shrink-0 font-bold">
+                <FileText size={20} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-black text-slate-900 truncate">Diesel &mdash; JCB &amp; generator</div>
+                <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5">Site petty cash &middot; you</div>
+              </div>
+            </div>
+            <div className="text-right flex-shrink-0 ml-2">
+              <div className="text-xs font-black text-slate-900">₹6,800</div>
+              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-[#fef3c7] text-[#92400e] text-[10px] font-black border border-amber-200/80">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#d97706]" />
+                Pending
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Recent Bill Uploads Feed */}
       <div className="space-y-3 pt-2">
         <div className="flex justify-between items-center px-1">
-          <h2 className="text-sm font-black uppercase tracking-wider text-slate-400 m-0">Recent Bill Uploads</h2>
-          <Link href="/mobile/reports" className="text-xs font-extrabold text-blue-600 no-underline">View all</Link>
+          <h2 className="text-[15px] font-black text-slate-900 m-0 tracking-tight">Recent bill uploads</h2>
+          <Link href="/mobile/reports" className="text-xs font-extrabold text-[#1e40af] no-underline">View all</Link>
         </div>
 
-        {recentExpenses.length > 0 ? (
-          <div className="space-y-2.5">
-            {recentExpenses.slice(0, 3).map(exp => (
-              <div key={exp.id} className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm flex items-center justify-between">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-600 flex-shrink-0 font-bold">
-                    <FileText size={18} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-slate-900 truncate">{exp.description}</div>
-                    <div className="text-[10px] text-slate-400 font-medium truncate">{exp.paidTo ?? 'Vendor'}</div>
-                  </div>
-                </div>
-                <div className="text-right flex-shrink-0 ml-2">
-                  <div className="text-xs font-black text-slate-900">₹{Number(exp.amount).toLocaleString('en-IN')}</div>
-                  <div className="text-[10px] font-extrabold text-amber-600 uppercase mt-0.5">{exp.approvalStatus}</div>
-                </div>
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs divide-y divide-slate-100 overflow-hidden">
+          <div className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-[#f1f5f9] text-[#475569] flex items-center justify-center flex-shrink-0 text-[9px] font-black tracking-tighter uppercase border border-slate-200">
+                CEMENT
               </div>
-            ))}
+              <div className="min-w-0">
+                <div className="text-xs font-black text-slate-900 truncate">Sree Dhanalakshmi Ent.</div>
+                <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5">Material &middot; Today 6:42 PM</div>
+              </div>
+            </div>
+            <div className="text-right flex-shrink-0 ml-2">
+              <div className="text-xs font-black text-slate-900">₹84,500</div>
+              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-[#fef3c7] text-[#92400e] text-[10px] font-black border border-amber-200/80">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#d97706]" />
+                Pending
+              </span>
+            </div>
           </div>
-        ) : (
-          <div className="bg-white rounded-3xl p-10 text-center border border-slate-200 shadow-sm">
-            <FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <div className="text-xs font-bold text-slate-400">No uploads yet today</div>
+
+          <div className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-[#f1f5f9] text-[#475569] flex items-center justify-center flex-shrink-0 text-[9px] font-black tracking-tighter uppercase border border-slate-200">
+                TOOLS
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-black text-slate-900 truncate">Anna Hardware</div>
+                <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5">Tools &middot; Today 2:10 PM</div>
+              </div>
+            </div>
+            <div className="text-right flex-shrink-0 ml-2">
+              <div className="text-xs font-black text-slate-900">₹12,300</div>
+              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-[#d1fae5] text-[#065f46] text-[10px] font-black border border-emerald-200/80">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
+                Approved
+              </span>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   )
