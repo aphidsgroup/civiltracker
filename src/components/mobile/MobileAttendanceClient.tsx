@@ -81,8 +81,10 @@ export default function MobileAttendanceClient({
   })
 
   // Add Worker Modal State
+  const [viewMode, setViewMode] = useState<'ACTIONS' | 'ROSTER'>('ACTIONS')
   const [showAddForm, setShowAddForm] = useState(false)
   const [addTab, setAddTab] = useState<'EXISTING' | 'NEW'>('EXISTING')
+  const [showContractorForm, setShowContractorForm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [newName, setNewName] = useState('')
   const [newTrade, setNewTrade] = useState('HELPER')
@@ -371,16 +373,16 @@ export default function MobileAttendanceClient({
 
   const isCompletelyEmpty = labourList.length === 0 && contractorList.length === 0;
 
-  if (isCompletelyEmpty && !showAddForm && !showContractorForm) {
+  if (viewMode === 'ACTIONS' || (isCompletelyEmpty && !showAddForm && !showContractorForm)) {
     return (
       <div className="space-y-6 select-none pb-24 mt-8 px-4">
         <div className="text-center mb-8">
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">Today's Roster</h2>
-          <p className="text-sm font-bold text-slate-400 mt-2">Your roster is currently empty.<br/>Add your workforce to begin.</p>
+          <p className="text-sm font-bold text-slate-400 mt-2">Add your workforce or contractors to begin.</p>
         </div>
 
         <button
-          onClick={() => { setShowAddForm(true); setAddTab('EXISTING') }}
+          onClick={() => { setViewMode('ROSTER'); setShowAddForm(true); setAddTab('EXISTING') }}
           className="w-full py-5 bg-white border-2 border-emerald-500 rounded-3xl shadow-xl shadow-emerald-900/10 active:scale-95 transition-all flex flex-col items-center justify-center gap-2 group cursor-pointer"
         >
           <div className="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
@@ -391,8 +393,8 @@ export default function MobileAttendanceClient({
         </button>
 
         <button
-          onClick={() => setShowContractorForm(true)}
-          className="w-full py-5 bg-white border-2 border-blue-500 rounded-3xl shadow-xl shadow-blue-900/10 active:scale-95 transition-all flex flex-col items-center justify-center gap-2 group cursor-pointer mt-4"
+          onClick={() => { setViewMode('ROSTER'); setShowContractorForm(true) }}
+          className="w-full py-5 bg-white border-2 border-[#fc6e20] rounded-3xl shadow-xl shadow-orange-900/10 active:scale-95 transition-all flex flex-col items-center justify-center gap-2 group cursor-pointer mt-4"
         >
           <div className="w-14 h-14 bg-[#fff7ed] rounded-2xl flex items-center justify-center text-[#fc6e20] group-hover:scale-110 transition-transform">
             <Briefcase size={28} strokeWidth={2.5} />
@@ -400,12 +402,31 @@ export default function MobileAttendanceClient({
           <div className="text-lg font-black text-slate-800">Add Contractor Team</div>
           <div className="text-xs font-bold text-slate-400">Log an outside contractor & headcount</div>
         </button>
+
+        {!isCompletelyEmpty && (
+          <button
+            onClick={() => setViewMode('ROSTER')}
+            className="w-full py-4 mt-8 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg transition-all border-none cursor-pointer flex items-center justify-center gap-2"
+          >
+            <Users size={18} />
+            View Today's Roster ({totalOnsite} Onsite)
+          </button>
+        )}
       </div>
     )
   }
 
   return (
     <div className="space-y-6 select-none pb-24">
+      {/* View Mode Toggle back to Actions */}
+      <div className="flex justify-between items-center px-1">
+        <button 
+          onClick={() => setViewMode('ACTIONS')}
+          className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 bg-transparent border-none p-0 cursor-pointer"
+        >
+          ← Back to Actions
+        </button>
+      </div>
       {/* Live Telemetry Summary */}
       <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
         <div>
