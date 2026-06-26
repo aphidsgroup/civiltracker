@@ -37,7 +37,7 @@ export default async function SuperAdminDashboard() {
     { Icon: MessageCircle, bg: 'bg-[#fbe6e3]', color: 'text-[#cf3f31]', value: 7, label: 'Open tickets' },
   ]
 
-  const planColors: Record<string, string> = { ENTERPRISE: '#7c3aed', GROWTH: '#059669', STARTER: '#0284c7', TRIAL: '#d97706' }
+  const planColors: Record<string, string> = { FREE: '#10b981', ENTERPRISE: '#7c3aed', GROWTH: '#059669', STARTER: '#0284c7', TRIAL: '#d97706' }
   const statusChip = (s: string) => {
     if (s === 'ACTIVE') return 'bg-[#e2f3ea] text-[#0f7a45]'
     if (s === 'TRIAL') return 'bg-[#fbeacb] text-[#a96c08]'
@@ -121,7 +121,7 @@ export default async function SuperAdminDashboard() {
               <div className="text-[15px] font-extrabold text-[#16273a] tracking-[-0.02em]">Plan distribution</div>
             </div>
             <div className="px-5 py-4">
-              {(['ENTERPRISE','GROWTH','STARTER','TRIAL'] as const).map(plan => {
+              {(['FREE','ENTERPRISE','GROWTH','STARTER','TRIAL'] as const).map(plan => {
                 const count = planCounts.find(p => p.plan === plan)?._count ?? 0
                 const pct = totalCompanies > 0 ? Math.round((count / totalCompanies) * 100) : 0
                 return (

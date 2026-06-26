@@ -41,6 +41,9 @@ async function main() {
   const hash = (pw: string) => bcrypt.hash(pw, 12)
 
   // ── Plans ────────────────────────────────────────────────────
+  const freePlan = await prisma.subscriptionPlan.create({
+    data: { name: 'Free (Complimentary)', price: 0, maxSites: 1, maxUsers: 3, storageGb: 1, features: ['Sites', 'Expenses', 'Bills', 'Attendance', 'Complimentary License'] },
+  })
   const starterPlan = await prisma.subscriptionPlan.create({
     data: { name: 'Starter', price: 1999, maxSites: 2, maxUsers: 5, storageGb: 2, features: ['Sites', 'Expenses', 'Bills', 'Attendance'] },
   })

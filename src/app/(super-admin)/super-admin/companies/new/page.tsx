@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
+import { CompanyPlan, CompanyStatus } from '@prisma/client'
 
 async function createCompany(formData: FormData) {
   'use server'
@@ -12,14 +13,46 @@ async function createCompany(formData: FormData) {
   const gst = formData.get('gst') as string
   const city = formData.get('city') as string
   const state = formData.get('state') as string
+  const planId = formData.get('planId') as string
 
   if (!name) return
 
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.random().toString(36).slice(2, 8)
 
-  await prisma.company.create({
-    data: { name, email: email || null, phone: phone || null, gst: gst || null, city: city || null, state: state || null, slug },
+  let planEnum: CompanyPlan = 'TRIAL'
+  let planRecord = planId && planId !== 'free-tier' ? await prisma.subscriptionPlan.findUnique({ where: { id: planId } }) : null
+
+  if (planId === 'free-tier' || (planRecord && Number(planRecord.price) === 0)) {
+    planEnum = 'FREE'
+  } else if (planRecord) {
+    const upper = planRecord.name.toUpperCase()
+    if (upper.includes('STARTER')) planEnum = 'STARTER'
+    else if (upper.includes('GROWTH')) planEnum = 'GROWTH'
+    else if (upper.includes('PRO') || upper.includes('ENTERPRISE')) planEnum = 'ENTERPRISE'
+  }
+
+  const company = await prisma.company.create({
+    data: {
+      name,
+      email: email || null,
+      phone: phone || null,
+      gst: gst || null,
+      city: city || null,
+      state: state || null,
+      slug,
+      plan: planEnum,
+      status: planEnum === 'FREE' ? CompanyStatus.ACTIVE : CompanyStatus.TRIAL,
+      userLimit: planRecord ? planRecord.maxUsers : 3,
+      siteLimit: planRecord ? planRecord.maxSites : 1,
+      storageLimitMb: planRecord ? planRecord.storageGb * 1024 : 100,
+    },
   })
+
+  if (planRecord) {
+    await prisma.companySubscription.create({
+      data: { companyId: company.id, planId: planRecord.id, status: 'active' }
+    })
+  }
 
   revalidatePath('/super-admin/companies')
   redirect('/super-admin/companies')
@@ -71,17 +104,17 @@ export default async function NewCompanyPage() {
                 <input name="state" placeholder="Tamil Nadu"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               </div>
-              {plans.length > 0 && (
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Subscription Plan</label>
-                  <select name="planId"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    {plans.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} — ₹{Number(p.price).toLocaleString("en-IN")}/mo</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Subscription Plan Tier *</label>
+                <select name="planId" defaultValue="free-tier"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                  <option value="free-tier">Free Tier (Complimentary) &mdash; &#8377;0/mo</option>
+                  {plans.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} &mdash; &#8377;{Number(p.price).toLocaleString("en-IN")}/mo</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="mt-6 flex items-center gap-3">

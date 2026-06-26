@@ -33,6 +33,7 @@ enum CompanyStatus {
 }
 
 enum CompanyPlan {
+  FREE
   TRIAL
   STARTER
   GROWTH
