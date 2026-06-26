@@ -73,25 +73,35 @@ const css = `
     box-shadow: 0 14px 32px -10px rgba(19,85,142,0.65) !important;
   }
 
-  /* MOBILE — hide left panel, full-screen right */
+  /* MOBILE STACKED LAYOUT */
   @media (max-width: 768px) {
-    .login-left { display: none; }
+    .login-root {
+      flex-direction: column;
+    }
+    .login-left {
+      width: 100%;
+      padding: 32px 24px;
+      flex: 0 0 auto;
+    }
     .login-right {
-      background: linear-gradient(160deg,#091e36 0%,#0d3259 45%,#155291 100%);
-      padding: 24px 20px;
+      width: 100%;
+      padding: 32px 24px;
       align-items: flex-start;
-      padding-top: 48px;
+      background: #f0f4f8;
+      min-height: auto;
+      flex: 1;
     }
     .login-card {
       background: #fff;
       border-radius: 20px;
       padding: 32px 24px;
-      box-shadow: 0 24px 64px -12px rgba(0,0,0,0.35);
+      box-shadow: 0 8px 32px -8px rgba(0,0,0,0.1);
     }
   }
 
   @media (max-width: 400px) {
-    .login-right { padding: 16px 12px; padding-top: 32px; }
+    .login-left { padding: 24px 16px; }
+    .login-right { padding: 24px 16px; }
     .login-card { padding: 24px 18px; border-radius: 16px; }
   }
 `
@@ -117,9 +127,8 @@ export default function LoginPage() {
         setError('Invalid email or password. Please try again.')
         setLoading(false)
       } else {
-        // Reload session then redirect based on role
-        router.push('/')
-        router.refresh()
+        // Force full page load to bypass Next.js App Router cache for unauthenticated state
+        window.location.href = '/'
       }
     } catch {
       setError('Something went wrong. Please try again.')
