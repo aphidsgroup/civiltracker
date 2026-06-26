@@ -1,19 +1,45 @@
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { FileText, Image as ImageIcon, Users, IndianRupee, Clock } from 'lucide-react'
-import Link from 'next/link'
 
 function formatTime(date: Date) {
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hour12: true }).format(date)
 }
 
-function parseTime(timeStr: string | null, fallbackDate: Date, todayDate: Date) {
-  if (!timeStr) return fallbackDate;
-  const [hours, mins] = timeStr.split(':').map(Number);
-  if (isNaN(hours) || isNaN(mins)) return fallbackDate;
-  const d = new Date(todayDate);
-  d.setHours(hours, mins, 0, 0);
-  return d;
+function parseTime(timeStr: string | null | undefined, fallbackDate: Date, todayDate: Date) {
+  if (!timeStr) return fallbackDate
+  const [hours, mins] = timeStr.split(':').map(Number)
+  if (isNaN(hours) || isNaN(mins)) return fallbackDate
+  const d = new Date(todayDate)
+  d.setHours(hours, mins, 0, 0)
+  return d
+}
+
+type ActivityType = 'ATTENDANCE' | 'ATTENDANCE_CON' | 'EXPENSE' | 'DPR' | 'PHOTO'
+
+type Activity = {
+  id: string
+  type: ActivityType
+  title: string
+  desc: string
+  time: Date
+}
+
+function ActivityIcon({ type }: { type: ActivityType }) {
+  const cls = 'w-[18px] h-[18px]'
+  if (type === 'EXPENSE') return <IndianRupee className={cls} strokeWidth={2.5} />
+  if (type === 'DPR') return <FileText className={cls} strokeWidth={2.5} />
+  if (type === 'PHOTO') return <ImageIcon className={cls} strokeWidth={2.5} />
+  return <Users className={cls} strokeWidth={2.5} />
+}
+
+function activityColor(type: ActivityType) {
+  if (type === 'ATTENDANCE') return 'bg-emerald-100 text-emerald-600'
+  if (type === 'ATTENDANCE_CON') return 'bg-blue-100 text-blue-600'
+  if (type === 'EXPENSE') return 'bg-red-100 text-red-600'
+  if (type === 'DPR') return 'bg-blue-100 text-blue-600'
+  if (type === 'PHOTO') return 'bg-[#fff7ed] text-[#fc6e20]'
+  return 'bg-slate-100 text-slate-600'
 }
 
 export default async function MobileActivityPage() {
@@ -21,22 +47,17 @@ export default async function MobileActivityPage() {
   const companyId = session?.user?.companyId
   const userId = session?.user?.id
 
-  // Fetch active site
-  const member = await prisma.companyMember.findFirst({
-    where: { userId, companyId },
-  })
+  const member = await prisma.companyMember.findFirst({ where: { userId, companyId } })
   const siteIds = member?.siteIds ?? []
   const activeSite = siteIds.length > 0
     ? await prisma.site.findFirst({ where: { id: { in: siteIds }, companyId } })
     : await prisma.site.findFirst({ where: { companyId }, orderBy: { createdAt: 'desc' } })
 
   const siteId = activeSite?.id
-
-  // Date constraints for today
   const now = new Date()
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
-  let activities: any[] = []
+  const activities: Activity[] = []
 
   if (siteId) {
     const [expenses, dprs, attendance, contractorAttendances, photos] = await Promise.all([
@@ -54,8 +75,6 @@ export default async function MobileActivityPage() {
         title: `${a.labour.name} marked ${a.status.toLowerCase()}`,
         desc: `Own Labour • ${a.labour.trade}`,
         time: parseTime(a.startTime, a.createdAt, startOfToday),
-        icon: <Users size={18} strokeWidth={2.5} />,
-        color: 'bg-emerald-100 text-emerald-600',
       })
     })
 
@@ -65,9 +84,7 @@ export default async function MobileActivityPage() {
         type: 'ATTENDANCE_CON',
         title: `${c.subcontractor.name} logged ${c.labourCount} workers`,
         desc: `Contractor • ${c.contractorType || c.subcontractor.trade || 'Others'}`,
-        time: parseTime(c.startTime, c.createdAt, startOfToday),
-        icon: <Users size={18} strokeWidth={2.5} />,
-        color: 'bg-blue-100 text-blue-600',
+        time: parseTime(c.startTime ?? null, c.createdAt, startOfToday),
       })
     })
 
@@ -75,11 +92,9 @@ export default async function MobileActivityPage() {
       activities.push({
         id: `exp-${e.id}`,
         type: 'EXPENSE',
-        title: `₹${Number(e.amount).toLocaleString('en-IN')} expense added`,
-        desc: `${e.category.replace('_', ' ')} • By ${e.createdBy.name}`,
+        title: `\u20b9${Number(e.amount).toLocaleString('en-IN')} expense added`,
+        desc: `${e.category.replace(/_/g, ' ')} \u2022 By ${e.createdBy.name}`,
         time: e.createdAt,
-        icon: <IndianRupee size={18} strokeWidth={2.5} />,
-        color: 'bg-red-100 text-red-600',
       })
     })
 
@@ -90,8 +105,6 @@ export default async function MobileActivityPage() {
         title: `Daily Progress Report submitted`,
         desc: `By ${d.createdBy.name}`,
         time: d.createdAt,
-        icon: <FileText size={18} strokeWidth={2.5} />,
-        color: 'bg-blue-100 text-blue-600',
       })
     })
 
@@ -102,20 +115,17 @@ export default async function MobileActivityPage() {
         title: `Site photo uploaded`,
         desc: p.caption ? `"${p.caption}"` : `Site photo uploaded`,
         time: p.createdAt,
-        icon: <ImageIcon size={18} strokeWidth={2.5} />,
-        color: 'bg-[#fff7ed] text-[#fc6e20]',
       })
     })
   }
 
-  // Sort by time descending
   activities.sort((a, b) => b.time.getTime() - a.time.getTime())
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 sm:p-6 pb-28 select-none">
       <div className="mb-6">
         <h1 className="text-[24px] font-extrabold text-[#0f172a] m-0 tracking-tight">
-          Today's Activity
+          Today&apos;s Activity
         </h1>
         <div className="text-[13px] font-semibold text-slate-500 mt-1">
           {activeSite?.name || 'No active site'}
@@ -133,14 +143,11 @@ export default async function MobileActivityPage() {
           </div>
         ) : (
           <div className="relative border-l-2 border-slate-100 ml-4 py-2">
-            {activities.map((act, index) => (
+            {activities.map((act) => (
               <div key={act.id} className="relative pl-6 pb-8 last:pb-0">
-                {/* Timeline Dot */}
-                <div className={`absolute -left-[17px] top-0.5 w-8 h-8 rounded-full flex items-center justify-center border-4 border-white ${act.color} shadow-sm`}>
-                  {act.icon}
+                <div className={`absolute -left-[17px] top-0.5 w-8 h-8 rounded-full flex items-center justify-center border-4 border-white ${activityColor(act.type)} shadow-sm`}>
+                  <ActivityIcon type={act.type} />
                 </div>
-
-                {/* Content */}
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-0.5">
                     <h3 className="text-[14.5px] font-bold text-[#0f172a] m-0 leading-snug">
