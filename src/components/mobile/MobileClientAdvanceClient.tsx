@@ -49,7 +49,7 @@ export default function MobileClientAdvanceClient({ sites }: Props) {
         receivedAt: form.receivedAt,
       })
       setSuccess(true)
-      setTimeout(() => router.push('/mobile/add'), 1800)
+      setTimeout(() => router.push('/mobile/home'), 1800)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Try again.')
     } finally {
@@ -76,7 +76,7 @@ export default function MobileClientAdvanceClient({ sites }: Props) {
       {/* Header */}
       <div className="flex items-center gap-3 px-5 pt-6 pb-4 border-b border-slate-100">
         <Link
-          href="/mobile/add"
+          href="/mobile/home"
           className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center active:scale-95 transition-transform"
         >
           <ArrowLeft size={16} className="text-slate-600" />
