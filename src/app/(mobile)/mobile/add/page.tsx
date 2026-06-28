@@ -17,6 +17,7 @@ export default async function MobileQuickAddPage() {
     { label: 'Site Photos', href: '/mobile/site-photo', bg: 'bg-[#f3e8ff]', text: 'text-[#7e22ce]' },
     { label: 'Daily Report', href: '/mobile/dpr', bg: 'bg-[#e0e7ff]', text: 'text-[#4338ca]' },
     { label: 'Material In', href: '/mobile/upload-bill?type=MATERIAL', bg: 'bg-[#d1fae5]', text: 'text-[#047857]' },
+    { label: 'Client Advance', href: '/mobile/add-client-advance', bg: 'bg-[#fef3c7]', text: 'text-[#b45309]' },
     { label: 'Raise Issue', href: '/mobile/notifications', bg: 'bg-[#ffe4e6]', text: 'text-[#be123c]' },
   ]
 

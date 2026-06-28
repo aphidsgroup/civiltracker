@@ -32,9 +32,12 @@ export default async function SystemLogsPage() {
   return (
     <>
       <div className="flex items-center justify-between px-8 py-5 border-b border-slate-200 bg-white">
-        <div className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <ScrollText className="text-[#fc6e20]" size={20} />
-          System Audit Logs
+        <div className="flex items-center gap-3">
+          <Activity className="text-[#fc6e20]" size={20} />
+          <div>
+            <div className="text-lg font-bold text-slate-800">Activity &amp; Audit Logs</div>
+            <div className="text-xs text-slate-500 font-medium mt-0.5">All user actions across every company — live feed</div>
+          </div>
         </div>
       </div>
 
