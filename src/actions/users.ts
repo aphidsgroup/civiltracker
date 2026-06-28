@@ -199,10 +199,10 @@ export async function resetUserPassword(userId: string, newPassword: string) {
   })
 
   const actor = await prisma.user.findUnique({ where: { id: session.user.id! }, select: { name: true, email: true } })
-  const target = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true, members: { select: { companyId: true }, take: 1 } } })
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true, companyMembers: { select: { companyId: true }, take: 1 } } })
   await logActivity({
     userId: session.user.id!,
-    companyId: target?.members?.[0]?.companyId ?? session.user.companyId,
+    companyId: target?.companyMembers?.[0]?.companyId ?? session.user.companyId,
     action: 'UPDATE',
     module: 'PASSWORD_RESET',
     recordId: userId,

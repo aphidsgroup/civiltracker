@@ -26,7 +26,7 @@ export default async function SAUserDetailPage({ params }: { params: Promise<{ i
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
-      members: {
+      companyMembers: {
         include: { company: { select: { id: true, name: true, status: true } } },
         take: 1,
       },
@@ -34,7 +34,7 @@ export default async function SAUserDetailPage({ params }: { params: Promise<{ i
   })
   if (!user) return notFound()
 
-  const member = user.members[0]
+  const member = user.companyMembers[0]
 
   return (
     <div className="min-h-screen bg-slate-50/50">
