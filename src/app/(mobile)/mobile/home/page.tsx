@@ -21,7 +21,7 @@ function getGreeting() {
 
 
 
-export default async function MobileHome({ searchParams }: { searchParams: { siteId?: string } }) {
+export default async function MobileHome({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
   const session = await auth()
   const companyId = session?.user?.companyId
   const userId = session?.user?.id
@@ -36,7 +36,8 @@ export default async function MobileHome({ searchParams }: { searchParams: { sit
   })
   const siteIds = member?.siteIds ?? []
 
-  const requestedSiteId = searchParams?.siteId
+  const resolvedParams = await searchParams
+  const requestedSiteId = resolvedParams?.siteId
 
   // Fetch all sites user has access to
   const allSitesRecords = siteIds.length > 0
