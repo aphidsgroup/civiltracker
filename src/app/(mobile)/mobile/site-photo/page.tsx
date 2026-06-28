@@ -19,10 +19,20 @@ export default async function MobileSitePhotoPage({ searchParams }: { searchPara
       })
     : []
 
-  const fallbackSites = sites.length > 0 ? sites : [
-    { id: 'site-a', name: 'Anna Nagar Villa' },
-    { id: 'site-b', name: 'Metro Heights Tower A' }
-  ]
+  const photos = await prisma.sitePhoto.findMany({
+    where: { companyId: user.companyId },
+    include: { site: { select: { name: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 20
+  })
 
-  return <MobilePhotoClient sites={fallbackSites} defaultSiteId={siteId} />
+  const mappedPhotos = photos.map(p => ({
+    id: p.id,
+    title: p.caption || 'Site Photo',
+    meta: p.createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
+    tag: p.category || 'Civil',
+    imageUrl: p.secureUrl
+  }))
+
+  return <MobilePhotoClient sites={sites} defaultSiteId={siteId} initialPhotos={mappedPhotos} />
 }

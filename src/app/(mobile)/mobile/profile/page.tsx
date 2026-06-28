@@ -84,25 +84,6 @@ export default async function MobileProfilePage() {
         <Award className="absolute -bottom-8 -right-8 w-40 h-40 text-white/5 pointer-events-none transform -rotate-12" />
       </div>
 
-      {/* SHIFT & ROSTER INFO */}
-      <div className="bg-white rounded-[24px] p-5 border border-[#e4eaf0] shadow-sm mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-[#647387]">
-            <Clock size={16} className="text-emerald-600" />
-            <span>Active Roster</span>
-          </div>
-          <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-            On Duty
-          </span>
-        </div>
-        <div className="bg-[#f8fafc] rounded-[18px] p-4 border border-[#e2e8f0]">
-          <div className="text-sm font-black text-[#16273a]">General Site Shift (Day)</div>
-          <div className="text-xs text-[#647387] font-medium mt-1 flex items-center justify-between">
-            <span>09:00 AM – 06:00 PM</span>
-            <span className="font-bold text-[#fc6e20]">Mon – Sat</span>
-          </div>
-        </div>
-      </div>
 
       {/* SUPPORT & HELPDESK */}
       <div className="flex flex-col gap-3 mb-6">

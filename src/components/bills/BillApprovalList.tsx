@@ -10,6 +10,7 @@ type Bill = {
   amount: unknown
   category: string
   paymentMode: string
+  approvalStatus: string
   paidTo: string | null
   billNumber: string | null
   billDate: Date | null
@@ -85,24 +86,37 @@ export default function BillApprovalList({ bills }: { bills: Bill[] }) {
             </div>
             <div className="text-left sm:text-right flex-shrink-0 w-full sm:w-auto">
               <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-3">{formatCurrency(Number(bill.amount))}</div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleAction(bill.id, 'reject')}
-                  disabled={loading === bill.id}
-                  className="px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/50 text-red-600 dark:text-red-400 font-semibold text-xs transition-colors inline-flex items-center gap-1 disabled:opacity-50"
-                >
-                  {loading === bill.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                  <span>Reject</span>
-                </button>
-                <button
-                  onClick={() => handleAction(bill.id, 'approve')}
-                  disabled={loading === bill.id}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors inline-flex items-center gap-1 disabled:opacity-50 shadow-sm"
-                >
-                  {loading === bill.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                  <span>Approve</span>
-                </button>
-              </div>
+              {bill.approvalStatus === 'PENDING' ? (
+                <div className="flex gap-2 justify-start sm:justify-end">
+                  <button
+                    onClick={() => handleAction(bill.id, 'reject')}
+                    disabled={loading === bill.id}
+                    className="px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/50 text-red-600 dark:text-red-400 font-semibold text-xs transition-colors inline-flex items-center gap-1 disabled:opacity-50"
+                  >
+                    {loading === bill.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                    <span>Reject</span>
+                  </button>
+                  <button
+                    onClick={() => handleAction(bill.id, 'approve')}
+                    disabled={loading === bill.id}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors inline-flex items-center gap-1 disabled:opacity-50 shadow-sm"
+                  >
+                    {loading === bill.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>Approve</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex justify-start sm:justify-end">
+                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold tracking-wide uppercase ${
+                    bill.approvalStatus === 'APPROVED' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                    bill.approvalStatus === 'REJECTED' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' :
+                    bill.approvalStatus === 'PAID' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                    'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                  }`}>
+                    {bill.approvalStatus}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

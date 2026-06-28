@@ -21,9 +21,11 @@ type SiteOption = {
 export default function MobilePhotoClient({
   sites,
   defaultSiteId,
+  initialPhotos = [],
 }: {
   sites: SiteOption[]
   defaultSiteId?: string
+  initialPhotos?: PhotoCard[]
 }) {
   const matchedSite = sites.find(s => s.id === defaultSiteId)
   const initialSiteId = matchedSite ? matchedSite.id : (sites[0]?.id || '')
@@ -31,15 +33,7 @@ export default function MobilePhotoClient({
   const [selectedCat, setSelectedCat] = useState('All')
   const [showModal, setShowModal] = useState(false)
 
-  // Demo mockup cards exactly matching screenshot
-  const [photos, setPhotos] = useState<PhotoCard[]>([
-    { id: '1', title: 'Slab shuttering — Block A', meta: 'Murugan - 8:20 AM', tag: 'Civil' },
-    { id: '2', title: 'Cement delivery — 120 bags', meta: 'Murugan - 9:05 AM', tag: 'Material' },
-    { id: '3', title: 'Column reinforcement tied', meta: 'Vetrivel - 10:40 AM', tag: 'Civil' },
-    { id: '4', title: 'Conduit routing — 1st flr', meta: 'Anbarasu - 11:30 AM', tag: 'Electrical' },
-    { id: '5', title: 'Honeycomb on plinth beam', meta: 'Murugan - 12:10 PM', tag: 'Issue' },
-    { id: '6', title: 'Cube casting for test', meta: 'Senthil - 1:15 PM', tag: 'Quality' },
-  ])
+  const [photos, setPhotos] = useState<PhotoCard[]>(initialPhotos)
 
   // Capture Modal State
   const [siteId, setSiteId] = useState(initialSiteId)
@@ -169,45 +163,57 @@ export default function MobilePhotoClient({
       </div>
 
       {/* 2-Column Photo Cards Grid */}
-      <div className="grid grid-cols-2 gap-3.5 mb-8">
-        {filteredList.map((item) => (
-          <div
-            key={item.id}
-            className="bg-white rounded-[22px] border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col group hover:shadow-md transition-shadow"
-          >
-            {/* Image Box */}
-            <div className="aspect-[4/3] bg-[#f1f5f9] relative flex items-center justify-center overflow-hidden">
-              {item.imageUrl ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-              ) : (
-                <>
-                  {/* Subtle diagonal stripe CSS background matching mockup */}
-                  <div className="absolute inset-0 opacity-40 bg-[linear-gradient(135deg,#e2e8f0_25%,transparent_25%,transparent_50%,#e2e8f0_50%,#e2e8f0_75%,transparent_75%,transparent)] bg-[length:20px_20px]" />
-                  <span className="text-[11px] font-mono font-black text-slate-400 tracking-widest uppercase relative z-10 select-none">
-                    site photo
-                  </span>
-                </>
-              )}
-
-              {/* Tag Pill Badge */}
-              <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-slate-800/85 text-white font-black text-[9.5px] tracking-wide backdrop-blur-xs shadow-xs z-20">
-                {item.tag}
-              </div>
-            </div>
-
-            {/* Caption & Meta Subtitle */}
-            <div className="p-3 bg-white flex-1 flex flex-col justify-between min-w-0">
-              <div className="text-xs font-black text-slate-900 leading-snug mb-1 truncate">
-                {item.title}
-              </div>
-              <div className="text-[10.5px] font-bold text-slate-400 truncate">
-                {item.meta}
-              </div>
-            </div>
+      {filteredList.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center flex flex-col items-center justify-center min-h-[250px] shadow-sm mb-8">
+          <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
+            <Camera size={32} className="text-slate-300" />
           </div>
-        ))}
-      </div>
+          <h3 className="text-slate-800 font-black text-lg mb-1">No photos captured</h3>
+          <p className="text-slate-500 text-xs max-w-[220px] font-medium leading-relaxed">
+            Tap the camera button to snap and log field telemetry photos.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3.5 mb-8">
+          {filteredList.map((item) => (
+            <div
+              key={item.id}
+              className="bg-white rounded-[22px] border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col group hover:shadow-md transition-shadow"
+            >
+              {/* Image Box */}
+              <div className="aspect-[4/3] bg-[#f1f5f9] relative flex items-center justify-center overflow-hidden">
+                {item.imageUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                ) : (
+                  <>
+                    {/* Subtle diagonal stripe CSS background matching mockup */}
+                    <div className="absolute inset-0 opacity-40 bg-[linear-gradient(135deg,#e2e8f0_25%,transparent_25%,transparent_50%,#e2e8f0_50%,#e2e8f0_75%,transparent_75%,transparent)] bg-[length:20px_20px]" />
+                    <span className="text-[11px] font-mono font-black text-slate-400 tracking-widest uppercase relative z-10 select-none">
+                      site photo
+                    </span>
+                  </>
+                )}
+
+                {/* Tag Pill Badge */}
+                <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-slate-800/85 text-white font-black text-[9.5px] tracking-wide backdrop-blur-xs shadow-xs z-20">
+                  {item.tag}
+                </div>
+              </div>
+
+              {/* Caption & Meta Subtitle */}
+              <div className="p-3 bg-white flex-1 flex flex-col justify-between min-w-0">
+                <div className="text-xs font-black text-slate-900 leading-snug mb-1 truncate">
+                  {item.title}
+                </div>
+                <div className="text-[10.5px] font-bold text-slate-400 truncate">
+                  {item.meta}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Camera Capture Modal Pop-up Overlay */}
       {showModal && (

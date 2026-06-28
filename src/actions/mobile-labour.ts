@@ -285,6 +285,15 @@ export async function removeLabourAttendanceAction(labourId: string) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
+  const labour = await prisma.labour.findUnique({
+    where: { id: labourId },
+    select: { companyId: true }
+  })
+
+  if (!labour || labour.companyId !== user.companyId) {
+    throw new Error('Unauthorized or not found')
+  }
+
   // Delete today's attendance record
   await prisma.labourAttendance.deleteMany({
     where: {

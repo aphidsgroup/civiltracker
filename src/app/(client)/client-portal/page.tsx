@@ -21,6 +21,10 @@ export default async function ClientPortal() {
         where: { approvedForClient: true },
         orderBy: { createdAt: 'desc' },
         take: 3
+      },
+      tasks: {
+        orderBy: { createdAt: 'desc' },
+        take: 5
       }
     }
   })
@@ -112,53 +116,34 @@ export default async function ClientPortal() {
             </div>
             
             <div className="space-y-6 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-gray-100">
-              <div className="relative flex items-start gap-4 pl-1">
-                <div className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center shadow-sm relative z-10 flex-shrink-0 mt-0.5">
-                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                </div>
-                <div className="flex-1 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                  <div className="flex justify-between items-center flex-wrap gap-2 mb-1">
-                    <span className="text-sm font-bold text-gray-900">Foundation & footing</span>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800 uppercase tracking-wider">Done</span>
+              {site.tasks.length === 0 ? (
+                <div className="text-center text-gray-500 py-6 text-sm">No construction milestones tracked yet.</div>
+              ) : (
+                site.tasks.map(task => (
+                  <div key={task.id} className="relative flex items-start gap-4 pl-1">
+                    {task.status === 'COMPLETED' ? (
+                      <div className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center shadow-sm relative z-10 flex-shrink-0 mt-0.5">
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      </div>
+                    ) : task.status === 'IN_PROGRESS' ? (
+                      <div className="w-6 h-6 rounded-full bg-amber-500 border-4 border-amber-100 shadow-sm relative z-10 flex-shrink-0 mt-0.5 animate-pulse"></div>
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-gray-200 border-2 border-white shadow-sm relative z-10 flex-shrink-0 mt-0.5"></div>
+                    )}
+                    <div className={`flex-1 p-4 rounded-2xl border ${task.status === 'COMPLETED' ? 'bg-gray-50 border-gray-100' : task.status === 'IN_PROGRESS' ? 'bg-amber-50/60 border-amber-200/60 shadow-sm' : 'bg-white border-gray-100'}`}>
+                      <div className="flex justify-between items-center flex-wrap gap-2 mb-1">
+                        <span className="text-sm font-bold text-gray-900">{task.name}</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${task.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : task.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-800 ring-1 ring-amber-400' : 'bg-gray-100 text-gray-600'}`}>
+                          {task.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <p className={`text-xs ${task.status === 'COMPLETED' ? 'text-gray-500' : task.status === 'IN_PROGRESS' ? 'text-amber-700/80 font-medium' : 'text-gray-400'}`}>
+                        {task.description || (task.status === 'COMPLETED' ? 'Completed successfully' : task.status === 'IN_PROGRESS' ? 'Currently active phase' : 'Upcoming phase')}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500">Completed successfully</p>
-                </div>
-              </div>
-
-              <div className="relative flex items-start gap-4 pl-1">
-                <div className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center shadow-sm relative z-10 flex-shrink-0 mt-0.5">
-                  <Check className="w-3.5 h-3.5 stroke-[3]" />
-                </div>
-                <div className="flex-1 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                  <div className="flex justify-between items-center flex-wrap gap-2 mb-1">
-                    <span className="text-sm font-bold text-gray-900">RCC structure</span>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800 uppercase tracking-wider">Done</span>
-                  </div>
-                  <p className="text-xs text-gray-500">Completed successfully</p>
-                </div>
-              </div>
-
-              <div className="relative flex items-start gap-4 pl-1">
-                <div className="w-6 h-6 rounded-full bg-amber-500 border-4 border-amber-100 shadow-sm relative z-10 flex-shrink-0 mt-0.5 animate-pulse"></div>
-                <div className="flex-1 bg-amber-50/60 p-4 rounded-2xl border border-amber-200/60 shadow-sm">
-                  <div className="flex justify-between items-center flex-wrap gap-2 mb-1">
-                    <span className="text-sm font-bold text-gray-900">Masonry & block work</span>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 uppercase tracking-wider ring-1 ring-amber-400">In progress</span>
-                  </div>
-                  <p className="text-xs text-amber-700/80 font-medium">Currently active phase</p>
-                </div>
-              </div>
-
-              <div className="relative flex items-start gap-4 pl-1">
-                <div className="w-6 h-6 rounded-full bg-gray-200 border-4 border-white shadow-sm relative z-10 flex-shrink-0 mt-0.5"></div>
-                <div className="flex-1 bg-white p-4 rounded-2xl border border-gray-100 opacity-60">
-                  <div className="flex justify-between items-center flex-wrap gap-2 mb-1">
-                    <span className="text-sm font-semibold text-gray-700">Finishing & Handover</span>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600 uppercase tracking-wider">Upcoming</span>
-                  </div>
-                  <p className="text-xs text-gray-400">Planned for later stages</p>
-                </div>
-              </div>
+                ))
+              )}
             </div>
           </div>
           

@@ -24,61 +24,7 @@ export default async function LabourSalaryPage() {
     salaryRuns = rawRuns.map(run => ({ ...run, site: null }));
   }
 
-  // Sample fallback runs if demo db is empty so UI looks breathtaking
-  const displayRuns = salaryRuns.length > 0 ? salaryRuns : [
-    {
-      id: 'sal-run-901',
-      periodStart: new Date('2026-06-15'),
-      periodEnd: new Date('2026-06-21'),
-      runType: 'WEEKLY',
-      status: 'PAID',
-      totalGross: 245000,
-      totalAdvance: 35000,
-      totalDeduction: 4800,
-      totalNet: 205200,
-      createdAt: new Date('2026-06-22'),
-      site: { name: 'Metro Heights Tower A & B' }
-    },
-    {
-      id: 'sal-run-902',
-      periodStart: new Date('2026-06-08'),
-      periodEnd: new Date('2026-06-14'),
-      runType: 'WEEKLY',
-      status: 'APPROVED',
-      totalGross: 198000,
-      totalAdvance: 22000,
-      totalDeduction: 3000,
-      totalNet: 173000,
-      createdAt: new Date('2026-06-15'),
-      site: { name: 'Green Valley Villas' }
-    },
-    {
-      id: 'sal-run-903',
-      periodStart: new Date('2026-06-01'),
-      periodEnd: new Date('2026-06-07'),
-      runType: 'WEEKLY',
-      status: 'DRAFT',
-      totalGross: 182000,
-      totalAdvance: 15000,
-      totalDeduction: 1200,
-      totalNet: 165800,
-      createdAt: new Date('2026-06-08'),
-      site: { name: 'Apex Commercial Hub' }
-    },
-    {
-      id: 'sal-run-904',
-      periodStart: new Date('2026-05-01'),
-      periodEnd: new Date('2026-05-31'),
-      runType: 'MONTHLY',
-      status: 'PAID',
-      totalGross: 840000,
-      totalAdvance: 120000,
-      totalDeduction: 18000,
-      totalNet: 702000,
-      createdAt: new Date('2026-06-01'),
-      site: { name: 'All Consolidated Sites' }
-    }
-  ]
+  const displayRuns = salaryRuns
 
   const totalGrossSum = displayRuns.reduce((acc, r) => acc + Number(r.totalGross), 0)
   const totalAdvanceSum = displayRuns.reduce((acc, r) => acc + Number(r.totalAdvance), 0)
@@ -203,11 +149,17 @@ export default async function LabourSalaryPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4">
-          {displayRuns.map(run => (
-            <div
-              key={run.id}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative overflow-hidden group"
-            >
+        {displayRuns.length === 0 ? (
+          <div className="py-20 flex flex-col items-center justify-center text-center">
+            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+              <Banknote className="w-8 h-8 text-slate-400" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2 m-0">No salary runs found</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm m-0">You haven't generated any salary runs yet. Create a new salary run to process wages.</p>
+          </div>
+        ) : (
+          displayRuns.map((run: any) => (
+            <div key={run.id} className="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-1 h-full bg-[#fc6e20] group-hover:bg-[#fc6e20] transition-colors" />
 
               <div className="space-y-2 flex-1 pl-2">
@@ -258,7 +210,8 @@ export default async function LabourSalaryPage() {
                 </Link>
               </div>
             </div>
-          ))}
+          ))
+        )}
         </div>
       </div>
     </div>

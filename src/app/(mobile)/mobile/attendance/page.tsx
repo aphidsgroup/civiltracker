@@ -41,10 +41,7 @@ export default async function MobileAttendancePage({ searchParams }: { searchPar
     })
   ])
 
-  const fallbackSites = sites.length > 0 ? sites : [
-    { id: 'demo-site-1', name: 'Metro Heights Tower B' },
-    { id: 'demo-site-2', name: 'Green Valley Villas' }
-  ]
+
 
   const mapLabour = (l: any) => ({
     id: l.id,
@@ -95,7 +92,7 @@ export default async function MobileAttendancePage({ searchParams }: { searchPar
         todayRoster={todayRoster} 
         otherWorkers={otherWorkers} 
         initialContractors={initialContractors}
-        sites={fallbackSites} 
+        sites={sites} 
         defaultSiteId={siteId}
       />
     </div>

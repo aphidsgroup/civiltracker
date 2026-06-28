@@ -37,7 +37,7 @@ export default async function MobileReports() {
   // Budget calculations
   const budget = Number(activeSite?.budget ?? 0)
   const spent = Number(activeSite?.spent ?? 0)
-  const budgetPct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 62
+  const budgetPct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0
 
   const reportTypes = [
     { name: 'Site-wise expense report' },

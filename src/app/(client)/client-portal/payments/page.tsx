@@ -29,49 +29,7 @@ export default async function ClientPortalPaymentsPage() {
   // Exact prompt query requirement
   const rawInvoices = await prisma.invoice.findMany({ where: { clientId: client.id }, orderBy: { createdAt: 'desc' } });
 
-  // Sample fallback invoices if demo db has no invoices attached so UI looks stunning
-  const displayInvoices = rawInvoices.length > 0 ? rawInvoices : [
-    {
-      id: 'inv-client-101',
-      invoiceNumber: 'INV-2026-0842',
-      milestone: 'Superstructure Plinth & Slab 4 Completion',
-      amount: 2450000,
-      status: 'PAID',
-      dueDate: new Date('2026-05-30'),
-      paidAt: new Date('2026-05-28'),
-      createdAt: new Date('2026-05-15')
-    },
-    {
-      id: 'inv-client-102',
-      invoiceNumber: 'INV-2026-0912',
-      milestone: 'Brickwork & Internal Plastering (Floors 1-6)',
-      amount: 1850000,
-      status: 'PAID',
-      dueDate: new Date('2026-06-15'),
-      paidAt: new Date('2026-06-12'),
-      createdAt: new Date('2026-06-01')
-    },
-    {
-      id: 'inv-client-103',
-      invoiceNumber: 'INV-2026-1045',
-      milestone: 'MEP Rough-ins & Waterproofing Stage',
-      amount: 3200000,
-      status: 'DUE',
-      dueDate: new Date('2026-07-10'),
-      paidAt: null,
-      createdAt: new Date('2026-06-20')
-    },
-    {
-      id: 'inv-client-104',
-      invoiceNumber: 'INV-2026-1102',
-      milestone: 'External Elevation Glazing & Painting Advance',
-      amount: 1500000,
-      status: 'DUE',
-      dueDate: new Date('2026-07-25'),
-      paidAt: null,
-      createdAt: new Date('2026-06-25')
-    }
-  ]
+  const displayInvoices = rawInvoices
 
   const totalBilled = displayInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0)
   const totalPaid = displayInvoices.filter(inv => inv.status.toUpperCase() === 'PAID').reduce((sum, inv) => sum + Number(inv.amount), 0)
@@ -187,33 +145,39 @@ export default async function ClientPortalPaymentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-sm">
-              {displayInvoices.map((inv: any) => (
-                <tr key={inv.id} className="hover:bg-slate-50/75 dark:hover:bg-slate-800/50 transition-colors">
-                  <td className="py-4 px-6 font-mono font-bold text-[#fc6e20] dark:text-blue-400 whitespace-nowrap">
-                    {inv.invoiceNumber}
-                  </td>
-                  <td className="py-4 px-6">
-                    <div className="font-extrabold text-slate-900 dark:text-slate-100">{inv.milestone || 'Project Progress Installment'}</div>
-                  </td>
-                  <td className="py-4 px-6 text-xs font-medium text-slate-500 whitespace-nowrap">
-                    {formatDate(inv.createdAt)}
-                  </td>
-                  <td className="py-4 px-6 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                    {formatDate(inv.dueDate)}
-                  </td>
-                  <td className="py-4 px-6 text-right font-black text-slate-900 dark:text-slate-100 text-base whitespace-nowrap">
-                    {formatCurrency(inv.amount)}
-                  </td>
-                  <td className="py-4 px-6 text-center whitespace-nowrap">
-                    {getStatusChip(inv.status)}
-                  </td>
-                  <td className="py-4 px-6 text-right whitespace-nowrap">
-                    <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer border-none font-inherit">
-                      <Download className="w-3.5 h-3.5 text-blue-500" /> PDF
-                    </button>
-                  </td>
+              {displayInvoices.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-slate-500 font-medium">No invoices found.</td>
                 </tr>
-              ))}
+              ) : (
+                displayInvoices.map((inv: any) => (
+                  <tr key={inv.id} className="hover:bg-slate-50/75 dark:hover:bg-slate-800/50 transition-colors">
+                    <td className="py-4 px-6 font-mono font-bold text-[#fc6e20] dark:text-blue-400 whitespace-nowrap">
+                      {inv.invoiceNumber}
+                    </td>
+                    <td className="py-4 px-6">
+                      <div className="font-extrabold text-slate-900 dark:text-slate-100">{inv.milestone || 'Project Progress Installment'}</div>
+                    </td>
+                    <td className="py-4 px-6 text-xs font-medium text-slate-500 whitespace-nowrap">
+                      {formatDate(inv.createdAt)}
+                    </td>
+                    <td className="py-4 px-6 text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                      {formatDate(inv.dueDate)}
+                    </td>
+                    <td className="py-4 px-6 text-right font-black text-slate-900 dark:text-slate-100 text-base whitespace-nowrap">
+                      {formatCurrency(inv.amount)}
+                    </td>
+                    <td className="py-4 px-6 text-center whitespace-nowrap">
+                      {getStatusChip(inv.status)}
+                    </td>
+                    <td className="py-4 px-6 text-right whitespace-nowrap">
+                      <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer border-none font-inherit">
+                        <Download className="w-3.5 h-3.5 text-blue-500" /> PDF
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

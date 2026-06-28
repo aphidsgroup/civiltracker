@@ -89,11 +89,6 @@ export default async function CompaniesPage({
                 <tbody className="divide-y divide-gray-100">
                   {companies.map(c => {
                     const owner = c.members[0]?.user
-                    const maxUsers = 50 // Mock max users based on plan
-                    const maxSites = 10 // Mock max sites
-                    
-                    const sitePct = Math.min((c._count.sites / maxSites) * 100, 100)
-                    const userPct = Math.min((c._count.members / maxUsers) * 100, 100)
                     
                     let stCls = 'bg-emerald-50 text-emerald-700 border-emerald-200'
                     let dotCls = 'bg-emerald-500'
@@ -131,16 +126,12 @@ export default async function CompaniesPage({
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-xs font-semibold text-gray-700 mb-1.5">{c._count.sites} of {maxSites} used</div>
-                          <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                            <div className={`h-full rounded-full ${sitePct > 90 ? 'bg-rose-500' : sitePct > 75 ? 'bg-amber-500' : 'bg-[#fc6e20]'}`} style={{ width: `${sitePct}%` }} />
-                          </div>
+                          <div className="text-sm font-semibold text-gray-900">{c._count.sites}</div>
+                          <div className="text-xs text-gray-500">sites created</div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-xs font-semibold text-gray-700 mb-1.5">{c._count.members} of {maxUsers} active</div>
-                          <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                            <div className={`h-full rounded-full ${userPct > 90 ? 'bg-rose-500' : userPct > 75 ? 'bg-amber-500' : 'bg-[#fc6e20]'}`} style={{ width: `${userPct}%` }} />
-                          </div>
+                          <div className="text-sm font-semibold text-gray-900">{c._count.members}</div>
+                          <div className="text-xs text-gray-500">active users</div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="font-semibold text-sm text-gray-900">{(Number(c.storageUsed) / (1024 * 1024)).toFixed(1)} MB</div>

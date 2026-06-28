@@ -7,16 +7,18 @@ import ResponsiveTable from '@/components/responsive/ResponsiveTable'
 import MobileCardList from '@/components/responsive/MobileCardList'
 import { Plus } from 'lucide-react'
 
-export default async function ExpensesPage() {
+export default async function ExpensesPage({ searchParams }: { searchParams: Promise<{ limit?: string }> }) {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
   const { companyId } = session.user
+  const { limit } = await searchParams
+  const take = limit ? parseInt(limit, 10) : 50
 
   const expenses = await prisma.expense.findMany({
     where: { companyId, deletedAt: null },
     include: { site: { select: { name: true } }, createdBy: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
-    take: 50,
+    take,
   })
 
   const statusColors: Record<string, string> = {
@@ -126,6 +128,13 @@ export default async function ExpensesPage() {
             }
           />
         </div>
+        {expenses.length === take && (
+          <div className="p-4 flex justify-center border-t border-slate-200 bg-slate-50">
+            <Link href={`/expenses?limit=${take + 50}`} className="text-sm font-bold text-[#fc6e20] hover:underline">
+              Load More Records
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   )

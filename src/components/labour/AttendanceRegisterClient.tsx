@@ -51,27 +51,21 @@ export default function AttendanceRegisterClient({
   dateString
 }: AttendanceRegisterClientProps) {
   const sourceList = initialLabour || labourList || []
-  const fallbackList: Worker[] = sourceList.length > 0 ? sourceList : [
-    { id: 'l-1', name: 'Rameshwar Yadav', phone: null, trade: 'MASON', dailyWage: 950, siteId: 's-1', site: { id: 's-1', name: 'Metro Heights Tower A' }, status: 'PRESENT', advance: 500 },
-    { id: 'l-2', name: 'Suresh Manjhi', phone: null, trade: 'HELPER', dailyWage: 650, siteId: 's-1', site: { id: 's-1', name: 'Metro Heights Tower A' }, status: 'PRESENT', advance: 0 },
-    { id: 'l-3', name: 'Dinesh Vishwakarma', phone: null, trade: 'CARPENTER', dailyWage: 900, siteId: 's-2', site: { id: 's-2', name: 'Green Valley Villas' }, status: 'HALF_DAY', advance: 200 },
-    { id: 'l-4', name: 'Mukesh Glass Fitter', phone: 'CUSTOM_TRADE:Glass Fitter', trade: 'HELPER', dailyWage: 850, siteId: 's-1', site: { id: 's-1', name: 'Metro Heights Tower B' }, status: 'ABSENT', advance: 0 },
-  ]
 
-  const [workers, setWorkers] = useState<Worker[]>(fallbackList)
+  const [workers, setWorkers] = useState<Worker[]>(sourceList)
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>(() => {
     const init: Record<string, AttendanceStatus> = {}
-    fallbackList.forEach(w => { init[w.id] = (w.status as AttendanceStatus) || 'PRESENT' })
+    sourceList.forEach(w => { init[w.id] = (w.status as AttendanceStatus) || 'PRESENT' })
     return init
   })
   const [overtime, setOvertime] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {}
-    fallbackList.forEach(w => { init[w.id] = w.overtimeHours || 0 })
+    sourceList.forEach(w => { init[w.id] = w.overtimeHours || 0 })
     return init
   })
   const [advances, setAdvances] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {}
-    fallbackList.forEach(w => { init[w.id] = w.advance || 0 })
+    sourceList.forEach(w => { init[w.id] = w.advance || 0 })
     return init
   })
 
@@ -387,7 +381,20 @@ export default function AttendanceRegisterClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-sm">
-              {filteredList.map(worker => {
+              {filteredList.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center">
+                    <div className="flex flex-col items-center justify-center text-slate-400">
+                      <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                        <HardHat size={32} className="text-slate-300 dark:text-slate-600" />
+                      </div>
+                      <p className="text-base font-bold text-slate-600 dark:text-slate-300 mb-1">No workers found</p>
+                      <p className="text-sm">Click &quot;Add New Employee&quot; to enroll field workers.</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredList.map(worker => {
                 const st = attendance[worker.id]
                 const ot = overtime[worker.id] || 0
                 const adv = advances[worker.id] || 0
@@ -474,7 +481,8 @@ export default function AttendanceRegisterClient({
                     </td>
                   </tr>
                 )
-              })}
+              })
+            )}
             </tbody>
           </table>
         </div>

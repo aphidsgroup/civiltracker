@@ -19,7 +19,8 @@ async function getCachedSuperAdminData() {
     prisma.company.findMany({
       where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 5,
       include: { _count: { select: { sites: true, members: true } } }
-    })
+    }),
+    prisma.supportTicket.count({ where: { status: 'OPEN' } })
   ])
 }
 
@@ -35,7 +36,7 @@ export default async function SuperAdminDashboard() {
 
   const [
     totalCompanies, activeCompanies, trialCompanies, suspendedCompanies,
-    totalSites, totalUsers, storageAgg, planCounts, topCompanies
+    totalSites, totalUsers, storageAgg, planCounts, topCompanies, openTicketsCount
   ] = await cachedDataFetcher()
 
   const totalStorageGb = ((storageAgg._sum.storageUsed || 0) / (1024 * 1024 * 1024)).toFixed(1)
@@ -45,14 +46,13 @@ export default async function SuperAdminDashboard() {
     { label: 'Active', value: activeCompanies, sub: `${Math.round((activeCompanies/(totalCompanies||1))*100)}% of base`, trend: 'up' },
     { label: 'On Trial', value: trialCompanies, sub: 'Free trials', trend: 'warn' },
     { label: 'Suspended', value: suspendedCompanies, sub: 'Billing failed', trend: 'down' },
-    { label: 'Monthly Revenue', value: '₹6.4 L', sub: '+12% MoM', trend: 'up' },
   ]
 
   const miniStats = [
     { Icon: Building2, bg: 'bg-[#e7f0fb]', color: 'text-[#fc6e20]', value: totalSites, label: 'Total sites' },
     { Icon: Users, bg: 'bg-[#ece8fa]', color: 'text-[#5b47b8]', value: totalUsers, label: 'Total users' },
     { Icon: HardDrive, bg: 'bg-[#e2f3ea]', color: 'text-[#0f7a45]', value: `${totalStorageGb} GB`, label: 'Cloudinary storage' },
-    { Icon: MessageCircle, bg: 'bg-[#fbe6e3]', color: 'text-[#cf3f31]', value: 7, label: 'Open tickets' },
+    { Icon: MessageCircle, bg: 'bg-[#fbe6e3]', color: 'text-[#cf3f31]', value: openTicketsCount, label: 'Open tickets' },
   ]
 
   const planColors: Record<string, string> = { FREE: '#10b981', ENTERPRISE: '#7c3aed', GROWTH: '#059669', STARTER: '#0284c7', TRIAL: '#d97706' }
@@ -65,7 +65,7 @@ export default async function SuperAdminDashboard() {
   return (
     <>
       {/* KPI Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-4">
         {kpis.map(k => (
           <div key={k.label} className={`rounded-[16px] p-4 border ${
             k.featured

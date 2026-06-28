@@ -71,6 +71,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
     pendingApprovals,
     recentExpenses,
     clientAdvancesAgg,
+    todayDpr,
   ] = await Promise.all([
     siteId ? prisma.expense.aggregate({
       where: { siteId, createdAt: { gte: today, lte: todayEnd } },
@@ -109,6 +110,10 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
       where: { siteId, type: 'ADVANCE' },
       _sum: { amount: true },
     }) : Promise.resolve({ _sum: { amount: null } }),
+
+    siteId ? prisma.dailyProgressReport.findFirst({
+      where: { siteId, date: { gte: today, lte: todayEnd } }
+    }) : Promise.resolve(null),
   ])
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
@@ -116,19 +121,26 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
 
   const budget = Number(activeSiteRecord?.budget ?? 0)
   const spent = Number(activeSiteRecord?.spent ?? 0)
-  const budgetPct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 61 // Approx from screenshot
+  const budgetPct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0
 
   const startDate = activeSiteRecord?.startDate
   const targetDate = activeSiteRecord?.targetEndDate
   const dayOfProject = startDate
     ? Math.floor((Date.now() - new Date(startDate).getTime()) / 86400000) + 1
-    : 184
+    : null
   const totalDays = startDate && targetDate
     ? Math.floor((new Date(targetDate).getTime() - new Date(startDate).getTime()) / 86400000)
-    : 290
+    : null
 
   const firstName = session?.user?.name?.split(' ')[0] ?? 'Engineer'
   const roleTitle = session?.user?.role?.replace(/_/g, ' ') ?? 'Site Engineer'
+
+  const formattedDate = new Date().toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  })
 
   return (
     <div className="space-y-6 p-4 sm:p-6 select-none bg-[#f8fafc] min-h-screen">
@@ -163,12 +175,12 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
             {getGreeting()}, {firstName}
           </h1>
           <p className="text-[12px] font-medium text-slate-500 m-0">
-            {roleTitle} · {activeSite?.name ?? 'Anna Nagar Villa'}
+            {roleTitle} {activeSite?.name ? `· ${activeSite.name}` : ''}
           </p>
         </div>
         <div className="text-right text-[11px] font-bold text-slate-400 whitespace-nowrap leading-tight">
-          Tue<br />
-          24 Jun 2026
+          {formattedDate.split(', ')[0]}<br />
+          {formattedDate.split(', ')[1]}
         </div>
       </div>
 
@@ -182,7 +194,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
             TODAY ON SITE
           </div>
           <div className="text-[11px] font-bold text-white bg-white/15 px-3 py-1 rounded-full backdrop-blur-md">
-            Day {dayOfProject} of {totalDays}
+            {dayOfProject && totalDays ? `Day ${dayOfProject} of ${totalDays}` : 'Day N/A'}
           </div>
         </div>
 
@@ -222,7 +234,11 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
         <div className="space-y-2 relative z-10">
           <div className="flex justify-between text-[11px] font-bold">
             <span className="text-white">Budget used</span>
-            <span className="text-white">₹1.14 Cr / ₹1.85 Cr</span>
+            <span className="text-white">
+              {budget > 0 
+                ? (budget >= 10000000 ? `₹${(spent/10000000).toFixed(2)} Cr / ₹${(budget/10000000).toFixed(2)} Cr` : `₹${(spent/100000).toFixed(1)} L / ₹${(budget/100000).toFixed(1)} L`) 
+                : 'No budget set'}
+            </span>
           </div>
           <div className="h-[6px] w-full bg-slate-800 rounded-full overflow-hidden">
             <div
@@ -265,7 +281,9 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
               <Wallet size={20} strokeWidth={2.2} />
             </div>
             <div className="text-[14px] font-extrabold text-slate-900 leading-tight mb-1">Add Expense</div>
-            <div className="text-[11.5px] font-medium text-slate-500">₹48.2k today</div>
+            <div className="text-[11.5px] font-medium text-slate-500">
+              {todaySpend >= 1000 ? `₹${(todaySpend / 1000).toFixed(1)}k today` : (todaySpend > 0 ? `₹${todaySpend} today` : 'No expenses today')}
+            </div>
           </Link>
 
           <Link
@@ -321,10 +339,17 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
             </div>
             <div>
               <div className="text-[14px] font-extrabold tracking-tight text-white mb-0.5">Daily Site Report</div>
-              <div className="flex items-center gap-1.5 text-[11px] text-amber-300 font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                <span>Not submitted for 24 Jun - due 7 PM</span>
-              </div>
+              {todayDpr ? (
+                <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-bold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span>Submitted today</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-[11px] text-amber-300 font-bold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  <span>Not submitted for {formattedDate.split(', ')[0]}</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="text-white/80">
@@ -340,43 +365,32 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
           <Link href="/mobile/approvals" className="text-[12px] font-bold text-[#fc6e20] no-underline">See all</Link>
         </div>
         <div className="bg-[#f8fafc] space-y-2.5">
-          <div className="p-3.5 bg-white rounded-[16px] border border-slate-100 shadow-sm flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-[10px] bg-[#fef3c7] text-[#b45309] flex items-center justify-center flex-shrink-0">
-                <FileText size={18} strokeWidth={2.2} />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[13.5px] font-bold text-slate-900 truncate">Cement — 120 bags</div>
-                <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5">Sree Dhanalakshmi · you</div>
-              </div>
+          {pendingApprovals.length === 0 ? (
+            <div className="p-4 bg-white rounded-[16px] border border-slate-100 shadow-sm text-center">
+              <div className="text-[13px] font-medium text-slate-500">No pending approvals</div>
             </div>
-            <div className="text-right flex-shrink-0 ml-2">
-              <div className="text-[13.5px] font-extrabold text-slate-900">₹84,500</div>
-              <div className="inline-flex items-center gap-1 mt-1 text-[#b45309] text-[10px] font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b]" />
-                Pending
+          ) : (
+            pendingApprovals.map(approval => (
+              <div key={approval.id} className="p-3.5 bg-white rounded-[16px] border border-slate-100 shadow-sm flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-[10px] bg-[#fef3c7] text-[#b45309] flex items-center justify-center flex-shrink-0">
+                    <FileText size={18} strokeWidth={2.2} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[13.5px] font-bold text-slate-900 truncate">{approval.description}</div>
+                    <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5">{approval.paidTo}</div>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0 ml-2">
+                  <div className="text-[13.5px] font-extrabold text-slate-900">₹{Number(approval.amount).toLocaleString('en-IN')}</div>
+                  <div className="inline-flex items-center gap-1 mt-1 text-[#b45309] text-[10px] font-bold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b]" />
+                    Pending
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-
-          <div className="p-3.5 bg-white rounded-[16px] border border-slate-100 shadow-sm flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-[10px] bg-[#fef3c7] text-[#b45309] flex items-center justify-center flex-shrink-0">
-                <FileText size={18} strokeWidth={2.2} />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[13.5px] font-bold text-slate-900 truncate">Diesel — JCB & generator</div>
-                <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5">Site petty cash · you</div>
-              </div>
-            </div>
-            <div className="text-right flex-shrink-0 ml-2">
-              <div className="text-[13.5px] font-extrabold text-slate-900">₹6,800</div>
-              <div className="inline-flex items-center gap-1 mt-1 text-[#b45309] text-[10px] font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b]" />
-                Pending
-              </div>
-            </div>
-          </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -388,45 +402,41 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
         </div>
 
         <div className="bg-[#f8fafc] space-y-2.5">
-          <div className="p-3.5 bg-white rounded-[16px] border border-slate-100 shadow-sm flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-full bg-[#f1f5f9] text-[#94a3b8] flex items-center justify-center flex-shrink-0 text-[8px] font-black tracking-widest uppercase overflow-hidden relative">
-                <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPjxyZWN0IHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMCAwTDQgNFpNMCw0TDRMMCIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEiLz48L3N2Zz4=')]"></div>
-                CEMENT
-              </div>
-              <div className="min-w-0">
-                <div className="text-[13.5px] font-bold text-slate-900 truncate">Sree Dhanalakshmi Ent.</div>
-                <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5">Material · Today 6:42 PM</div>
-              </div>
+          {recentExpenses.length === 0 ? (
+            <div className="p-4 bg-white rounded-[16px] border border-slate-100 shadow-sm text-center">
+              <div className="text-[13px] font-medium text-slate-500">No recent bills</div>
             </div>
-            <div className="text-right flex-shrink-0 ml-2">
-              <div className="text-[13.5px] font-extrabold text-slate-900">₹84,500</div>
-              <div className="inline-flex items-center gap-1 mt-1 text-[#b45309] text-[10px] font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b]" />
-                Pending
+          ) : (
+            recentExpenses.map(expense => (
+              <div key={expense.id} className="p-3.5 bg-white rounded-[16px] border border-slate-100 shadow-sm flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-full bg-[#f1f5f9] text-[#94a3b8] flex items-center justify-center flex-shrink-0 text-[8px] font-black tracking-widest uppercase overflow-hidden relative">
+                    <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPjxyZWN0IHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMCAwTDQgNFpNMCw0TDRMMCIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEiLz48L3N2Zz4=')]"></div>
+                    {expense.category.substring(0, 5)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[13.5px] font-bold text-slate-900 truncate">{expense.paidTo}</div>
+                    <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5">{expense.category} · {expense.createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0 ml-2">
+                  <div className="text-[13.5px] font-extrabold text-slate-900">₹{Number(expense.amount).toLocaleString('en-IN')}</div>
+                  <div className={`inline-flex items-center gap-1 mt-1 text-[10px] font-bold ${
+                    expense.approvalStatus === 'APPROVED' ? 'text-emerald-600' :
+                    expense.approvalStatus === 'REJECTED' ? 'text-rose-600' :
+                    'text-[#b45309]'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      expense.approvalStatus === 'APPROVED' ? 'bg-emerald-500' :
+                      expense.approvalStatus === 'REJECTED' ? 'bg-rose-500' :
+                      'bg-[#f59e0b]'
+                    }`} />
+                    {expense.approvalStatus.charAt(0) + expense.approvalStatus.slice(1).toLowerCase()}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-
-          <div className="p-3.5 bg-white rounded-[16px] border border-slate-100 shadow-sm flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-full bg-[#f1f5f9] text-[#94a3b8] flex items-center justify-center flex-shrink-0 text-[8px] font-black tracking-widest uppercase overflow-hidden relative">
-                <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPjxyZWN0IHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMCAwTDQgNFpNMCw0TDRMMCIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utd2lkdGg9IjEiLz48L3N2Zz4=')]"></div>
-                TOOLS
-              </div>
-              <div className="min-w-0">
-                <div className="text-[13.5px] font-bold text-slate-900 truncate">Anna Hardware</div>
-                <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5">Tools · Today 2:10 PM</div>
-              </div>
-            </div>
-            <div className="text-right flex-shrink-0 ml-2">
-              <div className="text-[13.5px] font-extrabold text-slate-900">₹12,300</div>
-              <div className="inline-flex items-center gap-1 mt-1 text-emerald-600 text-[10px] font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                Approved
-              </div>
-            </div>
-          </div>
+            ))
+          )}
         </div>
       </div>
     </div>

@@ -20,15 +20,7 @@ interface PurchaseRequestTableClientProps {
 }
 
 export default function PurchaseRequestTableClient({ initialRequests }: PurchaseRequestTableClientProps) {
-  const displayList: PurchaseRequestItem[] = initialRequests.length > 0 ? initialRequests : [
-    { id: 'pr-1', description: '53 Grade OPC Cement (Ultratech)', quantity: 350, unit: 'Bags', urgency: 'Urgent', status: 'PENDING', site: { name: 'Metro Heights Tower B' }, notes: 'Required for Slab 4 concrete pouring scheduled tomorrow.' },
-    { id: 'pr-2', description: 'Fe500D TMT Rebars (12mm)', quantity: 4.5, unit: 'MT', urgency: 'High', status: 'PENDING', site: { name: 'Apex Commercial Hub' }, notes: 'Steel reinforcement stock running critically low.' },
-    { id: 'pr-3', description: 'Coarse River Sand (Filtered)', quantity: 800, unit: 'Cu.Ft', urgency: 'Normal', status: 'PENDING', site: { name: 'Green Valley Villas' }, notes: 'Plastering work stage 2.' },
-    { id: 'pr-4', description: 'Waterproofing Chemical (Dr. Fixit 302)', quantity: 50, unit: 'Liters', urgency: 'Normal', status: 'APPROVED', site: { name: 'Metro Heights Tower A' }, notes: 'Basement retaining wall treatment.' },
-    { id: 'pr-5', description: 'Red Clay Bricks (Standard Size)', quantity: 12000, unit: 'Nos', urgency: 'Low', status: 'REJECTED', site: { name: 'Green Valley Villas' }, notes: 'Rate quoted by local vendor was above standard budget.' },
-  ]
-
-  const [requests, setRequests] = useState<PurchaseRequestItem[]>(displayList)
+  const [requests, setRequests] = useState<PurchaseRequestItem[]>(initialRequests)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [toastMessage, setToastMessage] = useState<string | null>(null)

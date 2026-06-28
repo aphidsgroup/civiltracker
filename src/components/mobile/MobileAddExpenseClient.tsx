@@ -77,19 +77,20 @@ export default function MobileAddExpenseClient({
           setGpsLoading(false)
         },
         () => {
-          setGpsCoords('28.5355° N, 77.3910° E')
+          setGpsCoords(null)
           setGpsLoading(false)
         },
         { timeout: 5000 }
       )
     } else {
-      setGpsCoords('28.5355° N, 77.3910° E')
+      setGpsCoords(null)
       setGpsLoading(false)
     }
   }
 
   const handleSubmit = async () => {
-    const finalSiteId = formData.siteId || sites[0]?.id || 'dummy-site'
+    const finalSiteId = formData.siteId || sites[0]?.id
+    if (!finalSiteId) return setError('Please select a valid site')
     if (!formData.amount || isNaN(Number(formData.amount.replace(/,/g, ''))) || Number(formData.amount) <= 0) {
       return setError('Valid numeric amount is required')
     }

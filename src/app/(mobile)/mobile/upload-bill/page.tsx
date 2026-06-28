@@ -19,12 +19,7 @@ export default async function MobileUploadBillPage({ searchParams }: { searchPar
       })
     : []
 
-  const fallbackSites = sites.length > 0 ? sites : [
-    { id: 'site-a', name: 'Anna Nagar Villa' },
-    { id: 'site-b', name: 'Metro Heights Tower A' }
-  ]
+  const matchedSite = sites.find(s => s.id === siteId) || sites[0]
 
-  const matchedSite = fallbackSites.find(s => s.id === siteId) || fallbackSites[0]
-
-  return <MobileUploadBillClient sites={fallbackSites} defaultSiteName={matchedSite.name} defaultSiteId={siteId} />
+  return <MobileUploadBillClient sites={sites} defaultSiteName={matchedSite?.name || ''} defaultSiteId={siteId} />
 }

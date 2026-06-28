@@ -81,6 +81,9 @@ export async function createExpenseAction(data: {
 
   revalidatePath('/dashboard')
   revalidatePath('/mobile/home')
+  revalidatePath('/expenses')
+  revalidatePath('/bills')
+  revalidatePath('/approvals')
 
   return { success: true, expenseId: expense.id }
 }

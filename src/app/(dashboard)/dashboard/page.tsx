@@ -32,6 +32,8 @@ async function getCachedDashboardData(companyId: string) {
     prisma.expense.findMany({ where: { companyId, deletedAt: null, approvalStatus: 'PENDING' }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, category: true, site: { select: { name: true } }, createdAt: true } }),
     prisma.expense.findMany({ where: { companyId, deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, approvalStatus: true, category: true, createdAt: true, site: { select: { name: true } } } }),
     prisma.site.findMany({ where: { companyId, deletedAt: null, status: 'ACTIVE' }, orderBy: { spent: 'desc' }, take: 5 }),
+    prisma.salaryRun.aggregate({ where: { companyId, status: 'APPROVED' }, _sum: { totalNet: true } }),
+    prisma.invoice.aggregate({ where: { companyId, status: 'DUE' }, _sum: { amount: true } })
   ])
 }
 
@@ -50,6 +52,7 @@ export default async function CompanyDashboard() {
   const [
     activeSitesCount, todayExpenseAgg, pendingExpenses,
     totalLabour, todayAttendance, recentPendingExpenses, recentExpenses, sites,
+    salaryDueAgg, invoicesDueAgg
   ] = await cachedDataFetcher()
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
@@ -91,13 +94,16 @@ export default async function CompanyDashboard() {
     { href: '/reports', Icon: BarChart3, label: 'Generate Report', color: 'text-[#be123c]', bg: 'bg-[#ffe4e6]' },
   ]
 
+  const salaryDue = Number(salaryDueAgg._sum.totalNet ?? 0)
+  const invoicesDue = Number(invoicesDueAgg._sum.amount ?? 0)
+
   const kpis = [
     { label: 'Active Sites', value: activeSitesCount, sub: 'Active this month', trend: 'up', Icon: Building2 },
     { label: "Today's Expense", value: fmtAmt(todaySpend), sub: 'Across all sites today', trend: 'up', Icon: DollarSign, featured: true },
     { label: 'Bills Pending', value: pendingCount, sub: `${fmtAmt(pendingTotal)} to approve`, trend: 'warn', Icon: Clock },
     { label: 'Labour Present', value: `${todayAttendance}/${totalLabour || '—'}`, sub: `${totalLabour > 0 ? Math.round((todayAttendance / totalLabour) * 100) : 0}% attendance`, trend: 'up', Icon: Users },
-    { label: 'Salary Due', value: '—', sub: 'No run scheduled', trend: 'flat', Icon: Wallet },
-    { label: 'Client Receivable', value: '—', sub: 'No overdue invoices', trend: 'flat', Icon: CreditCard },
+    { label: 'Salary Due', value: fmtAmt(salaryDue), sub: salaryDue > 0 ? 'Pending payout' : 'No run scheduled', trend: salaryDue > 0 ? 'warn' : 'flat', Icon: Wallet },
+    { label: 'Client Receivable', value: fmtAmt(invoicesDue), sub: invoicesDue > 0 ? 'Pending collection' : 'No overdue invoices', trend: invoicesDue > 0 ? 'up' : 'flat', Icon: CreditCard },
   ]
 
   return (

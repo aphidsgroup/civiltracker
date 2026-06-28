@@ -171,7 +171,8 @@ function verifyCanApproveEntity(role: string, entityType: string) {
 
 export async function approveApprovalAction(id: string, note?: string) {
   const user = await requireUser()
-  const approval = await prisma.approval.findUnique({ where: { id } })
+  const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
+  const approval = await prisma.approval.findFirst({ where: { id, ...companyFilter } })
   if (!approval) throw new Error('Approval not found')
 
   if (!verifyCanApproveEntity(user.role, approval.entityType)) {
@@ -236,7 +237,8 @@ export async function rejectApprovalAction(id: string, reason: string) {
     throw new Error('Rejection reason is mandatory (minimum 3 characters)')
   }
 
-  const approval = await prisma.approval.findUnique({ where: { id } })
+  const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
+  const approval = await prisma.approval.findFirst({ where: { id, ...companyFilter } })
   if (!approval) throw new Error('Approval not found')
 
   if (!verifyCanApproveEntity(user.role, approval.entityType)) {

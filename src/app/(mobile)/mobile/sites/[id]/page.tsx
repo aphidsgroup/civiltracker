@@ -22,17 +22,8 @@ export default async function MobileSingleSitePage({ params }: { params: Promise
     }
   })
 
-  // Demo fallback if site ID not found in dev
-  const displaySite = site || {
-    id: siteId,
-    name: 'Metro Heights Tower A',
-    status: 'ACTIVE',
-    location: 'Sector 62, Noida Express Highway',
-    projectType: 'Commercial Highrise',
-    budget: 12000000,
-    spent: 8500000,
-    labour: new Array(14).fill({ id: '1' }),
-    expenses: []
+  if (!site) {
+    notFound()
   }
 
   const isSiteEngineer = user.role === 'SITE_ENGINEER' || user.role === 'SUPERVISOR'
@@ -53,14 +44,14 @@ export default async function MobileSingleSitePage({ params }: { params: Promise
       <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-b-[32px] shadow-xl space-y-3">
         <div className="flex items-center justify-between">
           <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-black uppercase tracking-wider border border-emerald-400/30">
-            {displaySite.status}
+            {site.status}
           </span>
-          <span className="text-xs font-semibold text-slate-300">{displaySite.projectType || 'Construction Worksite'}</span>
+          <span className="text-xs font-semibold text-slate-300">{site.contractType || 'Construction Worksite'}</span>
         </div>
-        <h1 className="text-2xl font-black tracking-tight m-0">{displaySite.name}</h1>
+        <h1 className="text-2xl font-black tracking-tight m-0">{site.name}</h1>
         <div className="flex items-center gap-1.5 text-xs text-slate-300 font-medium">
           <MapPin size={14} className="text-blue-400 flex-shrink-0" />
-          <span>{displaySite.location}</span>
+          <span>{site.location}</span>
         </div>
       </div>
 
@@ -76,11 +67,11 @@ export default async function MobileSingleSitePage({ params }: { params: Promise
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/60">
                 <div className="text-[10px] font-bold text-slate-400 uppercase">Total Budget</div>
-                <div className="text-lg font-black text-slate-900 mt-0.5">₹{(Number(displaySite.budget)/100000).toFixed(1)}L</div>
+                <div className="text-lg font-black text-slate-900 mt-0.5">₹{(Number(site.budget)/100000).toFixed(1)}L</div>
               </div>
               <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200/60">
                 <div className="text-[10px] font-bold text-emerald-600 uppercase">Spent Amount</div>
-                <div className="text-lg font-black text-emerald-900 mt-0.5">₹{(Number(displaySite.spent)/100000).toFixed(1)}L</div>
+                <div className="text-lg font-black text-emerald-900 mt-0.5">₹{(Number(site.spent)/100000).toFixed(1)}L</div>
               </div>
             </div>
           </div>
@@ -91,7 +82,7 @@ export default async function MobileSingleSitePage({ params }: { params: Promise
             </div>
             <div>
               <div className="text-xs font-black text-blue-900 uppercase tracking-wide">Site Engineer Deployment</div>
-              <div className="text-[11px] text-blue-700 font-medium">Headcount Today: {displaySite.labour.length} Assigned Workers</div>
+              <div className="text-[11px] text-blue-700 font-medium">Headcount Today: {site.labour.length} Assigned Workers</div>
             </div>
           </div>
         )}
@@ -104,7 +95,7 @@ export default async function MobileSingleSitePage({ params }: { params: Promise
 
           <div className="grid grid-cols-1 gap-3">
             <Link
-              href={`/mobile/add-expense?siteId=${displaySite.id}`}
+              href={`/mobile/add-expense?siteId=${site.id}`}
               className="p-4 bg-white hover:bg-slate-50 active:scale-98 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between no-underline border-l-4 border-l-amber-500 transition-all text-inherit"
             >
               <div className="flex items-center gap-3">
@@ -120,7 +111,7 @@ export default async function MobileSingleSitePage({ params }: { params: Promise
             </Link>
 
             <Link
-              href={`/mobile/upload-bill?siteId=${displaySite.id}`}
+              href={`/mobile/upload-bill?siteId=${site.id}`}
               className="p-4 bg-white hover:bg-slate-50 active:scale-98 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between no-underline border-l-4 border-l-rose-500 transition-all text-inherit"
             >
               <div className="flex items-center gap-3">
@@ -136,7 +127,7 @@ export default async function MobileSingleSitePage({ params }: { params: Promise
             </Link>
 
             <Link
-              href={`/mobile/attendance?siteId=${displaySite.id}`}
+              href={`/mobile/attendance?siteId=${site.id}`}
               className="p-4 bg-white hover:bg-slate-50 active:scale-98 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between no-underline border-l-4 border-l-blue-500 transition-all text-inherit"
             >
               <div className="flex items-center gap-3">
@@ -152,7 +143,7 @@ export default async function MobileSingleSitePage({ params }: { params: Promise
             </Link>
 
             <Link
-              href={`/mobile/dpr?siteId=${displaySite.id}`}
+              href={`/mobile/dpr?siteId=${site.id}`}
               className="p-4 bg-white hover:bg-slate-50 active:scale-98 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between no-underline border-l-4 border-l-emerald-500 transition-all text-inherit"
             >
               <div className="flex items-center gap-3">
@@ -168,7 +159,7 @@ export default async function MobileSingleSitePage({ params }: { params: Promise
             </Link>
 
             <Link
-              href={`/mobile/site-photo?siteId=${displaySite.id}`}
+              href={`/mobile/site-photo?siteId=${site.id}`}
               className="p-4 bg-white hover:bg-slate-50 active:scale-98 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between no-underline border-l-4 border-l-purple-500 transition-all text-inherit"
             >
               <div className="flex items-center gap-3">
