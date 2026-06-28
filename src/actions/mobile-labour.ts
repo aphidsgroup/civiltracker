@@ -3,6 +3,7 @@
 import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { logActivity } from '@/lib/audit'
 
 export async function addMobileWorkerAction(formData: {
   name: string
@@ -37,6 +38,16 @@ export async function addMobileWorkerAction(formData: {
       dailyWage: Number(formData.dailyRate) || 650,
       isActive: true,
     }
+  })
+
+  await logActivity({
+    userId: user.id,
+    companyId: user.companyId,
+    action: 'CREATE',
+    module: 'LABOUR',
+    recordId: worker.id,
+    description: `${user.name ?? user.email} registered worker "${formData.name.trim()}" (${tradeVal}) at site`,
+    after: { name: formData.name, trade: tradeVal, dailyRate: formData.dailyRate },
   })
 
   revalidatePath('/mobile/attendance')
@@ -147,6 +158,19 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
 
   revalidatePath('/mobile/attendance')
   revalidatePath('/labour/attendance')
+
+  if (count > 0 && records[0]?.siteId) {
+    await logActivity({
+      userId: user.id,
+      companyId: user.companyId,
+      action: 'CREATE',
+      module: 'ATTENDANCE',
+      recordId: records[0].siteId,
+      description: `${user.name ?? user.email} marked attendance for ${count} worker(s) for today`,
+      after: { count, date: new Date().toLocaleDateString('en-IN') },
+    })
+  }
+
   return { success: true, count }
 }
 

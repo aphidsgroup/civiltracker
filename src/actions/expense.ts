@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import type { ExpenseCategory, PaymentMode } from '@/types'
 import { createApprovalAction } from './approvals'
+import { logActivity } from '@/lib/audit'
 
 export async function createExpenseAction(data: {
   siteId: string
@@ -26,7 +27,7 @@ export async function createExpenseAction(data: {
 
   await assertCanAccessSite(data.siteId)
 
-  const site = await prisma.site.findUnique({ where: { id: data.siteId }, select: { companyId: true } })
+  const site = await prisma.site.findUnique({ where: { id: data.siteId }, select: { companyId: true, name: true } })
   const companyId = site?.companyId || user.companyId!
 
   const expense = await prisma.expense.create({
@@ -66,6 +67,16 @@ export async function createExpenseAction(data: {
     description: data.notes || `Logged by ${user.name}`,
     priority: data.amount > 50000 ? 'HIGH' : 'NORMAL',
     approvalType: 'FINANCIAL',
+  })
+
+  await logActivity({
+    userId: user.id,
+    companyId,
+    action: 'CREATE',
+    module: data.secureUrl ? 'BILL_UPLOAD' : 'EXPENSE',
+    recordId: expense.id,
+    description: `${user.name ?? user.email} logged ₹${data.amount.toLocaleString('en-IN')} ${data.category.replace(/_/g, ' ')} expense on ${site?.name ?? data.siteId}`,
+    after: { amount: data.amount, category: data.category, site: site?.name },
   })
 
   revalidatePath('/dashboard')

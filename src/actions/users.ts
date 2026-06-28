@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/auth/require-permission'
 import { auth } from '@/lib/auth'
 import { Role } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { logActivity } from '@/lib/audit'
 import { revalidatePath } from 'next/cache'
 
 const EMPLOYEE_LIMIT = 15
@@ -89,6 +90,16 @@ export async function createUser(data: any) {
     },
   })
 
+  await logActivity({
+    userId: currentUser.id,
+    companyId,
+    action: 'CREATE',
+    module: 'USER',
+    recordId: newUser.id,
+    description: `${currentUser.name ?? currentUser.email} created new user "${data.name}" (${data.role.replace(/_/g, ' ')}) in the company`,
+    after: { name: data.name, role: data.role, email: data.email },
+  })
+
   revalidatePath('/settings/users')
   return { success: true, userId: newUser.id }
 }
@@ -130,6 +141,16 @@ export async function updateUser(userId: string, data: any) {
       role: data.role,
       isActive: data.isActive,
     },
+  })
+
+  await logActivity({
+    userId: currentUser.id,
+    companyId,
+    action: 'UPDATE',
+    module: 'USER',
+    recordId: userId,
+    description: `${currentUser.name ?? currentUser.email} updated user settings (role: ${data.role}, active: ${data.isActive})`,
+    after: { role: data.role, isActive: data.isActive },
   })
 
   revalidatePath('/settings/users')
@@ -175,6 +196,17 @@ export async function resetUserPassword(userId: string, newPassword: string) {
   await prisma.user.update({
     where: { id: userId },
     data: { passwordHash: hash },
+  })
+
+  const actor = await prisma.user.findUnique({ where: { id: session.user.id! }, select: { name: true, email: true } })
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true, members: { select: { companyId: true }, take: 1 } } })
+  await logActivity({
+    userId: session.user.id!,
+    companyId: target?.members?.[0]?.companyId ?? session.user.companyId,
+    action: 'UPDATE',
+    module: 'PASSWORD_RESET',
+    recordId: userId,
+    description: `${actor?.name ?? actor?.email ?? 'Admin'} reset password for "${target?.name ?? target?.email ?? userId}"`,
   })
 
   revalidatePath('/settings/users')

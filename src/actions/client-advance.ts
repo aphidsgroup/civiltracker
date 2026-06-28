@@ -59,16 +59,17 @@ export async function createClientAdvance(data: {
     },
   })
 
-  // Audit log (non-critical)
+  // Audit log
   try {
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id!,
-        companyId,
-        action: 'CREATE',
-        module: 'CLIENT_ADVANCE',
-        recordId: advance.id,
-      },
+    const { logActivity } = await import('@/lib/audit')
+    await logActivity({
+      userId: session.user.id!,
+      companyId,
+      action: 'CREATE',
+      module: 'CLIENT_ADVANCE',
+      recordId: advance.id,
+      description: `${session.user.name ?? session.user.email} recorded ₹${data.amount.toLocaleString('en-IN')} client advance — ${data.purpose.substring(0, 80)}`,
+      after: { amount: data.amount, purpose: data.purpose, siteId: data.siteId },
     })
   } catch {
     // Non-critical
