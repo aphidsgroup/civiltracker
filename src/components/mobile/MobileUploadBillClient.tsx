@@ -268,8 +268,6 @@ export default function MobileUploadBillClient({
         </div>
       </div>
 
-      </div>
-
       {/* Fixed Bottom Footer Button */}
       <div className="fixed bottom-0 left-0 right-0 max-w-[440px] mx-auto p-4 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-10px_25px_rgba(0,0,0,0.06)] z-40">
         <button
