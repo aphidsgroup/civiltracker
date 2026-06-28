@@ -44,36 +44,17 @@ export default async function UploadBillPage() {
             </div>
             
             <div className="flex flex-col md:col-span-2">
-              <label className="text-xs font-bold text-slate-500 mb-1.5">Project site</label>
-              <select name="siteId" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" required>
-                <option value="">Select site...</option>
-                {sites.map(s => (
-                  <option key={s.id} value={s.id}>{s.name} ({s.location})</option>
-                ))}
+              <label className="text-xs font-bold text-slate-500 mb-1.5">Expense Category</label>
+              <select name="category" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" required>
+                <option value="MATERIAL">Material</option>
+                <option value="LABOUR">Labour</option>
+                <option value="SUBCONTRACTOR">Subcontractor</option>
+                <option value="TRANSPORT">Transport</option>
+                <option value="TOOLS_EQUIPMENT">Tools & Equipment</option>
+                <option value="DIESEL">Diesel</option>
+                <option value="SITE_PETTY_CASH">Site Petty Cash</option>
+                <option value="MISCELLANEOUS">Miscellaneous</option>
               </select>
-            </div>
-            
-            <div className="flex flex-col">
-              <label className="text-xs font-bold text-slate-500 mb-1.5">Vendor / Supplier</label>
-              <input name="vendor" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" placeholder="Vendor name" required />
-            </div>
-            <div className="flex flex-col">
-              <label className="text-xs font-bold text-slate-500 mb-1.5">Bill number</label>
-              <input name="billNo" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" placeholder="e.g. INV-2026-001" />
-            </div>
-            
-            <div className="flex flex-col">
-              <label className="text-xs font-bold text-slate-500 mb-1.5">Amount (₹)</label>
-              <input name="amount" type="number" step="0.01" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" placeholder="0.00" required />
-            </div>
-            <div className="flex flex-col">
-              <label className="text-xs font-bold text-slate-500 mb-1.5">Bill Date</label>
-              <input name="date" type="date" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" defaultValue={new Date().toISOString().split('T')[0]} required />
-            </div>
-            
-            <div className="flex flex-col md:col-span-2">
-              <label className="text-xs font-bold text-slate-500 mb-1.5">Notes (Optional)</label>
-              <textarea name="notes" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white min-h-[100px]" placeholder="Any additional information..."></textarea>
             </div>
           </div>
           

@@ -29,13 +29,13 @@ export default function MobileUploadBillClient({
 
   const [formData, setFormData] = useState({
     siteId: sites[0]?.id || '',
-    amount: '84500',
+    amount: '0',
     category: 'MATERIAL' as ExpenseCategory,
-    paymentMode: 'UPI' as PaymentMode,
-    paidTo: 'Sree Dhanalakshmi Enterprises',
-    billNumber: 'INV-2418',
-    billDate: '24 Jun 2026',
-    notes: '120 bags UltraTech cement, received at gate by site store.'
+    paymentMode: 'CASH' as PaymentMode,
+    paidTo: 'To Be Updated',
+    billNumber: '',
+    billDate: '',
+    notes: ''
   })
 
   const categories: { id: ExpenseCategory; label: string }[] = [
@@ -268,103 +268,6 @@ export default function MobileUploadBillClient({
         </div>
       </div>
 
-      {/* Amount */}
-      <div className="mb-6">
-        <div className="flex justify-between items-baseline mb-1.5 px-0.5">
-          <span className="text-xs font-black text-[#647387] tracking-tight">Amount</span>
-          <span className="text-[11px] font-black text-[#dc2626]">required</span>
-        </div>
-        <div className="relative flex items-center bg-white rounded-2xl border-2 border-[#1e40af] shadow-xs px-4 py-1 focus-within:ring-4 focus-within:ring-blue-100 transition-all">
-          <span className="text-2xl font-black text-[#1e293b] select-none mr-2">₹</span>
-          <input
-            type="text"
-            placeholder="84,500"
-            value={formData.amount}
-            onChange={e => setFormData(p => ({ ...p, amount: e.target.value }))}
-            className="w-full py-2.5 bg-transparent border-none text-2xl font-black text-[#1e293b] placeholder:text-[#cbd5e1] focus:outline-none"
-          />
-        </div>
-      </div>
-
-      {/* Vendor / Supplier */}
-      <div className="mb-6">
-        <label className="text-xs font-black text-[#647387] tracking-tight block mb-1.5 px-0.5">
-          Vendor / Supplier
-        </label>
-        <input
-          type="text"
-          placeholder="Sree Dhanalakshmi Enterprises"
-          value={formData.paidTo}
-          onChange={e => setFormData(p => ({ ...p, paidTo: e.target.value }))}
-          className="w-full px-4 py-3 rounded-xl bg-white border border-[#cbd5e1] text-xs font-bold text-[#1e293b] placeholder:text-[#94a3b8] focus:outline-none focus:border-[#1e40af] shadow-2xs box-border transition-colors"
-        />
-      </div>
-
-      {/* Two Column Grid: Bill number & Bill date */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div>
-          <label className="text-xs font-black text-[#647387] tracking-tight block mb-1.5 px-0.5">
-            Bill number
-          </label>
-          <input
-            type="text"
-            placeholder="INV-2418"
-            value={formData.billNumber}
-            onChange={e => setFormData(p => ({ ...p, billNumber: e.target.value }))}
-            className="w-full px-4 py-3 rounded-xl bg-white border border-[#cbd5e1] text-xs font-bold text-[#1e293b] placeholder:text-[#cbd5e1] focus:outline-none focus:border-[#1e40af] shadow-2xs box-border"
-          />
-        </div>
-
-        <div>
-          <label className="text-xs font-black text-[#647387] tracking-tight block mb-1.5 px-0.5">
-            Bill date
-          </label>
-          <input
-            type="text"
-            value={formData.billDate}
-            onChange={e => setFormData(p => ({ ...p, billDate: e.target.value }))}
-            className="w-full px-4 py-3 rounded-xl bg-white border border-[#cbd5e1] text-xs font-bold text-[#1e293b] focus:outline-none focus:border-[#1e40af] shadow-2xs box-border"
-          />
-        </div>
-      </div>
-
-      {/* Payment mode */}
-      <div className="mb-6">
-        <label className="text-xs font-black text-[#647387] tracking-tight block mb-2 px-0.5">
-          Payment mode
-        </label>
-        <div className="grid grid-cols-4 gap-2">
-          {paymentModes.map((pm) => {
-            const active = formData.paymentMode === pm.id
-            return (
-              <button
-                key={pm.id}
-                type="button"
-                onClick={() => setFormData(p => ({ ...p, paymentMode: pm.id }))}
-                className={`py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer border ${
-                  active
-                    ? 'bg-[#1e40af] text-white border-[#1e40af] shadow-xs'
-                    : 'bg-white text-[#475569] border-[#cbd5e1] hover:bg-slate-50'
-                }`}
-              >
-                {pm.label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Notes */}
-      <div className="mb-6">
-        <label className="text-xs font-black text-[#647387] tracking-tight block mb-1.5 px-0.5">
-          Notes
-        </label>
-        <textarea
-          placeholder="120 bags UltraTech cement, received at gate by site store."
-          value={formData.notes}
-          onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
-          className="w-full px-4 py-3 rounded-2xl bg-white border border-[#cbd5e1] text-xs font-bold text-[#1e293b] placeholder:text-[#94a3b8] focus:outline-none focus:border-[#1e40af] min-h-[85px] leading-relaxed shadow-2xs box-border resize-none"
-        />
       </div>
 
       {/* Fixed Bottom Footer Button */}
