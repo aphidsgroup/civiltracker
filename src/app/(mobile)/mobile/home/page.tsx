@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma'
 import Link from 'next/link'
 import {
   Building2, ChevronDown, Bell, ArrowRight, Wallet,
-  FileText, Camera, ListTodo, ClipboardList, CheckCircle2, Search
+  FileText, Camera, ListTodo, ClipboardList, CheckCircle2, Search, IndianRupee
 } from 'lucide-react'
 import PWAInstallBanner from '@/components/mobile/PWAInstallBanner'
 import SiteSelectorClient from '@/components/mobile/SiteSelectorClient'
@@ -70,6 +70,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
     todayPhotos,
     pendingApprovals,
     recentExpenses,
+    clientAdvancesAgg,
   ] = await Promise.all([
     siteId ? prisma.expense.aggregate({
       where: { siteId, createdAt: { gte: today, lte: todayEnd } },
@@ -103,9 +104,15 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
       take: 2,
       select: { id: true, description: true, amount: true, paidTo: true, approvalStatus: true, createdAt: true, category: true },
     }) : Promise.resolve([]),
+
+    siteId ? prisma.payment.aggregate({
+      where: { siteId, type: 'ADVANCE' },
+      _sum: { amount: true },
+    }) : Promise.resolve({ _sum: { amount: null } }),
   ])
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
+  const totalAdvances = Number(clientAdvancesAgg._sum.amount ?? 0)
 
   const budget = Number(activeSiteRecord?.budget ?? 0)
   const spent = Number(activeSiteRecord?.spent ?? 0)
@@ -281,6 +288,23 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
             </div>
             <div className="text-[14px] font-extrabold text-slate-900 leading-tight mb-1">Site Photos</div>
             <div className="text-[11.5px] font-medium text-slate-500">{todayPhotos} uploaded today</div>
+          </Link>
+
+          <Link
+            href="/mobile/add-client-advance"
+            className="p-4 rounded-[20px] bg-white border border-slate-100 shadow-sm active:scale-95 transition-all no-underline col-span-2"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-[12px] bg-[#fef3c7] text-[#b45309] flex items-center justify-center flex-shrink-0">
+                <IndianRupee size={20} strokeWidth={2.2} />
+              </div>
+              <div>
+                <div className="text-[14px] font-extrabold text-slate-900 leading-tight mb-0.5">Client Advance</div>
+                <div className="text-[11.5px] font-medium text-slate-500">
+                  {totalAdvances > 0 ? `₹${totalAdvances.toLocaleString('en-IN')} received` : 'Log advance received from client'}
+                </div>
+              </div>
+            </div>
           </Link>
         </div>
       </div>
