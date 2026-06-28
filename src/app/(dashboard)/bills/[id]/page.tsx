@@ -68,43 +68,8 @@ export default async function BillDetailPage({
     }
   }
 
-  // Sample fallback record if demo db doesn't match ID so UI looks stunning
   if (!billRecord) {
-    const baseAmt = 125423
-    const gstAmt = 22576
-    const totAmt = 148000
-
-    billRecord = {
-      id: params.id,
-      description: 'Supply of 53 Grade OPC Cement (400 Bags)',
-      amount: totAmt,
-      baseAmount: baseAmt,
-      gstAmount: gstAmt,
-      category: 'MATERIAL',
-      paymentMode: 'BANK_TRANSFER',
-      approvalStatus: 'APPROVED',
-      notes: 'Delivered to Site Store #2. Verified by quality control engineer against Challan #904.',
-      invoiceNumber: `INV-2026-9042`,
-      invoiceDate: new Date(),
-      gstNumber: '27AABCU9603R1ZM',
-      site: { name: 'Metro Heights Tower B', location: 'Baner, Pune' },
-      vendor: {
-        name: 'Buildwell Cement & Steel Syndicate',
-        gst: '27AABCU9603R1ZM',
-        phone: '+91 98230 14520',
-        email: 'dispatch@buildwellsyndicate.com',
-        address: 'Gate No 104, Hinjewadi Phase 2, Pune - 411057'
-      },
-      paymentHistory: [
-        { id: 'pay-1', date: new Date(Date.now() - 86400000), amount: 50000, mode: 'BANK_TRANSFER', reference: 'NEFT-IBKL0002934', status: 'COMPLETED' },
-        { id: 'pay-2', date: new Date(), amount: 98000, mode: 'BANK_TRANSFER', reference: 'NEFT-IBKL0003112', status: 'PROCESSING' }
-      ],
-      timeline: [
-        { id: 't-1', action: 'Bill Created & Submitted', actor: 'Vikram Deshmukh', date: new Date(Date.now() - 172800000), status: 'SUBMITTED', note: 'Invoice #INV-2026-9042 submitted for 400 cement bags.' },
-        { id: 't-2', action: 'Quantity Verification', actor: 'Amit Patel (Store Manager)', date: new Date(Date.now() - 129600000), status: 'VERIFIED', note: 'Challan matched. Stock register Entry #412.' },
-        { id: 't-3', action: 'Financial Audit & Sign-off', actor: 'Neeta Rane (Accounts Head)', date: new Date(Date.now() - 43200000), status: 'APPROVED', note: 'GSTIN verified on GST portal. Approved for bank payout.' }
-      ]
-    }
+    redirect('/bills')
   }
 
   const getStatusBadge = (status: string) => {

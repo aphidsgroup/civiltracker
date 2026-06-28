@@ -11,12 +11,6 @@ const FEATURES = [
   { icon: '📦', title: 'Materials & Inventory', desc: 'Stock levels, purchase requests and vendor orders' },
 ]
 
-const DEMO_USERS = [
-  { role: 'Super Admin', email: 'admin@civiltracker.in', password: 'Admin@123456', color: '#5b47b8' },
-  { role: 'Company Admin', email: 'arun@madras-crafters.in', password: 'Admin@123456', color: '#fc6e20' },
-  { role: 'Site Engineer', email: 'murugan@madras-crafters.in', password: 'Admin@123456', color: '#138a4e' },
-  { role: 'Client', email: 'client@annanagar.in', password: 'Admin@123456', color: '#fc6e20' },
-]
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -135,27 +129,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-7">
-            <div className="flex items-center gap-2 mb-2.5">
-              <span className="flex-1 h-px bg-[#e4eaf0]" />
-              <span className="text-[11px] font-bold text-[#8a9ab0] uppercase tracking-[0.08em]">Try demo account</span>
-              <span className="flex-1 h-px bg-[#e4eaf0]" />
-            </div>
-            <div className="flex flex-col gap-2">
-              {DEMO_USERS.map(u => (
-                <button key={u.email} type="button"
-                  onClick={() => { setEmail(u.email); setPassword(u.password); setError('') }}
-                  className="flex items-center gap-3 px-3.5 py-[11px] rounded-[11px] border-[1.5px] border-[#e4eaf0] bg-white hover:border-[#fc6e20] hover:bg-[#fff7ed] text-left w-full transition-all cursor-pointer">
-                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: u.color }} />
-                  <div>
-                    <div className="text-[12.5px] font-bold text-[#16273a]">{u.role}</div>
-                    <div className="text-[11.5px] text-[#7a8fa3] font-medium mt-0.5">{u.email}</div>
-                  </div>
-                  <div className="ml-auto text-[#b0bec8] text-sm">↗</div>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>

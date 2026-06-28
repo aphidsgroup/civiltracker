@@ -106,7 +106,7 @@ export default function MobilePhotoClient({
       setPreviewUrl(null)
       setCaption('')
     } catch {
-      // ignore client error in fallback demo
+      // Ignore errors for now
     } finally {
       setSaving(false)
     }
@@ -127,7 +127,7 @@ export default function MobilePhotoClient({
         <div className="min-w-0 flex-1">
           <h1 className="text-[19px] font-black tracking-tight text-[#1e293b] m-0 leading-tight">Site Photos</h1>
           <p className="text-[11.5px] font-bold text-[#647387] m-0 truncate mt-0.5">
-            Anna Nagar Villa &middot; photo diary
+            {matchedSite?.name || 'All Sites'} &middot; photo diary
           </p>
         </div>
       </div>

@@ -45,10 +45,6 @@ export default async function LabourAttendancePage() {
     advance: Number(l.attendance[0]?.advance) || 0
   }))
 
-  const fallbackSites = sites.length > 0 ? sites : [
-    { id: 'site-a', name: 'Metro Heights Tower A' },
-    { id: 'site-b', name: 'Green Valley Villas' }
-  ]
 
   const todayStr = new Date().toLocaleDateString('en-IN', {
     weekday: 'long',
@@ -85,7 +81,7 @@ export default async function LabourAttendancePage() {
       {/* Main Interactive Table Component */}
       <AttendanceRegisterClient
         initialLabour={formattedLabour}
-        sites={fallbackSites}
+        sites={sites}
         dateString={todayStr}
       />
     </div>

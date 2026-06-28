@@ -29,48 +29,7 @@ export default async function ClientPortalProjectsPage() {
   // Exact prompt query requirement
   const rawProjects = await prisma.site.findMany({ where: { companyId: client.companyId }, orderBy: { createdAt: 'desc' } });
 
-  // Sample fallback projects if demo client has no sites attached so UI looks stunning
-  const projects = rawProjects.length > 0 ? rawProjects : [
-    {
-      id: 'site-client-1',
-      name: 'Metro Heights Tower B (Luxury Residencies)',
-      location: 'Baner, Pune',
-      status: 'ACTIVE',
-      progress: 68,
-      areaSqft: 45000,
-      budget: 125000000,
-      spent: 85000000,
-      startDate: new Date('2025-01-10'),
-      targetEndDate: new Date('2026-12-31'),
-      currentStage: 'RCC Framing & Slab 8'
-    },
-    {
-      id: 'site-client-2',
-      name: 'Green Valley Twin Villas (Phase 1)',
-      location: 'Wakad, Pune',
-      status: 'ACTIVE',
-      progress: 92,
-      areaSqft: 12000,
-      budget: 35000000,
-      spent: 32000000,
-      startDate: new Date('2024-06-15'),
-      targetEndDate: new Date('2026-08-30'),
-      currentStage: 'Interior Plastering & MEP'
-    },
-    {
-      id: 'site-client-3',
-      name: 'Apex Commercial Tech Park',
-      location: 'Hinjewadi Phase 1, Pune',
-      status: 'PLANNING',
-      progress: 15,
-      areaSqft: 80000,
-      budget: 280000000,
-      spent: 42000000,
-      startDate: new Date('2026-03-01'),
-      targetEndDate: new Date('2028-06-30'),
-      currentStage: 'Excavation & Shoring'
-    }
-  ]
+  const projects = rawProjects;
 
   const milestonesTemplate = [
     { name: 'Site Mobilization & Excavation', threshold: 10 },
