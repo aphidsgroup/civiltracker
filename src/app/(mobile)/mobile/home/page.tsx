@@ -242,7 +242,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
 
         <div className="grid grid-cols-2 gap-3.5">
           <Link
-            href="/mobile/upload-bill"
+            href={siteId ? `/mobile/upload-bill?siteId=${siteId}` : "/mobile/upload-bill"}
             className="p-4 rounded-[20px] bg-white border border-slate-100 shadow-sm active:scale-95 transition-all no-underline relative"
           >
             {pendingBillsCount > 0 && (
@@ -258,7 +258,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
           </Link>
 
           <Link
-            href="/mobile/add-expense"
+            href={siteId ? `/mobile/add-expense?siteId=${siteId}` : "/mobile/add-expense"}
             className="p-4 rounded-[20px] bg-white border border-slate-100 shadow-sm active:scale-95 transition-all no-underline"
           >
             <div className="w-10 h-10 rounded-[12px] bg-[#ecfdf5] text-[#047857] flex items-center justify-center mb-3">
@@ -269,7 +269,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
           </Link>
 
           <Link
-            href="/mobile/attendance"
+            href={siteId ? `/mobile/attendance?siteId=${siteId}` : "/mobile/attendance"}
             className="p-4 rounded-[20px] bg-white border border-slate-100 shadow-sm active:scale-95 transition-all no-underline"
           >
             <div className="w-10 h-10 rounded-[12px] bg-[#fef3c7] text-[#b45309] flex items-center justify-center mb-3">
@@ -280,7 +280,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
           </Link>
 
           <Link
-            href="/mobile/site-photo"
+            href={siteId ? `/mobile/site-photo?siteId=${siteId}` : "/mobile/site-photo"}
             className="p-4 rounded-[20px] bg-white border border-slate-100 shadow-sm active:scale-95 transition-all no-underline"
           >
             <div className="w-10 h-10 rounded-[12px] bg-[#f3e8ff] text-[#7e22ce] flex items-center justify-center mb-3">
@@ -291,7 +291,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
           </Link>
 
           <Link
-            href="/mobile/add-client-advance"
+            href={siteId ? `/mobile/add-client-advance?siteId=${siteId}` : "/mobile/add-client-advance"}
             className="p-4 rounded-[20px] bg-white border border-slate-100 shadow-sm active:scale-95 transition-all no-underline col-span-2"
           >
             <div className="flex items-center gap-3">
@@ -311,7 +311,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
 
       {/* Daily Progress Report Action Card */}
       <Link
-        href="/mobile/dpr"
+        href={siteId ? `/mobile/dpr?siteId=${siteId}` : "/mobile/dpr"}
         className="block bg-[#0f172a] active:scale-98 text-white p-[18px] rounded-[18px] shadow-md transition-all no-underline"
       >
         <div className="flex items-center justify-between">

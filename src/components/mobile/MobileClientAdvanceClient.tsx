@@ -14,21 +14,26 @@ interface Site {
 
 interface Props {
   sites: Site[]
+  defaultSiteId?: string
 }
 
-export default function MobileClientAdvanceClient({ sites }: Props) {
+export default function MobileClientAdvanceClient({ sites, defaultSiteId }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [changeSite, setChangeSite] = useState(false)
 
   const now = new Date()
   const localDatetime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
     .toISOString()
     .slice(0, 16)
 
+  const matchedSite = sites.find(s => s.id === defaultSiteId)
+  const initialSiteId = matchedSite ? matchedSite.id : (sites[0]?.id ?? '')
+
   const [form, setForm] = useState({
-    siteId: sites[0]?.id ?? '',
+    siteId: initialSiteId,
     amount: '',
     purpose: '',
     receivedAt: localDatetime,
@@ -96,13 +101,32 @@ export default function MobileClientAdvanceClient({ sites }: Props) {
 
         {/* Site Selection */}
         <div>
-          <label className="text-xs font-black text-[#647387] tracking-tight block mb-2 px-0.5 flex items-center gap-1.5">
-            <Building2 size={12} />
-            Project / Site
-          </label>
+          <div className="flex items-center justify-between mb-2 px-0.5">
+            <label className="text-xs font-black text-[#647387] tracking-tight flex items-center gap-1.5">
+              <Building2 size={12} />
+              Project / Site
+            </label>
+            {matchedSite && !changeSite && (
+              <button
+                type="button"
+                onClick={() => setChangeSite(true)}
+                className="text-[11px] font-bold text-blue-600 hover:underline focus:outline-none"
+              >
+                Change project
+              </button>
+            )}
+          </div>
           {sites.length === 0 ? (
             <div className="text-xs text-slate-400 bg-slate-50 rounded-xl px-4 py-3 border border-slate-200">
               No active sites found. Contact your admin.
+            </div>
+          ) : matchedSite && !changeSite ? (
+            <div className="w-full px-4 py-3 rounded-xl bg-blue-50/70 border border-blue-200 flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-2.5 overflow-hidden">
+                <div className="w-2 h-2 rounded-full bg-blue-600 flex-shrink-0" />
+                <span className="text-sm font-black text-blue-950 truncate">{matchedSite.name}</span>
+                <span className="text-xs font-semibold text-blue-700/80 truncate">({matchedSite.location})</span>
+              </div>
             </div>
           ) : (
             <select

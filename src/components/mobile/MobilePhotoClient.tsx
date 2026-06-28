@@ -19,10 +19,15 @@ type SiteOption = {
 }
 
 export default function MobilePhotoClient({
-  sites
+  sites,
+  defaultSiteId,
 }: {
   sites: SiteOption[]
+  defaultSiteId?: string
 }) {
+  const matchedSite = sites.find(s => s.id === defaultSiteId)
+  const initialSiteId = matchedSite ? matchedSite.id : (sites[0]?.id || '')
+
   const [selectedCat, setSelectedCat] = useState('All')
   const [showModal, setShowModal] = useState(false)
 
@@ -37,7 +42,7 @@ export default function MobilePhotoClient({
   ])
 
   // Capture Modal State
-  const [siteId, setSiteId] = useState(sites[0]?.id || '')
+  const [siteId, setSiteId] = useState(initialSiteId)
   const [caption, setCaption] = useState('')
   const [captureTag, setCaptureTag] = useState('Civil')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)

@@ -8,9 +8,11 @@ export const metadata = {
   description: 'Record advance payments received from clients.',
 }
 
-export default async function MobileClientAdvancePage() {
+export default async function MobileClientAdvancePage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
   const user = await requireUser()
   if (!user.companyId) redirect('/mobile/home')
+
+  const { siteId } = await searchParams
 
   const sites = await prisma.site.findMany({
     where: {
@@ -22,5 +24,5 @@ export default async function MobileClientAdvancePage() {
     orderBy: { name: 'asc' },
   })
 
-  return <MobileClientAdvanceClient sites={sites} />
+  return <MobileClientAdvanceClient sites={sites} defaultSiteId={siteId} />
 }

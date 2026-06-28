@@ -9,10 +9,12 @@ export const metadata = {
   description: 'Mark worker daily attendance, log contractor headcount, and manage advance payments.',
 }
 
-export default async function MobileAttendancePage() {
+export default async function MobileAttendancePage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
   const { companyId } = session.user
+
+  const { siteId } = await searchParams
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -24,6 +26,7 @@ export default async function MobileAttendancePage() {
         attendance: { where: { date: today }, take: 1 },
         site: { select: { name: true } },
       },
+
       orderBy: { name: 'asc' },
     }),
     prisma.site.findMany({
@@ -43,7 +46,6 @@ export default async function MobileAttendancePage() {
     { id: 'demo-site-2', name: 'Green Valley Villas' }
   ]
 
-  // Separate into Today's Roster vs Other Company Workers
   const mapLabour = (l: any) => ({
     id: l.id,
     name: l.name,
@@ -52,13 +54,14 @@ export default async function MobileAttendancePage() {
     dailyRate: Number(l.dailyWage) || 650,
     siteId: l.siteId,
     siteName: l.site?.name || 'Assigned Site',
-    status: l.attendance[0]?.status || 'PRESENT',
+    status: l.attendance[0]?.status || 'UNMARKED',
     advance: Number(l.attendance[0]?.advance) || 0,
     startTime: l.attendance[0]?.startTime || null
   })
 
-  const todayRoster = allLabour.filter(l => l.attendance.length > 0).map(mapLabour)
-  const otherWorkers = allLabour.filter(l => l.attendance.length === 0).map(mapLabour)
+  const mapped = allLabour.map(mapLabour)
+  const todayRoster = mapped.filter(l => l.status !== 'UNMARKED')
+  const otherWorkers = mapped.filter(l => l.status === 'UNMARKED')
 
   const initialContractors = contractorAttendances.map(ca => ({
     id: ca.id,
@@ -71,26 +74,19 @@ export default async function MobileAttendancePage() {
   }))
 
   return (
-    <div className="p-4 sm:p-6 max-w-lg mx-auto space-y-6 select-none">
-      {/* Header Banner */}
-      <div className="flex items-center justify-between bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-5 rounded-3xl text-white shadow-xl">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-400/30">
-            <Users size={24} />
-          </div>
+    <div className="min-h-screen bg-[#f8fafc] pb-32 font-sans select-none text-[#1e293b]">
+      {/* Header */}
+      <div className="bg-[#0f172a] text-white pt-6 pb-8 px-5 rounded-b-[32px] shadow-lg mb-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 rounded-full blur-2xl -mr-12 -mt-12 pointer-events-none" />
+        <div className="flex items-center justify-between mb-4 relative z-10">
           <div>
-            <div className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-amber-300">
-              <Sparkles size={11} />
-              <span>FIELD ROSTER OCR</span>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/10 text-amber-300 text-[11px] font-extrabold mb-2">
+              <Sparkles size={12} /> Daily Muster Roll
             </div>
-            <h1 className="text-xl font-black tracking-tight text-white m-0">Daily Roster</h1>
+            <h1 className="text-2xl font-black tracking-tight text-white m-0">Field Attendance</h1>
           </div>
-        </div>
-
-        <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 text-right">
-          <div className="text-[10px] text-slate-300 font-bold uppercase">Date</div>
-          <div className="text-xs font-black text-white whitespace-nowrap">
-            {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+          <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center text-white backdrop-blur-md">
+            <Users size={24} />
           </div>
         </div>
       </div>
@@ -100,6 +96,7 @@ export default async function MobileAttendancePage() {
         otherWorkers={otherWorkers} 
         initialContractors={initialContractors}
         sites={fallbackSites} 
+        defaultSiteId={siteId}
       />
     </div>
   )

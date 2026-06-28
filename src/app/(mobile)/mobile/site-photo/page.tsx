@@ -7,8 +7,9 @@ export const metadata = {
   description: 'Capture progress photos with auto-tagged GPS coordinates and time stamps.',
 }
 
-export default async function MobileSitePhotoPage() {
+export default async function MobileSitePhotoPage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
   const user = await requireUser()
+  const { siteId } = await searchParams
 
   const sites = user.companyId
     ? await prisma.site.findMany({
@@ -23,5 +24,5 @@ export default async function MobileSitePhotoPage() {
     { id: 'site-b', name: 'Metro Heights Tower A' }
   ]
 
-  return <MobilePhotoClient sites={fallbackSites} />
+  return <MobilePhotoClient sites={fallbackSites} defaultSiteId={siteId} />
 }

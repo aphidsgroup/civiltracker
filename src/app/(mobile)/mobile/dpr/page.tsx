@@ -7,12 +7,14 @@ import { Role } from '@prisma/client'
 import { createApprovalAction } from '@/actions/approvals'
 import { ClipboardList, Send } from 'lucide-react'
 
-export default async function MobileDprPage() {
+export default async function MobileDprPage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
   const companyId = session.user.companyId
   if (!companyId) redirect('/login')
+
+  const { siteId } = await searchParams
 
   const sites = await prisma.site.findMany({
     where: { companyId, deletedAt: null },
@@ -71,7 +73,7 @@ export default async function MobileDprPage() {
       <form action={submitDpr} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-4">
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Site</label>
-          <select name="siteId" className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm" required>
+          <select name="siteId" defaultValue={siteId || ""} className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm" required>
             <option value="">Select a site...</option>
             {sites.map(s => (
               <option key={s.id} value={s.id}>{s.name}</option>

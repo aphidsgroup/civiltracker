@@ -14,10 +14,12 @@ type SiteOpt = {
 
 export default function MobileAddExpenseClient({
   sites,
-  defaultSiteName
+  defaultSiteName,
+  defaultSiteId,
 }: {
   sites: SiteOpt[]
   defaultSiteName: string
+  defaultSiteId?: string
 }) {
   const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
@@ -27,8 +29,11 @@ export default function MobileAddExpenseClient({
   const [gpsCoords, setGpsCoords] = useState<string | null>(null)
   const [gpsLoading, setGpsLoading] = useState(false)
 
+  const matchedSite = sites.find(s => s.id === defaultSiteId)
+  const initialSiteId = matchedSite ? matchedSite.id : (sites[0]?.id || '')
+
   const [formData, setFormData] = useState({
-    siteId: sites[0]?.id || '',
+    siteId: initialSiteId,
     amount: '',
     category: 'DIESEL' as ExpenseCategory,
     paymentMode: 'UPI' as PaymentMode,

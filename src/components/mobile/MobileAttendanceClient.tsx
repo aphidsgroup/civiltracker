@@ -53,13 +53,18 @@ export default function MobileAttendanceClient({
   todayRoster,
   otherWorkers,
   initialContractors,
-  sites
+  sites,
+  defaultSiteId,
 }: {
   todayRoster: LabourItem[]
   otherWorkers: LabourItem[]
   initialContractors: ContractorItem[]
   sites: SiteOption[]
+  defaultSiteId?: string
 }) {
+  const matchedSite = sites.find(s => s.id === defaultSiteId)
+  const initialSiteId = matchedSite ? matchedSite.id : (sites[0]?.id || '')
+
   const [labourList, setLabourList] = useState<LabourItem[]>(todayRoster)
   const [availableWorkers, setAvailableWorkers] = useState<LabourItem[]>(otherWorkers)
   const [contractorList, setContractorList] = useState<ContractorItem[]>(initialContractors)
@@ -90,7 +95,7 @@ export default function MobileAttendanceClient({
   const [newTrade, setNewTrade] = useState('HELPER')
   const [newCustomTrade, setNewCustomTrade] = useState('')
   const [newRate, setNewRate] = useState('650')
-  const [newSiteId, setNewSiteId] = useState(sites[0]?.id || '')
+  const [newSiteId, setNewSiteId] = useState(initialSiteId)
   const [newStartTime, setNewStartTime] = useState(() => {
     const now = new Date()
     return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
@@ -120,7 +125,7 @@ export default function MobileAttendanceClient({
   const [conCustomType, setConCustomType] = useState('')
   const [conCount, setConCount] = useState('10')
   const [conAdvance, setConAdvance] = useState('0')
-  const [conSiteId, setConSiteId] = useState(sites[0]?.id || '')
+  const [conSiteId, setConSiteId] = useState(initialSiteId)
   const [conStartTime, setConStartTime] = useState(() => {
     const now = new Date()
     return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`

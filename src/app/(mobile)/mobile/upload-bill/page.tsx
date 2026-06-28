@@ -7,8 +7,9 @@ export const metadata = {
   description: 'Scan vendor bills and OCR challans auto-tagged with date, time, and GPS telemetry.',
 }
 
-export default async function MobileUploadBillPage() {
+export default async function MobileUploadBillPage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
   const user = await requireUser()
+  const { siteId } = await searchParams
 
   const sites = user.companyId
     ? await prisma.site.findMany({
@@ -23,5 +24,7 @@ export default async function MobileUploadBillPage() {
     { id: 'site-b', name: 'Metro Heights Tower A' }
   ]
 
-  return <MobileUploadBillClient sites={fallbackSites} defaultSiteName={fallbackSites[0].name} />
+  const matchedSite = fallbackSites.find(s => s.id === siteId) || fallbackSites[0]
+
+  return <MobileUploadBillClient sites={fallbackSites} defaultSiteName={matchedSite.name} defaultSiteId={siteId} />
 }

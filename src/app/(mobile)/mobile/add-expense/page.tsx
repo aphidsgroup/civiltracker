@@ -7,8 +7,9 @@ export const metadata = {
   description: 'Log petty cash expenditures and attach GPS-tagged receipt vouchers.',
 }
 
-export default async function MobileAddExpensePage() {
+export default async function MobileAddExpensePage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
   const user = await requireUser()
+  const { siteId } = await searchParams
 
   const sites = user.companyId
     ? await prisma.site.findMany({
@@ -23,5 +24,7 @@ export default async function MobileAddExpensePage() {
     { id: 'site-b', name: 'Metro Heights Tower A' }
   ]
 
-  return <MobileAddExpenseClient sites={fallbackSites} defaultSiteName={fallbackSites[0].name} />
+  const matchedSite = fallbackSites.find(s => s.id === siteId) || fallbackSites[0]
+
+  return <MobileAddExpenseClient sites={fallbackSites} defaultSiteName={matchedSite.name} defaultSiteId={siteId} />
 }
