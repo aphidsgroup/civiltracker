@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { Role } from '@prisma/client'
 
-const publicPaths = ['/login', '/api/auth', '/api/health', '/offline', '/api/admin']
+const publicPaths = ['/login', '/api/auth', '/api/health', '/offline']
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
