@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { Settings, Sliders, AlertTriangle } from 'lucide-react'
+import SuperAdminPasswordForm from '@/components/super-admin/SuperAdminPasswordForm'
 
 export default async function SettingsPage() {
   const session = await auth()
@@ -63,6 +64,8 @@ export default async function SettingsPage() {
             </div>
           </div>
         ))}
+
+        <SuperAdminPasswordForm />
 
         <div className="bg-rose-50/50 rounded-2xl border border-rose-200 p-6 shadow-sm">
           <div className="text-base font-bold text-rose-900 mb-1 flex items-center gap-2">
