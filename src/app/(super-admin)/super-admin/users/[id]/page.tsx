@@ -2,21 +2,9 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { revalidatePath } from 'next/cache'
-import { ArrowLeft, Shield, User, Building2 } from 'lucide-react'
-import { resetUserPassword } from '@/actions/users'
+import { ArrowLeft, User, Building2, Clock } from 'lucide-react'
 import { deleteUser } from '@/actions/super-admin'
-
-async function handleReset(formData: FormData) {
-  'use server'
-  const userId = formData.get('userId') as string
-  const newPassword = formData.get('newPassword') as string
-  const confirmPassword = formData.get('confirmPassword') as string
-  if (newPassword !== confirmPassword) throw new Error('Passwords do not match.')
-  await resetUserPassword(userId, newPassword)
-  revalidatePath('/super-admin/users')
-  redirect('/super-admin/users')
-}
+import SetPasswordPanel from '@/components/super-admin/SetPasswordPanel'
 
 export default async function SAUserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -42,6 +30,17 @@ export default async function SAUserDetailPage({ params }: { params: Promise<{ i
     await deleteUser(userId)
   }
 
+  const roleColors: Record<string, string> = {
+    COMPANY_ADMIN: 'bg-purple-100 text-purple-700',
+    SITE_ENGINEER: 'bg-blue-100 text-blue-700',
+    PROJECT_MANAGER: 'bg-indigo-100 text-indigo-700',
+    SUPERVISOR: 'bg-teal-100 text-teal-700',
+    ACCOUNTANT: 'bg-sky-100 text-sky-700',
+    PURCHASE_MANAGER: 'bg-cyan-100 text-cyan-700',
+    CLIENT: 'bg-amber-100 text-amber-700',
+    SUPER_ADMIN: 'bg-rose-100 text-rose-700',
+  }
+
   return (
     <div className="min-h-screen bg-slate-50/50">
       {/* Header */}
@@ -55,7 +54,7 @@ export default async function SAUserDetailPage({ params }: { params: Promise<{ i
           </Link>
           <div>
             <h1 className="text-lg font-extrabold text-slate-800 tracking-tight">Manage User</h1>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">Super Admin — Reset Password & View Details</p>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">Super Admin — Set Password & View Details</p>
           </div>
         </div>
         {/* Delete User */}
@@ -90,12 +89,14 @@ export default async function SAUserDetailPage({ params }: { params: Promise<{ i
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mt-5 pt-5 border-t border-slate-100">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-5 pt-5 border-t border-slate-100">
             <div className="flex items-center gap-2.5 p-3 bg-slate-50 rounded-xl">
               <User size={14} className="text-[#fc6e20] flex-shrink-0" />
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Role</div>
-                <div className="text-sm font-bold text-slate-800 mt-0.5">{user.role.replace(/_/g, ' ')}</div>
+                <div className={`text-xs font-bold mt-0.5 px-1.5 py-0.5 rounded inline-block ${roleColors[user.role] ?? 'bg-slate-100 text-slate-700'}`}>
+                  {user.role.replace(/_/g, ' ')}
+                </div>
               </div>
             </div>
             {member && (
@@ -107,65 +108,22 @@ export default async function SAUserDetailPage({ params }: { params: Promise<{ i
                 </div>
               </div>
             )}
+            <div className="flex items-center gap-2.5 p-3 bg-slate-50 rounded-xl">
+              <Clock size={14} className="text-[#fc6e20] flex-shrink-0" />
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Last Login</div>
+                <div className="text-xs font-bold text-slate-800 mt-0.5">
+                  {user.lastLoginAt
+                    ? new Date(user.lastLoginAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : 'Never'}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Reset Password Card */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-amber-50/50">
-            <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
-              <Shield size={16} className="text-amber-600" />
-            </div>
-            <div>
-              <div className="text-sm font-extrabold text-slate-800">Reset Password</div>
-              <div className="text-xs text-slate-500 font-medium">Set a new password for this user</div>
-            </div>
-          </div>
-
-          <form action={handleReset} className="p-6 space-y-4">
-            <input type="hidden" name="userId" value={user.id} />
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                New Password
-              </label>
-              <input
-                type="password"
-                name="newPassword"
-                required
-                minLength={6}
-                placeholder="Enter new password (min 6 chars)"
-                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                required
-                minLength={6}
-                placeholder="Re-enter new password"
-                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
-              />
-            </div>
-            <div className="pt-2 flex gap-3">
-              <button
-                type="submit"
-                className="flex-1 py-2.5 bg-[#fc6e20] hover:bg-[#e85b0d] text-white text-sm font-bold rounded-xl transition-colors cursor-pointer shadow-sm"
-              >
-                Reset Password
-              </button>
-              <Link
-                href="/super-admin/users"
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition-colors text-center"
-              >
-                Cancel
-              </Link>
-            </div>
-          </form>
-        </div>
+        {/* Set Password Panel — shows password once for copying */}
+        <SetPasswordPanel userId={user.id} userName={user.name ?? user.email} />
       </div>
     </div>
   )

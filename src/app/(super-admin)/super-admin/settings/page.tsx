@@ -19,10 +19,10 @@ export default async function SettingsPage() {
     {
       title: 'Defaults',
       fields: [
-        { label: 'Default Plan for New Companies', value: 'TRIAL', editable: false },
-        { label: 'Default Storage Limit', value: '100 MB', editable: false },
-        { label: 'Default User Limit', value: '5 users', editable: false },
-        { label: 'Default Site Limit', value: '1 site', editable: false },
+        { label: 'Default Plan for New Companies', value: 'FREE (Active)', editable: false },
+        { label: 'Default Storage Limit', value: '1 GB', editable: false },
+        { label: 'Default User Limit', value: '15 users', editable: false },
+        { label: 'Default Site Limit', value: '15 sites', editable: false },
       ],
     },
     {
