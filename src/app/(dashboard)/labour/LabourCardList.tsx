@@ -141,6 +141,10 @@ function WorkerCard({ worker, sites, updateAction, markPaidAction, deactivateAct
             <div className="text-sm font-bold text-slate-700">{worker.presentDays}</div>
           </div>
           <div className="text-center">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Advance Paid</div>
+            <div className="text-sm font-bold text-slate-600">{fmt(worker.totalAdvances)}</div>
+          </div>
+          <div className="text-center">
             <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Pending Salary</div>
             <div className={`text-sm font-black ${isPending ? 'text-orange-600' : 'text-emerald-600'}`}>
               {isPending ? fmt(worker.pendingBalance) : '✓ Paid'}
@@ -170,10 +174,11 @@ function WorkerCard({ worker, sites, updateAction, markPaidAction, deactivateAct
       {open && (
         <div className="border-t border-slate-100 bg-slate-50/40 px-5 py-5">
           {/* Financial summary strip */}
-          <div className="grid grid-cols-3 gap-3 mb-5 p-3 bg-white rounded-xl border border-slate-200">
+          <div className="grid grid-cols-4 gap-3 mb-5 p-3 bg-white rounded-xl border border-slate-200">
             {[
+              { label: 'Days Present', val: String(worker.presentDays), cls: 'text-slate-700' },
               { label: 'Total Earned', val: fmt(worker.earned), cls: 'text-slate-700' },
-              { label: 'Advances Paid', val: fmt(worker.totalAdvances), cls: 'text-slate-700' },
+              { label: 'Advance Paid', val: fmt(worker.totalAdvances), cls: 'text-slate-700' },
               { label: 'Pending Balance', val: isPending ? fmt(worker.pendingBalance) : '✓ Settled', cls: isPending ? 'text-orange-600 font-black' : 'text-emerald-600 font-black' },
             ].map(f => (
               <div key={f.label} className="text-center">
