@@ -237,54 +237,54 @@ model CompanySubscription {
 // ============================================================
 
 model Company {
-  id          String        @id @default(cuid())
-  name        String
-  slug        String        @unique
-  logo        String?
-  gst         String?
-  phone       String?
-  email       String?
-  address     String?
-  city        String?
-  state       String?
-  pincode     String?
-  status      CompanyStatus @default(TRIAL)
-  plan        CompanyPlan   @default(TRIAL)
-  userLimit   Int           @default(5)
-  siteLimit   Int           @default(1)
-  storageLimitMb Int        @default(100)
-  storageUsed Float         @default(0)
-  modulesJson Json?         
-  createdById String?       
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  deletedAt   DateTime?
+  id             String        @id @default(cuid())
+  name           String
+  slug           String        @unique
+  logo           String?
+  gst            String?
+  phone          String?
+  email          String?
+  address        String?
+  city           String?
+  state          String?
+  pincode        String?
+  status         CompanyStatus @default(TRIAL)
+  plan           CompanyPlan   @default(TRIAL)
+  userLimit      Int           @default(5)
+  siteLimit      Int           @default(1)
+  storageLimitMb Int           @default(100)
+  storageUsed    Float         @default(0)
+  modulesJson    Json?
+  createdById    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
 
-  members           CompanyMember[]
-  sites             Site[]
-  expenses          Expense[]
-  labour            Labour[]
-  materials         Material[]
-  vendors           Vendor[]
-  subcontractors    Subcontractor[]
+  members               CompanyMember[]
+  sites                 Site[]
+  expenses              Expense[]
+  labour                Labour[]
+  materials             Material[]
+  vendors               Vendor[]
+  subcontractors        Subcontractor[]
   contractorAttendances ContractorAttendance[]
-  dprs              DailyProgressReport[]
-  documents         Document[]
-  clients           Client[]
-  notifications     Notification[]
-  auditLogs         AuditLog[]
-  mediaAssets       MediaAsset[]
-  approvals         Approval[]
-  approvalComments  ApprovalComment[]
-  approvalTimelines ApprovalTimeline[]
-  salaryRuns        SalaryRun[]
-  purchaseRequests  PurchaseRequest[]
-  purchaseOrders    PurchaseOrder[]
-  supportTickets    SupportTicket[]
-  subscription      CompanySubscription[]
-  tasks             Task[]
-  boqitems          BOQItem[]
-  reportExports     ReportExport[]
+  dprs                  DailyProgressReport[]
+  documents             Document[]
+  clients               Client[]
+  notifications         Notification[]
+  auditLogs             AuditLog[]
+  mediaAssets           MediaAsset[]
+  approvals             Approval[]
+  approvalComments      ApprovalComment[]
+  approvalTimelines     ApprovalTimeline[]
+  salaryRuns            SalaryRun[]
+  purchaseRequests      PurchaseRequest[]
+  purchaseOrders        PurchaseOrder[]
+  supportTickets        SupportTicket[]
+  subscription          CompanySubscription[]
+  tasks                 Task[]
+  boqitems              BOQItem[]
+  reportExports         ReportExport[]
 
   @@index([status])
 }
@@ -322,15 +322,15 @@ model User {
 }
 
 model CompanyMember {
-  id        String   @id @default(cuid())
-  userId    String
-  companyId String
-  role      Role
+  id             String   @id @default(cuid())
+  userId         String
+  companyId      String
+  role           Role
   siteIds        String[] @default([])
   moduleControls Json?
   isActive       Boolean  @default(true)
-  joinedAt  DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  joinedAt       DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -345,53 +345,53 @@ model CompanyMember {
 // ============================================================
 
 model Site {
-  id           String     @id @default(cuid())
-  companyId    String
-  name         String
-  slug         String
-  location     String
-  address      String?
-  clientName   String?
-  clientPhone  String?
-  clientEmail  String?
-  clientId     String?
-  mapLink      String?
-  projectType  String?
-  contractType String?
-  areaSqft     Decimal?   @db.Decimal(10, 2)
-  floors       Int?
-  budget       Decimal    @default(0) @db.Decimal(14, 2)
-  contractValue Decimal?  @db.Decimal(14, 2)
-  spent        Decimal    @default(0) @db.Decimal(14, 2)
-  progress     Int        @default(0)
-  status       SiteStatus @default(ACTIVE)
-  currentStage String?
-  startDate    DateTime?
-  targetEndDate DateTime?
-  handoverDate DateTime?
+  id                 String     @id @default(cuid())
+  companyId          String
+  name               String
+  slug               String
+  location           String
+  address            String?
+  clientName         String?
+  clientPhone        String?
+  clientEmail        String?
+  clientId           String?
+  mapLink            String?
+  projectType        String?
+  contractType       String?
+  areaSqft           Decimal?   @db.Decimal(10, 2)
+  floors             Int?
+  budget             Decimal    @default(0) @db.Decimal(14, 2)
+  contractValue      Decimal?   @db.Decimal(14, 2)
+  spent              Decimal    @default(0) @db.Decimal(14, 2)
+  progress           Int        @default(0)
+  status             SiteStatus @default(ACTIVE)
+  currentStage       String?
+  startDate          DateTime?
+  targetEndDate      DateTime?
+  handoverDate       DateTime?
   assignedPmId       String?
   assignedEngineerId String?
   clientUserId       String?
-  engineerId   String?
-  managerId    String?
-  createdById  String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  deletedAt    DateTime?
+  engineerId         String?
+  managerId          String?
+  createdById        String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  deletedAt          DateTime?
 
-  company          Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  expenses         Expense[]
-  labour           Labour[]
-  materials        Material[]
-  dprs             DailyProgressReport[]
+  company               Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  expenses              Expense[]
+  labour                Labour[]
+  materials             Material[]
+  dprs                  DailyProgressReport[]
   contractorAttendances ContractorAttendance[]
-  photos           SitePhoto[]
-  tasks            Task[]
-  boqItems         BOQItem[]
-  documents        Document[]
-  purchaseRequests PurchaseRequest[]
-  mediaAssets      MediaAsset[]
-  approvals        Approval[]
+  photos                SitePhoto[]
+  tasks                 Task[]
+  boqItems              BOQItem[]
+  documents             Document[]
+  purchaseRequests      PurchaseRequest[]
+  mediaAssets           MediaAsset[]
+  approvals             Approval[]
 
   @@unique([companyId, slug])
   @@index([companyId])
@@ -665,7 +665,7 @@ model Subcontractor {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
   attendances ContractorAttendance[]
 
   @@index([companyId])
@@ -976,17 +976,17 @@ model Approval {
   rejectionReason String?
   closedAt        DateTime?
   metadataJson    Json?
-  
+
   // Legacy fields preserved to prevent destructive migration
-  status          String?
-  module          ModuleType?
-  recordId        String?
-  requestedAt     DateTime?
-  legacyComments  String?            @map("comments")
-  
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  deletedAt       DateTime?
+  status         String?
+  module         ModuleType?
+  recordId       String?
+  requestedAt    DateTime?
+  legacyComments String?     @map("comments")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   site        Site?              @relation(fields: [siteId], references: [id])
@@ -1115,4 +1115,148 @@ model SupportTicket {
 
   @@index([companyId])
   @@index([status])
+}
+
+// ============================================================
+// CHECKLISTS & MILESTONES
+// ============================================================
+
+model ChecklistTemplate {
+  id          String   @id @default(cuid())
+  companyId   String? // null means global template managed by superadmin
+  name        String
+  description String?
+  isGlobal    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stages   ChecklistStage[]
+  projects ProjectChecklist[]
+
+  @@index([companyId])
+}
+
+model ChecklistStage {
+  id         String   @id @default(cuid())
+  templateId String
+  name       String
+  order      Int      @default(0)
+  weight     Float    @default(1.0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  template   ChecklistTemplate   @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  categories ChecklistCategory[]
+
+  @@index([templateId])
+}
+
+model ChecklistCategory {
+  id        String   @id @default(cuid())
+  stageId   String
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stage ChecklistStage  @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  tasks ChecklistTask[]
+
+  @@index([stageId])
+}
+
+model ChecklistTask {
+  id         String   @id @default(cuid())
+  categoryId String
+  name       String
+  order      Int      @default(0)
+  isRequired Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category ChecklistCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId])
+}
+
+// Snapshot for Projects
+model ProjectChecklist {
+  id         String   @id @default(cuid())
+  siteId     String
+  templateId String
+  companyId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  template ChecklistTemplate       @relation(fields: [templateId], references: [id])
+  stages   ProjectChecklistStage[]
+
+  @@unique([siteId])
+  @@index([companyId])
+}
+
+model ProjectChecklistStage {
+  id          String   @id @default(cuid())
+  checklistId String
+  name        String
+  order       Int      @default(0)
+  weight      Float    @default(1.0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  checklist  ProjectChecklist           @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  categories ProjectChecklistCategory[]
+
+  @@index([checklistId])
+}
+
+model ProjectChecklistCategory {
+  id          String   @id @default(cuid())
+  stageId     String
+  name        String
+  order       Int      @default(0)
+  isNeglected Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stage ProjectChecklistStage  @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  tasks ProjectChecklistTask[]
+
+  @@index([stageId])
+}
+
+model ProjectChecklistTask {
+  id            String    @id @default(cuid())
+  categoryId    String
+  name          String
+  order         Int       @default(0)
+  isRequired    Boolean   @default(true)
+  isClientDone  Boolean   @default(false)
+  isNeglected   Boolean   @default(false)
+  status        String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  completedAt   DateTime?
+  completedById String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  category    ProjectChecklistCategory         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attachments ProjectChecklistTaskAttachment[]
+
+  @@index([categoryId])
+}
+
+model ProjectChecklistTaskAttachment {
+  id                 String   @id @default(cuid())
+  taskId             String
+  cloudinaryPublicId String
+  secureUrl          String
+  format             String?
+  bytes              Int?
+  originalName       String?
+  uploadedById       String
+  uploadedAt         DateTime @default(now())
+
+  task ProjectChecklistTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
 }

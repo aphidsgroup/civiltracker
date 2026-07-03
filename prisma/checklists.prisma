@@ -1,0 +1,144 @@
+
+// ============================================================
+// CHECKLISTS & MILESTONES
+// ============================================================
+
+model ChecklistTemplate {
+  id          String   @id @default(cuid())
+  companyId   String?  // null means global template managed by superadmin
+  name        String
+  description String?
+  isGlobal    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stages      ChecklistStage[]
+  projects    ProjectChecklist[]
+
+  @@index([companyId])
+}
+
+model ChecklistStage {
+  id         String   @id @default(cuid())
+  templateId String
+  name       String
+  order      Int      @default(0)
+  weight     Float    @default(1.0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  template   ChecklistTemplate   @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  categories ChecklistCategory[]
+
+  @@index([templateId])
+}
+
+model ChecklistCategory {
+  id        String   @id @default(cuid())
+  stageId   String
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stage ChecklistStage  @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  tasks ChecklistTask[]
+
+  @@index([stageId])
+}
+
+model ChecklistTask {
+  id         String   @id @default(cuid())
+  categoryId String
+  name       String
+  order      Int      @default(0)
+  isRequired Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category ChecklistCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId])
+}
+
+// Snapshot for Projects
+model ProjectChecklist {
+  id         String   @id @default(cuid())
+  siteId     String
+  templateId String
+  companyId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  template ChecklistTemplate       @relation(fields: [templateId], references: [id])
+  stages   ProjectChecklistStage[]
+
+  @@unique([siteId])
+  @@index([companyId])
+}
+
+model ProjectChecklistStage {
+  id          String   @id @default(cuid())
+  checklistId String
+  name        String
+  order       Int      @default(0)
+  weight      Float    @default(1.0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  checklist  ProjectChecklist           @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  categories ProjectChecklistCategory[]
+
+  @@index([checklistId])
+}
+
+model ProjectChecklistCategory {
+  id          String   @id @default(cuid())
+  stageId     String
+  name        String
+  order       Int      @default(0)
+  isNeglected Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stage ProjectChecklistStage  @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  tasks ProjectChecklistTask[]
+
+  @@index([stageId])
+}
+
+model ProjectChecklistTask {
+  id           String   @id @default(cuid())
+  categoryId   String
+  name         String
+  order        Int      @default(0)
+  isRequired   Boolean  @default(true)
+  isClientDone Boolean  @default(false)
+  isNeglected  Boolean  @default(false)
+  status       String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  completedAt  DateTime?
+  completedById String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category    ProjectChecklistCategory         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attachments ProjectChecklistTaskAttachment[]
+
+  @@index([categoryId])
+}
+
+model ProjectChecklistTaskAttachment {
+  id                 String   @id @default(cuid())
+  taskId             String
+  cloudinaryPublicId String
+  secureUrl          String
+  format             String?
+  bytes              Int?
+  originalName       String?
+  uploadedById       String
+  uploadedAt         DateTime @default(now())
+
+  task ProjectChecklistTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}

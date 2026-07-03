@@ -86,7 +86,7 @@ export default async function SiteDetailPage({
         <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">Bills</div>
         <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">Labour</div>
         <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">Materials</div>
-        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">Tasks</div>
+        <Link href={`/sites/${site.id}/checklist`} className="px-3 py-2 text-sm font-bold text-[#fc6e20] hover:text-[#e55a10] border-b-2 border-transparent hover:border-[#fc6e20] whitespace-nowrap cursor-pointer transition-colors">Checklist</Link>
         <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">BOQ</div>
       </div>
       

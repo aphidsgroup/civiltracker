@@ -324,6 +324,23 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
               </div>
             </div>
           </Link>
+
+          <Link
+            href={siteId ? `/mobile/checklists?siteId=${siteId}` : "/mobile/checklists"}
+            className="p-4 rounded-[20px] bg-white border border-slate-100 shadow-sm active:scale-95 transition-all no-underline col-span-2"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-[12px] bg-sky-50 text-sky-600 flex items-center justify-center flex-shrink-0">
+                <CheckCircle2 size={20} strokeWidth={2.2} />
+              </div>
+              <div>
+                <div className="text-[14px] font-extrabold text-slate-900 leading-tight mb-0.5">Site Checklist</div>
+                <div className="text-[11.5px] font-medium text-slate-500">
+                  Update tasks and milestones
+                </div>
+              </div>
+            </div>
+          </Link>
         </div>
       </div>
 
