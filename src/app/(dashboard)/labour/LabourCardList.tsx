@@ -67,6 +67,7 @@ function WorkerCard({ worker, sites, updateAction, markPaidAction, deactivateAct
   const [overtimeRate, setOvertimeRate] = useState(String(worker.overtimeRate))
   const [siteId, setSiteId] = useState(worker.siteId)
   const [status, setStatus] = useState(worker.isActive ? 'active' : 'inactive')
+  const [openingAdvance, setOpeningAdvance] = useState(String(worker.openingAdvance ?? 0))
 
   const isPending = worker.pendingBalance > 0
 
@@ -79,6 +80,7 @@ function WorkerCard({ worker, sites, updateAction, markPaidAction, deactivateAct
       fd.append('trade', trade)
       fd.append('dailyWage', dailyWage)
       fd.append('overtimeRate', overtimeRate)
+      fd.append('openingAdvance', openingAdvance)
       fd.append('siteId', siteId)
       fd.append('status', status)
       await updateAction(fd)
@@ -210,6 +212,10 @@ function WorkerCard({ worker, sites, updateAction, markPaidAction, deactivateAct
             <div>
               <label className={labelCls}>Overtime Rate (₹/hr)</label>
               <input type="number" value={overtimeRate} onChange={e => setOvertimeRate(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Opening Advance (₹)</label>
+              <input type="number" value={openingAdvance} onChange={e => setOpeningAdvance(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Assigned Site</label>

@@ -19,11 +19,12 @@ async function updateLabour(formData: FormData) {
   const trade = formData.get('trade') as string
   const dailyWage = parseFloat(formData.get('dailyWage') as string) || 0
   const overtimeRate = parseFloat(formData.get('overtimeRate') as string) || 0
+  const openingAdvance = parseFloat(formData.get('openingAdvance') as string) || 0
   const siteId = formData.get('siteId') as string
   const status = formData.get('status') as string
   await prisma.labour.updateMany({
     where: { id, companyId: session.user.companyId },
-    data: { name, phone: phone || null, trade: trade as any, dailyWage, overtimeRate, siteId, isActive: status === 'active' }
+    data: { name, phone: phone || null, trade: trade as any, dailyWage, overtimeRate, openingAdvance, siteId, isActive: status === 'active' }
   })
   revalidatePath('/labour')
 }
