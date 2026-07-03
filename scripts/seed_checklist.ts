@@ -5,6 +5,13 @@ const prisma = new PrismaClient()
 async function main() {
   console.log('Seeding Checklist Template...')
 
+  // Idempotent — skip if global template already exists
+  const existing = await prisma.checklistTemplate.findFirst({ where: { isGlobal: true } })
+  if (existing) {
+    console.log('Global template already exists:', existing.id, '—', existing.name)
+    return
+  }
+
   const template = await prisma.checklistTemplate.create({
     data: {
       name: 'TN Residential - Standard Checklist',
@@ -419,6 +426,17 @@ async function main() {
   })
 
   console.log('Successfully created global Checklist Template:', template.id)
+
+  // Also clean up any empty (0-stage) company templates that may have been created accidentally
+  const allCompany = await prisma.checklistTemplate.findMany({
+    where: { isGlobal: false },
+    include: { _count: { select: { stages: true } } }
+  })
+  const toDelete = allCompany.filter(t => t._count.stages === 0)
+  if (toDelete.length > 0) {
+    await prisma.checklistTemplate.deleteMany({ where: { id: { in: toDelete.map(t => t.id) } } })
+    console.log(`Cleaned up ${toDelete.length} empty company templates.`)
+  }
 }
 
 main()
