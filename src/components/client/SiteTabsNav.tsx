@@ -8,6 +8,7 @@ export function SiteTabsNav({ siteId }: { siteId: string }) {
 
   const tabs = [
     { name: 'Overview', href: `/sites/${siteId}` },
+    { name: 'Activity', href: `/sites/${siteId}/activity` },
     { name: 'DPR', href: `/sites/${siteId}/dpr` },
     { name: 'Expenses', href: `/sites/${siteId}/expenses` },
     { name: 'Bills', href: `/sites/${siteId}/bills` },
