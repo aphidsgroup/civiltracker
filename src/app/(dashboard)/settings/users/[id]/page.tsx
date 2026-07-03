@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
-import { Shield, UserMinus } from 'lucide-react'
+import { Shield, UserMinus, Eye } from 'lucide-react'
 import { resetUserPassword } from '@/actions/users'
 
 export const dynamic = 'force-dynamic'
@@ -171,38 +171,39 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-amber-50/60">
             <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
-              <Shield size={16} className="text-amber-600" />
+              <Eye size={16} className="text-amber-600" />
             </div>
             <div>
-              <div className="text-sm font-extrabold text-slate-800">Reset Password</div>
-              <div className="text-xs text-slate-500 font-medium">Override this user&apos;s login password</div>
+              <div className="text-sm font-extrabold text-slate-800">Set / View Password</div>
+              <div className="text-xs text-slate-500 font-medium">Password is shown in plain text — copy and share with the user</div>
             </div>
           </div>
 
           <form action={handlePasswordReset} className="p-6 space-y-4">
             <input type="hidden" name="userId" value={member.userId} />
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">New Password</label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">New Password (visible)</label>
               <input
-                type="password"
+                type="text"
                 name="newPassword"
                 required
                 minLength={6}
-                placeholder="Enter new password (min 6 characters)"
-                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all"
+                placeholder="Type new password — you can see &amp; copy it"
+                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all font-mono"
               />
             </div>
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Confirm Password</label>
               <input
-                type="password"
+                type="text"
                 name="confirmPassword"
                 required
                 minLength={6}
-                placeholder="Re-enter new password"
-                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all"
+                placeholder="Re-type to confirm"
+                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all font-mono"
               />
             </div>
+            <p className="text-xs text-slate-400">After setting, copy this password and share it with the user directly.</p>
             <div className="pt-1 flex gap-3">
               <button
                 type="submit"

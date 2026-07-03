@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Role } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { Shield, Eye } from 'lucide-react'
 
 async function createUser(formData: FormData) {
   'use server'
@@ -16,6 +17,7 @@ async function createUser(formData: FormData) {
   const phone = formData.get('phone') as string
   const password = formData.get('password') as string
   const role = formData.get('role') as Role
+  const siteIds = formData.getAll('siteIds') as string[]
 
   if (!name || !email || !password || !role) return
 
@@ -52,74 +54,184 @@ async function createUser(formData: FormData) {
         userId: user.id,
         companyId,
         role,
+        siteIds: siteIds.length > 0 ? siteIds : [],
         isActive: true,
       },
     })
   })
 
-  redirect('/settings/users')
+  redirect('/employees')
+}
+
+const roleDescriptions: Record<string, { label: string; desc: string; access: string }> = {
+  COMPANY_ADMIN: {
+    label: 'Company Admin',
+    desc: 'Full access to all features',
+    access: 'All modules, all sites, all reports, all settings',
+  },
+  PROJECT_MANAGER: {
+    label: 'Project Manager',
+    desc: 'Manages sites, expenses, approvals',
+    access: 'Sites, Expenses, Labour, DPR, Reports, Approvals',
+  },
+  SITE_ENGINEER: {
+    label: 'Site Engineer',
+    desc: 'Daily site operations',
+    access: 'Attendance, DPR, Expenses (submit), Materials',
+  },
+  SUPERVISOR: {
+    label: 'Supervisor',
+    desc: 'Labour and attendance tracking',
+    access: 'Labour Attendance, DPR (view), Materials (view)',
+  },
+  ACCOUNTANT: {
+    label: 'Accountant',
+    desc: 'Financial records and reports',
+    access: 'Expenses, Salary, Invoices, Reports',
+  },
+  PURCHASE_MANAGER: {
+    label: 'Purchase Manager',
+    desc: 'Purchase orders and materials',
+    access: 'Purchase Requests, POs, Vendors, Materials',
+  },
 }
 
 export default async function InviteUserPage() {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
+  const { companyId } = session.user
+
+  const sites = await prisma.site.findMany({
+    where: { companyId, deletedAt: null, status: 'ACTIVE' },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  })
+
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { userLimit: true },
+  })
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
-      <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
-        <h1 className="text-xl font-semibold text-gray-900">Create New User</h1>
+    <div className="min-h-screen bg-slate-50/50">
+      <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200">
+        <div>
+          <h1 className="text-xl font-extrabold text-slate-800">Add New Employee</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Create a login account for your team member</p>
+        </div>
+        <Link href="/employees" className="text-sm text-slate-500 hover:text-slate-900 font-medium transition-colors">← Back to Employees</Link>
       </div>
-      
-      <div className="p-6 max-w-2xl mx-auto">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <form action={createUser}>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Full Name *</label>
-                <input name="name" required placeholder="John Doe"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Email Address *</label>
-                <input name="email" type="email" required placeholder="john@company.com"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Phone Number</label>
-                <input name="phone" type="tel" placeholder="+91 98765 43210"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Password *</label>
-                <input name="password" type="password" required placeholder="Enter login password"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
-                <p className="mt-1 text-xs text-gray-500">Provide this password to the user so they can log in.</p>
-              </div>
+      <div className="p-6 max-w-2xl mx-auto space-y-5">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <form action={createUser} className="space-y-5">
+            {/* Basic Info */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Full Name *</label>
+              <input
+                name="name" required placeholder="e.g. Ravi Kumar"
+                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
+              />
+            </div>
 
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Role *</label>
-                <select name="role" required defaultValue="SITE_ENGINEER"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent">
-                  <option value="COMPANY_ADMIN">Company Admin</option>
-                  <option value="PROJECT_MANAGER">Project Manager</option>
-                  <option value="SITE_ENGINEER">Site Engineer</option>
-                  <option value="SUPERVISOR">Supervisor</option>
-                  <option value="ACCOUNTANT">Accountant</option>
-                  <option value="CLIENT">Client</option>
-                </select>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Email Address *</label>
+                <input
+                  name="email" type="email" required placeholder="ravi@yourcompany.com"
+                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Phone Number</label>
+                <input
+                  name="phone" type="tel" placeholder="+91 98765 43210"
+                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
+                />
               </div>
             </div>
 
-            <div className="mt-8 flex items-center gap-3 border-t border-gray-100 pt-5">
-              <button type="submit"
-                className="px-5 py-2.5 bg-[#fc6e20] hover:bg-[#e85b0d] text-white text-sm font-semibold rounded-lg shadow-sm transition-colors cursor-pointer">
-                Create User
+            {/* Password — shown in plain text */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                <Eye size={12} className="inline mr-1" />
+                Login Password *
+              </label>
+              <input
+                name="password" type="text" required minLength={6} placeholder="Set a password the employee will use to log in"
+                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all font-mono"
+              />
+              <p className="mt-1 text-xs text-slate-400">
+                Password is shown in plain text so you can copy and share it. You can reset it anytime from the Manage page.
+              </p>
+            </div>
+
+            {/* Role */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                <Shield size={12} className="inline mr-1" />
+                Role &amp; Access Level *
+              </label>
+              <select
+                name="role" required defaultValue="SITE_ENGINEER"
+                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
+              >
+                <option value="COMPANY_ADMIN">Company Admin — Full Access</option>
+                <option value="PROJECT_MANAGER">Project Manager — Sites &amp; Approvals</option>
+                <option value="SITE_ENGINEER">Site Engineer — Daily Operations</option>
+                <option value="SUPERVISOR">Supervisor — Labour &amp; Attendance</option>
+                <option value="ACCOUNTANT">Accountant — Finance &amp; Reports</option>
+                <option value="PURCHASE_MANAGER">Purchase Manager — POs &amp; Materials</option>
+              </select>
+            </div>
+
+            {/* Access descriptions */}
+            <div className="bg-slate-50 rounded-xl border border-slate-100 p-4">
+              <div className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-3">Access per Role</div>
+              <div className="space-y-2">
+                {Object.entries(roleDescriptions).map(([key, r]) => (
+                  <div key={key} className="flex items-start gap-2.5">
+                    <div className="text-xs font-bold text-slate-700 w-36 flex-shrink-0 pt-0.5">{r.label}</div>
+                    <div className="text-xs text-slate-500 leading-relaxed">{r.access}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Site Access */}
+            {sites.length > 0 && (
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Site Access (Optional)</label>
+                <div className="text-xs text-slate-400 mb-2 border-l-2 border-[#fc6e20] pl-2">
+                  Select which project sites this employee can access. Leave all unchecked to allow access to all sites.
+                </div>
+                <div className="space-y-2 max-h-44 overflow-y-auto border border-slate-200 rounded-xl p-3 bg-slate-50">
+                  {sites.map(site => (
+                    <label key={site.id} className="flex items-center gap-3 p-2 hover:bg-slate-100 rounded-lg cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="siteIds"
+                        value={site.id}
+                        className="w-4 h-4 text-[#fc6e20] border-slate-300 rounded focus:ring-[#fc6e20]"
+                      />
+                      <span className="text-sm font-medium text-slate-800">{site.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 flex items-center gap-3 border-t border-slate-100">
+              <button
+                type="submit"
+                className="px-6 py-2.5 bg-[#fc6e20] hover:bg-[#e85b0d] text-white text-sm font-bold rounded-xl shadow-sm transition-colors cursor-pointer"
+              >
+                Create Employee Account
               </button>
-              <Link href="/settings/users"
-                className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors inline-block">
+              <Link
+                href="/employees"
+                className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors"
+              >
                 Cancel
               </Link>
             </div>

@@ -8,7 +8,8 @@ import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard, FileText, Receipt, CheckCircle2, Users, Package,
   ShoppingCart, DollarSign, BarChart3, Settings, Layers, Building2,
-  Truck, ClipboardList, FolderOpen, UserCircle, CalendarCheck, LogOut
+  Truck, ClipboardList, FolderOpen, UserCircle, CalendarCheck, LogOut,
+  HardHat, UserCog, Contact2
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -21,7 +22,9 @@ const NAV_ITEMS = [
   { href: '/bills', label: 'Bills', icon: Receipt },
   { href: '/approvals', label: 'Approvals', icon: CheckCircle2, badge: true },
   { type: 'group', label: 'Workforce' },
-  { href: '/labour', label: 'Labour & Salary', icon: Users },
+  { href: '/labour', label: 'Labour & Salary', icon: HardHat },
+  { href: '/employees', label: 'Employees', icon: UserCog },
+  { href: '/client-accounts', label: 'Client Accounts', icon: Contact2 },
   { type: 'group', label: 'Procurement' },
   { href: '/materials', label: 'Materials & Stock', icon: Package },
   { href: '/vendors', label: 'Vendors', icon: Truck },
