@@ -5,8 +5,9 @@ import Link from 'next/link'
 import ResponsiveTable from '@/components/responsive/ResponsiveTable'
 import MobileCardList from '@/components/responsive/MobileCardList'
 import { formatCurrency } from '@/lib/utils'
-import { Users, UserCheck, UserMinus, HardHat, Plus, Trash2 } from 'lucide-react'
+import { Users, UserCheck, UserMinus, HardHat, Plus } from 'lucide-react'
 import { revalidatePath } from 'next/cache'
+import RemoveButton from '@/components/ui/RemoveButton'
 
 export const metadata = { title: 'Labour | Civil Tracker' }
 export const dynamic = 'force-dynamic'
@@ -136,14 +137,10 @@ export default async function LabourPage() {
                       <td className="px-4 py-3.5">
                         <form action={deactivateLabour}>
                           <input type="hidden" name="id" value={l.id} />
-                          <button
-                            type="submit"
-                            title="Remove worker (attendance data kept)"
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer"
-                            onClick={(e) => { if (!confirm(`Remove ${l.name}? Their attendance records are kept.`)) e.preventDefault() }}
-                          >
-                            <Trash2 size={11} /> Remove
-                          </button>
+                          <RemoveButton
+                            name={l.name}
+                            message={`Remove ${l.name}? Their attendance records are kept.`}
+                          />
                         </form>
                       </td>
                     </tr>

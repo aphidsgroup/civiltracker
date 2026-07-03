@@ -35,7 +35,7 @@ const NAV_ITEMS = [
   { href: '/tasks', label: 'Tasks & Schedule', icon: CalendarCheck },
   { type: 'group', label: 'Workspace' },
   { href: '/documents', label: 'Documents', icon: FolderOpen },
-  { href: '/clients', label: 'Clients', icon: UserCircle },
+  { href: '/clients', label: 'Billing Clients', icon: UserCircle },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ] as const

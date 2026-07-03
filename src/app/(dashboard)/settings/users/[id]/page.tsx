@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { Shield, UserMinus, Eye } from 'lucide-react'
 import { resetUserPassword } from '@/actions/users'
+import RemoveButton from '@/components/ui/RemoveButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -233,13 +234,10 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
               </div>
               <form action={removeFromCompany} className="mt-4">
                 <input type="hidden" name="memberId" value={member.id} />
-                <button
-                  type="submit"
-                  onClick={(e) => { if (!confirm(`Remove ${member.user.name} from your company? Their data is kept but they won't be able to log in.`)) e.preventDefault() }}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-lg transition-colors cursor-pointer shadow-sm"
-                >
-                  Remove from Company
-                </button>
+                <RemoveButton
+                  name={member.user.name}
+                  message={`Remove ${member.user.name} from your company? Their data is kept but they won't be able to log in.`}
+                />
               </form>
             </div>
           </div>
