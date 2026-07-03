@@ -19,7 +19,7 @@ async function updateSubcontractor(formData: FormData) {
 
   if (!id || !name) return
 
-  await prisma.subcontractor.update({
+  await prisma.subcontractor.updateMany({
     where: { id, companyId },
     data: {
       name,
@@ -38,7 +38,7 @@ export default async function EditSubcontractorPage({ params }: { params: { id: 
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
 
-  const sub = await prisma.subcontractor.findUnique({
+  const sub = await prisma.subcontractor.findFirst({
     where: { id: params.id, companyId: session.user.companyId },
   })
 

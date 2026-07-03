@@ -22,7 +22,7 @@ export async function updateLabourAction(formData: FormData) {
 
   if (!id || !name || !trade || !siteId || isNaN(dailyWage)) throw new Error('Missing required fields')
 
-  await prisma.labour.update({
+  await prisma.labour.updateMany({
     where: { id, companyId },
     data: {
       siteId,

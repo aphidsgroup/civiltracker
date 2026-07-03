@@ -21,7 +21,7 @@ async function updateVendor(formData: FormData) {
 
   if (!id || !name) return
 
-  await prisma.vendor.update({
+  await prisma.vendor.updateMany({
     where: { id, companyId },
     data: {
       name,
@@ -42,7 +42,7 @@ export default async function EditVendorPage({ params }: { params: { id: string 
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
 
-  const vendor = await prisma.vendor.findUnique({
+  const vendor = await prisma.vendor.findFirst({
     where: { id: params.id, companyId: session.user.companyId },
   })
 

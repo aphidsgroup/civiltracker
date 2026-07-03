@@ -12,7 +12,7 @@ export default async function EditLabourPage({ params }: { params: { id: string 
   if (!session?.user?.companyId) redirect('/login')
   const { companyId } = session.user
 
-  const labour = await prisma.labour.findUnique({
+  const labour = await prisma.labour.findFirst({
     where: { id: params.id, companyId },
   })
 
