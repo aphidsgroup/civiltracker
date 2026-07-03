@@ -12,14 +12,26 @@ export async function syncSiteBudget(siteId: string) {
       _sum: { amount: true }
     })
     
-    // 2. Sum Labour Advances
-    const advances = await prisma.labourAttendance.aggregate({
-      where: { siteId, advance: { gt: 0 } },
-      _sum: { advance: true }
+    // 2. Calculate Labour Salaries Earned (Incurred Cost)
+    const attendances = await prisma.labourAttendance.findMany({
+      where: { siteId, status: { in: ['PRESENT', 'HALF_DAY'] } },
+      include: { labour: { select: { dailyWage: true } } }
     })
     
-    // Total spent
-    const totalSpent = Number(expenses._sum.amount || 0) + Number(advances._sum.advance || 0)
+    let totalSalaries = 0
+    for (const att of attendances) {
+      const wage = Number(att.labour.dailyWage) || 0
+      if (att.status === 'PRESENT') totalSalaries += wage
+      else if (att.status === 'HALF_DAY') totalSalaries += (wage / 2)
+      
+      // Calculate overtime (assuming standard 8 hour day if no specific overtime rate is defined)
+      if (att.overtimeHours > 0) {
+        totalSalaries += (wage / 8) * att.overtimeHours
+      }
+    }
+    
+    // Total spent is approved expenses + total labour cost incurred
+    const totalSpent = Number(expenses._sum.amount || 0) + totalSalaries
     
     // Update site
     await prisma.site.update({
