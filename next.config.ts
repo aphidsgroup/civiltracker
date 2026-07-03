@@ -12,7 +12,12 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000'],
+      allowedOrigins: ['localhost:3000', 'civiltracker.buildogram.in', 'civil-tracker.vercel.app'],
+    },
+    // Disable client-side router cache so charts/data always show fresh on navigation
+    staleTimes: {
+      dynamic: 0,
+      static: 180,
     },
   },
 }

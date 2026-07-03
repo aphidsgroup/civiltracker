@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 export default async function UsersSettingsPage() {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
@@ -60,6 +62,7 @@ export default async function UsersSettingsPage() {
                 <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</th>
                 <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Joined</th>
                 <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -87,6 +90,14 @@ export default async function UsersSettingsPage() {
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${m.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
                       {m.isActive ? 'Active' : 'Inactive'}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <Link
+                      href={`/settings/users/${m.id}`}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#fff7ed] hover:bg-[#fde8d1] text-[#fc6e20] text-xs font-bold rounded-lg transition-colors"
+                    >
+                      Manage
+                    </Link>
                   </td>
                 </tr>
               ))}

@@ -1,6 +1,23 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { Plus, Trash2 } from 'lucide-react'
+import { revalidatePath } from 'next/cache'
+
+export const dynamic = 'force-dynamic'
+
+async function deactivateVendor(formData: FormData) {
+  'use server'
+  const session = await auth()
+  if (!session?.user?.companyId) return
+  const id = formData.get('id') as string
+  await prisma.vendor.update({
+    where: { id, companyId: session.user.companyId },
+    data: { isActive: false },
+  })
+  revalidatePath('/vendors')
+}
 
 export default async function VendorsPage() {
   const session = await auth()
@@ -41,24 +58,25 @@ export default async function VendorsPage() {
 
         {/* Table card */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
-          <div className="flex justify-between items-center p-4 mb-0">
+          <div className="flex justify-between items-center p-4 border-b border-slate-100">
             <div className="text-sm font-bold text-slate-800">All Vendors</div>
-            <a
+            <Link
               href="/vendors/new"
-              className="bg-[#fc6e20] text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-[#e85b0d] transition-colors"
+              className="inline-flex items-center gap-1.5 bg-[#fc6e20] text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-[#e85b0d] transition-colors shadow-sm"
             >
-              + Add Vendor
-            </a>
+              <Plus size={13} /> Add Vendor
+            </Link>
           </div>
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-t border-slate-100 bg-slate-50">
+              <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Vendor</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Category</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">POs</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Purchase</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Payable</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -79,11 +97,26 @@ export default async function VendorsPage() {
                       {v.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
+                  <td className="px-4 py-3">
+                    <form action={deactivateVendor}>
+                      <input type="hidden" name="id" value={v.id} />
+                      <button
+                        type="submit"
+                        title="Remove vendor (keeps all PO data)"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer"
+                        onClick={(e) => { if (!confirm(`Remove "${v.name}" from active vendors? All PO data is kept.`)) e.preventDefault() }}
+                      >
+                        <Trash2 size={11} /> Remove
+                      </button>
+                    </form>
+                  </td>
                 </tr>
               ))}
               {vendors.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">No vendors yet.</td>
+                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-slate-400">
+                    No active vendors. <Link href="/vendors/new" className="text-[#fc6e20] font-semibold hover:underline">Add one →</Link>
+                  </td>
                 </tr>
               )}
             </tbody>

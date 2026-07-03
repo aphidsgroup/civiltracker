@@ -1,9 +1,24 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import { Users, FileText, CheckCircle2, AlertCircle, HardHat } from 'lucide-react'
+import { Users, FileText, CheckCircle2, AlertCircle, HardHat, Plus, Trash2 } from 'lucide-react'
+import Link from 'next/link'
+import { revalidatePath } from 'next/cache'
 
 export const metadata = { title: 'Subcontractors | Civil Tracker' }
+export const dynamic = 'force-dynamic'
+
+async function deactivateSubcontractor(formData: FormData) {
+  'use server'
+  const session = await auth()
+  if (!session?.user?.companyId) return
+  const id = formData.get('id') as string
+  await prisma.subcontractor.update({
+    where: { id, companyId: session.user.companyId },
+    data: { isActive: false },
+  })
+  revalidatePath('/subcontractors')
+}
 
 export default async function SubcontractorsPage() {
   const session = await auth()
@@ -27,9 +42,9 @@ export default async function SubcontractorsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Subcontractors</h1>
-        <a href="/subcontractors/new" className="bg-[#fc6e20] text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-[#e85b0d] transition-colors">
-          + Add Subcontractor
-        </a>
+        <Link href="/subcontractors/new" className="inline-flex items-center gap-1.5 bg-[#fc6e20] text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-[#e85b0d] transition-colors shadow-sm">
+          <Plus size={13} /> Add Subcontractor
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -79,6 +94,7 @@ export default async function SubcontractorsPage() {
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Advance Given</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pending/Due</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -115,6 +131,19 @@ export default async function SubcontractorsPage() {
                         {s.status}
                       </span>
                     </td>
+                    <td className="px-4 py-3.5">
+                       <form action={deactivateSubcontractor}>
+                         <input type="hidden" name="id" value={s.id} />
+                         <button
+                           type="submit"
+                           title="Remove subcontractor (keeps all work order data)"
+                           className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer"
+                           onClick={(e) => { if (!confirm(`Remove "${s.name}"? All work order data is kept.`)) e.preventDefault() }}
+                         >
+                           <Trash2 size={11} /> Remove
+                         </button>
+                       </form>
+                     </td>
                   </tr>
                   )
                 })}

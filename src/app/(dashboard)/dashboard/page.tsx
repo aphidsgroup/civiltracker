@@ -42,11 +42,11 @@ export default async function CompanyDashboard() {
   if (!session?.user?.companyId) redirect('/login')
   const { companyId } = session.user
 
-  // Cache dashboard aggregations for 60 seconds to prevent DB connection exhaustion on free tier
+  // Cache dashboard aggregations for 10s to prevent DB exhaustion while keeping data fresh
   const cachedDataFetcher = unstable_cache(
     async () => getCachedDashboardData(companyId),
     [`dashboard_data_${companyId}`],
-    { revalidate: 60 }
+    { revalidate: 10 }
   )
 
   const [

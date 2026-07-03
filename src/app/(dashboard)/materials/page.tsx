@@ -8,6 +8,7 @@ import MobileCardList from '@/components/responsive/MobileCardList'
 import { Package, DollarSign, AlertTriangle, Boxes } from 'lucide-react'
 
 export const metadata = { title: 'Materials | Civil Tracker' }
+export const dynamic = 'force-dynamic'
 
 export default async function MaterialsPage() {
   const session = await auth()

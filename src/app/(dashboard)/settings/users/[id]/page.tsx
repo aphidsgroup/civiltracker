@@ -3,8 +3,10 @@ import { prisma } from '@/lib/prisma'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
-import { Shield } from 'lucide-react'
+import { Shield, UserMinus } from 'lucide-react'
 import { resetUserPassword } from '@/actions/users'
+
+export const dynamic = 'force-dynamic'
 
 async function updateUser(formData: FormData) {
   'use server'
@@ -22,6 +24,21 @@ async function updateUser(formData: FormData) {
     data: { role, isActive, siteIds },
   })
 
+  revalidatePath('/settings/users')
+  redirect('/settings/users')
+}
+
+// Soft-remove: deactivates CompanyMember only — User account + ALL data (expenses, DPRs, etc.) is KEPT
+async function removeFromCompany(formData: FormData) {
+  'use server'
+  const session = await auth()
+  if (!session?.user?.companyId) return
+  const memberId = formData.get('memberId') as string
+  // Only deactivate the membership — never delete the User or any of their inputs
+  await prisma.companyMember.update({
+    where: { id: memberId, companyId: session.user.companyId },
+    data: { isActive: false },
+  })
   revalidatePath('/settings/users')
   redirect('/settings/users')
 }
@@ -201,6 +218,30 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
               </Link>
             </div>
           </form>
+        </div>
+        {/* Remove from Company — soft delete, keeps all data */}
+        <div className="bg-rose-50 rounded-xl border border-rose-200 shadow-sm p-6">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-rose-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <UserMinus size={16} className="text-rose-600" />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-extrabold text-rose-800">Remove from Company</div>
+              <div className="text-xs text-rose-600/80 mt-0.5 leading-relaxed">
+                Deactivates this member&apos;s access. Their account and <strong>all data they entered</strong> (expenses, DPRs, attendance) is permanently kept.
+              </div>
+              <form action={removeFromCompany} className="mt-4">
+                <input type="hidden" name="memberId" value={member.id} />
+                <button
+                  type="submit"
+                  onClick={(e) => { if (!confirm(`Remove ${member.user.name} from your company? Their data is kept but they won't be able to log in.`)) e.preventDefault() }}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-lg transition-colors cursor-pointer shadow-sm"
+                >
+                  Remove from Company
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
     </div>
