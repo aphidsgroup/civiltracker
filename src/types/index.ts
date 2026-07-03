@@ -10,6 +10,7 @@ export interface SessionUser {
   companyId?: string
   companySlug?: string
   companyName?: string
+  moduleControls?: any
 }
 
 export interface DashboardKpi {
