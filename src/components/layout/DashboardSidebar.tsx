@@ -9,12 +9,13 @@ import {
   LayoutDashboard, FileText, Receipt, CheckCircle2, Users, Package,
   ShoppingCart, DollarSign, BarChart3, Settings, Layers, Building2,
   Truck, ClipboardList, FolderOpen, UserCircle, CalendarCheck, LogOut,
-  HardHat, UserCog, Contact2
+  HardHat, UserCog, Contact2, Clock
 } from 'lucide-react'
 
 const NAV_ITEMS = [
   { type: 'group', label: 'Overview' },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/activity', label: 'Activity', icon: Clock },
   { href: '/sites', label: 'Sites', icon: Building2 },
   { href: '/dpr', label: 'Daily Reports', icon: ClipboardList },
   { type: 'group', label: 'Finance' },
