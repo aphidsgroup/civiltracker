@@ -7,12 +7,14 @@ import { ChecklistClient } from './ChecklistClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function ProjectChecklistPage({ params }: { params: { id: string } }) {
+export default async function ProjectChecklistPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
+  
+  const { id } = await params
 
   const site = await prisma.site.findUnique({
-    where: { id: params.id, companyId: session.user.companyId },
+    where: { id, companyId: session.user.companyId },
   })
 
   if (!site) redirect('/sites')
