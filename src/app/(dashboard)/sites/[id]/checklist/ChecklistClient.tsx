@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { toggleTaskStatus, toggleCategoryNeglect, addCustomTask, editChecklistTask, deleteChecklistTask } from '@/actions/checklists'
-import { Pencil, Trash2 } from 'lucide-react'
+import { toggleTaskStatus, toggleCategoryNeglect, addCustomTask, editChecklistTask, deleteChecklistTask, deleteProjectChecklist } from '@/actions/checklists'
+import { Pencil, Trash2, RefreshCw } from 'lucide-react'
 
 type Task = {
   id: string
@@ -30,7 +30,7 @@ type Checklist = {
   stages: Stage[]
 }
 
-export function ChecklistClient({ checklist }: { checklist: Checklist }) {
+export function ChecklistClient({ siteId, checklist }: { siteId: string, checklist: Checklist }) {
   const [isPending, startTransition] = useTransition()
   const [activeStage, setActiveStage] = useState(checklist.stages[0]?.id)
   
@@ -83,6 +83,13 @@ export function ChecklistClient({ checklist }: { checklist: Checklist }) {
     })
   }
 
+  const handleResetChecklist = async () => {
+    if (!confirm('WARNING: This will permanently delete the current checklist and all its progress for this site. You will be prompted to select a new template. Are you sure?')) return
+    startTransition(async () => {
+      await deleteProjectChecklist(siteId)
+    })
+  }
+
   const currentStage = checklist.stages.find(s => s.id === activeStage)
 
   return (
@@ -118,6 +125,17 @@ export function ChecklistClient({ checklist }: { checklist: Checklist }) {
             </button>
           )
         })}
+        
+        <div className="mt-8 pt-6 border-t border-slate-200">
+          <button 
+            onClick={handleResetChecklist}
+            disabled={isPending}
+            className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl transition-colors border border-red-200"
+          >
+            <RefreshCw size={14} />
+            Change Template
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}

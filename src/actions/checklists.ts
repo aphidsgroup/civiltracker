@@ -133,3 +133,15 @@ export async function deleteChecklistTask(taskId: string) {
 
   return { success: true }
 }
+
+export async function deleteProjectChecklist(siteId: string) {
+  const session = await auth()
+  if (!session?.user?.companyId) throw new Error('Unauthorized')
+
+  await prisma.projectChecklist.delete({
+    where: { siteId }
+  })
+  
+  revalidatePath(`/sites/${siteId}`)
+  return { success: true }
+}

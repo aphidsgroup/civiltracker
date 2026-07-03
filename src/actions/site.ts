@@ -10,6 +10,15 @@ export async function updateSiteDetails(formData: FormData) {
 
   const id = formData.get('id') as string
   const name = formData.get('name') as string
+  const location = formData.get('location') as string
+  const address = formData.get('address') as string
+  const projectType = formData.get('projectType') as string
+  
+  const clientName = formData.get('clientName') as string
+  const clientPhone = formData.get('clientPhone') as string
+  const areaSqft = parseFloat(formData.get('areaSqft') as string) || null
+
+  const startDate = formData.get('startDate') as string
   const targetEndDate = formData.get('targetEndDate') as string
   const budget = parseFloat(formData.get('budget') as string) || 0
   const status = formData.get('status') as any
@@ -18,6 +27,13 @@ export async function updateSiteDetails(formData: FormData) {
     where: { id, companyId: session.user.companyId },
     data: {
       name,
+      location,
+      address,
+      projectType,
+      clientName,
+      clientPhone,
+      areaSqft,
+      startDate: startDate ? new Date(startDate) : null,
       targetEndDate: targetEndDate ? new Date(targetEndDate) : null,
       budget,
       status

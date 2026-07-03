@@ -75,6 +75,39 @@ export default async function SiteOverviewPage({
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          {/* Project Details Card */}
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200">
+              <h3 className="font-bold text-slate-800 text-sm">Project Details</h3>
+            </div>
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
+              <div>
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Client</div>
+                <div className="text-sm font-medium text-slate-900 mt-0.5">{site.clientName || 'N/A'}</div>
+                {site.clientPhone && <div className="text-xs text-slate-600">{site.clientPhone}</div>}
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Project Type</div>
+                <div className="text-sm font-medium text-slate-900 mt-0.5">{site.projectType || 'N/A'}</div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Timeline</div>
+                <div className="text-sm font-medium text-slate-900 mt-0.5">
+                  {site.startDate ? new Date(site.startDate).toLocaleDateString() : 'TBD'} - {site.targetEndDate ? new Date(site.targetEndDate).toLocaleDateString() : 'TBD'}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Area</div>
+                <div className="text-sm font-medium text-slate-900 mt-0.5">{site.areaSqft ? `${site.areaSqft} sqft` : 'N/A'}</div>
+              </div>
+              <div className="sm:col-span-2">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Location / Address</div>
+                <div className="text-sm font-medium text-slate-900 mt-0.5">{site.location}</div>
+                {site.address && <div className="text-xs text-slate-600 mt-0.5">{site.address}</div>}
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
               <div className="font-bold text-slate-800 text-sm">Today&apos;s site update</div>

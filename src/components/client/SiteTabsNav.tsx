@@ -12,6 +12,7 @@ export function SiteTabsNav({ siteId }: { siteId: string }) {
     { name: 'Expenses', href: `/sites/${siteId}/expenses` },
     { name: 'Bills', href: `/sites/${siteId}/bills` },
     { name: 'Labour', href: `/sites/${siteId}/labour` },
+    { name: 'Subcontractors', href: `/sites/${siteId}/subcontractors` },
     { name: 'Materials', href: `/sites/${siteId}/materials` },
     { name: 'Checklist', href: `/sites/${siteId}/checklist` },
     { name: 'BOQ', href: `/sites/${siteId}/boq` },

@@ -126,7 +126,7 @@ export default async function ProjectChecklistPage({ params }: { params: { id: s
 
       <div className="p-6 max-w-6xl mx-auto">
         {/* Pass initial data to a Client Component for interactive editing */}
-        <ChecklistClient checklist={checklist} />
+        <ChecklistClient siteId={site.id} checklist={checklist} />
       </div>
     </div>
   )

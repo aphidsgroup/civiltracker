@@ -50,8 +50,15 @@ export default async function SiteLayout({
           <EditSiteModal site={{
             id: site.id,
             name: site.name,
-            budget: Number(site.budget),
+            location: site.location,
+            address: site.address,
+            projectType: site.projectType,
+            clientName: site.clientName,
+            clientPhone: site.clientPhone,
+            areaSqft: site.areaSqft ? Number(site.areaSqft) : null,
+            startDate: site.startDate,
             targetEndDate: site.targetEndDate,
+            budget: Number(site.budget),
             status: site.status
           }} />
           <div className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer shadow-sm transition-colors">
