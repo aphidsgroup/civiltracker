@@ -99,13 +99,16 @@ export default async function VendorsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <form action={deactivateVendor}>
-                      <input type="hidden" name="id" value={v.id} />
-                      <RemoveButton
-                        name={v.name}
-                        message={`Remove "${v.name}" from active vendors? All PO data is kept.`}
-                      />
-                    </form>
+                    <div className="flex items-center gap-2">
+                      <Link href={`/vendors/${v.id}/edit`} className="text-xs font-bold text-slate-500 hover:text-[#fc6e20] transition-colors">Edit</Link>
+                      <form action={deactivateVendor}>
+                        <input type="hidden" name="id" value={v.id} />
+                        <RemoveButton
+                          name={v.name}
+                          message={`Remove "${v.name}" from active vendors? All PO data is kept.`}
+                        />
+                      </form>
+                    </div>
                   </td>
                 </tr>
               ))}

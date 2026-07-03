@@ -151,13 +151,16 @@ export default async function LabourPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3.5">
-                          <form action={deactivateLabour}>
-                            <input type="hidden" name="id" value={l.id} />
-                            <RemoveButton
-                              name={l.name}
-                              message={`Remove ${l.name}? Their attendance records are kept.`}
-                            />
-                          </form>
+                          <div className="flex items-center gap-2">
+                            <Link href={`/labour/${l.id}/edit`} className="text-xs font-bold text-slate-500 hover:text-[#fc6e20] transition-colors">Edit</Link>
+                            <form action={deactivateLabour}>
+                              <input type="hidden" name="id" value={l.id} />
+                              <RemoveButton
+                                name={l.name}
+                                message={`Remove ${l.name}? Their attendance records are kept.`}
+                              />
+                            </form>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -186,6 +189,13 @@ export default async function LabourPage() {
                       <div>
                         <div className="text-sm font-bold mt-1 text-slate-900 dark:text-slate-100">Wage: {formatCurrency(Number(l.dailyWage))}</div>
                         <div className="text-sm font-bold mt-0.5 text-amber-600">Pending: {pendingBalance > 0 ? formatCurrency(pendingBalance) : 'Settled'}</div>
+                        <div className="flex items-center gap-3 mt-3">
+                          <Link href={`/labour/${l.id}/edit`} className="text-xs font-bold text-slate-500 hover:text-[#fc6e20] transition-colors">Edit</Link>
+                          <form action={deactivateLabour}>
+                            <input type="hidden" name="id" value={l.id} />
+                            <RemoveButton name={l.name} message="Remove this worker?" />
+                          </form>
+                        </div>
                       </div>
                     ),
                     statusNode: (

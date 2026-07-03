@@ -133,13 +133,16 @@ export default async function SubcontractorsPage() {
                       </span>
                     </td>
                      <td className="px-4 py-3.5">
-                       <form action={deactivateSubcontractor}>
-                         <input type="hidden" name="id" value={s.id} />
-                         <RemoveButton
-                           name={s.name}
-                           message={`Remove "${s.name}"? All work order data is kept.`}
-                         />
-                       </form>
+                       <div className="flex items-center gap-2">
+                         <Link href={`/subcontractors/${s.id}/edit`} className="text-xs font-bold text-slate-500 hover:text-[#fc6e20] transition-colors">Edit</Link>
+                         <form action={deactivateSubcontractor}>
+                           <input type="hidden" name="id" value={s.id} />
+                           <RemoveButton
+                             name={s.name}
+                             message={`Remove "${s.name}"? All work order data is kept.`}
+                           />
+                         </form>
+                       </div>
                      </td>
                   </tr>
                   )

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import {
   Building2, DollarSign, Clock, Users, Wallet, CreditCard,
-  Plus, Upload, Receipt, CheckSquare, FileText, BarChart3, TrendingUp, AlertCircle
+  Plus, Upload, Receipt, CheckSquare, FileText, BarChart3, TrendingUp, AlertCircle, Truck, Package
 } from 'lucide-react'
 
 function siteStatusChip(progress: number) {
@@ -33,7 +33,11 @@ async function getCachedDashboardData(companyId: string) {
     prisma.expense.findMany({ where: { companyId, deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, approvalStatus: true, category: true, createdAt: true, site: { select: { name: true } } } }),
     prisma.site.findMany({ where: { companyId, deletedAt: null, status: 'ACTIVE' }, orderBy: { spent: 'desc' }, take: 5 }),
     prisma.salaryRun.aggregate({ where: { companyId, status: 'APPROVED' }, _sum: { totalNet: true } }),
-    prisma.invoice.aggregate({ where: { companyId, status: 'DUE' }, _sum: { amount: true } })
+    prisma.invoice.aggregate({ where: { companyId, status: 'DUE' }, _sum: { amount: true } }),
+    prisma.vendor.count({ where: { companyId, isActive: true } }),
+    prisma.subcontractor.count({ where: { companyId, isActive: true } }),
+    prisma.material.count({ where: { companyId, isActive: true } }),
+    prisma.labourAttendance.findMany({ where: { siteId: { in: siteIds } }, select: { advance: true, status: true, overtimeHours: true, labour: { select: { dailyWage: true } } } })
   ])
 }
 
@@ -52,12 +56,23 @@ export default async function CompanyDashboard() {
   const [
     activeSitesCount, todayExpenseAgg, pendingExpenses,
     totalLabour, todayAttendance, recentPendingExpenses, recentExpenses, sites,
-    salaryDueAgg, invoicesDueAgg
+    salaryDueAgg, invoicesDueAgg, vendorCount, subCount, materialCount, allAttendance
   ] = await cachedDataFetcher()
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
   const pendingCount = pendingExpenses._count
   const pendingTotal = Number(pendingExpenses._sum.amount ?? 0)
+  
+  let totalAdvances = 0
+  let totalWages = 0
+  allAttendance.forEach(a => {
+    totalAdvances += Number(a.advance) || 0
+    const wage = Number(a.labour?.dailyWage) || 0
+    if (a.status === 'PRESENT') totalWages += wage
+    if (a.status === 'HALF_DAY') totalWages += (wage / 2)
+    if (a.overtimeHours > 0) totalWages += (wage / 8) * a.overtimeHours
+  })
+  const labourPendingSalaries = Math.max(0, totalWages - totalAdvances)
 
   function fmtAmt(n: number) {
     if (n >= 10000000) return '₹' + (n / 10000000).toFixed(2) + ' Cr'
@@ -102,8 +117,11 @@ export default async function CompanyDashboard() {
     { label: "Today's Expense", value: fmtAmt(todaySpend), sub: 'Across all sites today', trend: 'up', Icon: DollarSign, featured: true },
     { label: 'Bills Pending', value: pendingCount, sub: `${fmtAmt(pendingTotal)} to approve`, trend: 'warn', Icon: Clock },
     { label: 'Labour Present', value: `${todayAttendance}/${totalLabour || '—'}`, sub: `${totalLabour > 0 ? Math.round((todayAttendance / totalLabour) * 100) : 0}% attendance`, trend: 'up', Icon: Users },
-    { label: 'Salary Due', value: fmtAmt(salaryDue), sub: salaryDue > 0 ? 'Pending payout' : 'No run scheduled', trend: salaryDue > 0 ? 'warn' : 'flat', Icon: Wallet },
-    { label: 'Client Receivable', value: fmtAmt(invoicesDue), sub: invoicesDue > 0 ? 'Pending collection' : 'No overdue invoices', trend: invoicesDue > 0 ? 'up' : 'flat', Icon: CreditCard },
+    { label: 'Pending Salaries', value: fmtAmt(labourPendingSalaries), sub: 'Unpaid earned wages', trend: labourPendingSalaries > 0 ? 'warn' : 'flat', Icon: Wallet },
+    { label: 'Labour Advances', value: fmtAmt(totalAdvances), sub: 'Total upfront paid', trend: 'up', Icon: CreditCard },
+    { label: 'Active Vendors', value: vendorCount, sub: 'Approved suppliers', trend: 'flat', Icon: Truck },
+    { label: 'Subcontractors', value: subCount, sub: 'Active tradesmen', trend: 'flat', Icon: Users },
+    { label: 'Materials Tracked', value: materialCount, sub: 'Across all sites', trend: 'flat', Icon: Package },
   ]
 
   return (
