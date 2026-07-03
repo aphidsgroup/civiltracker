@@ -20,18 +20,19 @@ async function createClientUser(formData: FormData) {
   const email = formData.get('email') as string
   const phone = (formData.get('phone') as string) || undefined
   const password = formData.get('password') as string
+  const siteIds = formData.getAll('siteIds') as string[]
 
-  if (!name || !email || !password) throw new Error('Missing required fields')
+  if (!name || !email || !password) redirect('/client-accounts?error=Missing+required+fields')
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
     include: { _count: { select: { members: { where: { isActive: true } } } } },
   })
-  if (!company) throw new Error('Company not found')
-  if (company._count.members >= company.userLimit) throw new Error('User limit reached. Please upgrade your plan.')
+  if (!company) redirect('/client-accounts?error=Company+not+found')
+  if (company._count.members >= company.userLimit) redirect('/client-accounts?error=User+limit+reached.+Please+upgrade+your+plan.')
 
   const existing = await prisma.user.findUnique({ where: { email } })
-  if (existing) throw new Error('Email already in use')
+  if (existing) redirect('/client-accounts?error=Email+already+in+use')
 
   const passwordHash = await bcrypt.hash(password, 12)
 
@@ -40,7 +41,7 @@ async function createClientUser(formData: FormData) {
       data: { name, email, phone, passwordHash, role: 'CLIENT' },
     })
     await tx.companyMember.create({
-      data: { userId: user.id, companyId, role: 'CLIENT', isActive: true },
+      data: { userId: user.id, companyId, role: 'CLIENT', siteIds: siteIds.length > 0 ? siteIds : [], isActive: true },
     })
   })
 
@@ -60,7 +61,7 @@ async function removeClientAccount(formData: FormData) {
   revalidatePath('/client-accounts')
 }
 
-export default async function ClientAccountsPage() {
+export default async function ClientAccountsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
   const { companyId } = session.user
@@ -76,8 +77,15 @@ export default async function ClientAccountsPage() {
   function getInitials(name: string) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   }
-
   const active = members.filter(m => m.isActive).length
+  const sites = await prisma.site.findMany({
+    where: { companyId, deletedAt: null, status: 'ACTIVE' },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  })
+  
+  const resolvedParams = await searchParams
+  const error = resolvedParams.error
 
   return (
     <div className="flex flex-col gap-6">
@@ -101,6 +109,11 @@ export default async function ClientAccountsPage() {
               <h2 className="text-sm font-extrabold text-slate-800">Create Client Account</h2>
             </div>
             <form action={createClientUser} className="p-5 space-y-4">
+              {error && (
+                <div className="bg-red-50 text-red-600 px-3 py-2 rounded-lg border border-red-100 text-sm font-semibold">
+                  {error}
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Client Name *</label>
                 <input
@@ -130,6 +143,29 @@ export default async function ClientAccountsPage() {
                 />
                 <p className="mt-1 text-xs text-slate-400">Shown in plain text — copy and share it with the client.</p>
               </div>
+              
+              {sites.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Site Access (Optional)</label>
+                  <div className="text-xs text-slate-400 mb-2 border-l-2 border-[#fc6e20] pl-2">
+                    Select which projects this client can view. Leave empty to allow all.
+                  </div>
+                  <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-3 bg-slate-50">
+                    {sites.map(site => (
+                      <label key={site.id} className="flex items-center gap-3 p-2 hover:bg-slate-100 rounded-lg cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="siteIds"
+                          value={site.id}
+                          className="w-4 h-4 text-[#fc6e20] border-slate-300 rounded focus:ring-[#fc6e20]"
+                        />
+                        <span className="text-sm font-medium text-slate-800">{site.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <button
                 type="submit"
                 className="w-full py-2.5 bg-[#fc6e20] hover:bg-[#e85b0d] text-white text-sm font-bold rounded-xl shadow-sm transition-colors cursor-pointer"

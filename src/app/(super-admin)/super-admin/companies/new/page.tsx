@@ -107,7 +107,7 @@ export default function NewCompanyPage() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Admin Password *</label>
-                <input name="ownerPassword" type="password" required minLength={6} placeholder="Min 6 characters"
+                <input name="ownerPassword" type="text" required minLength={6} placeholder="Min 6 characters"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
             </div>

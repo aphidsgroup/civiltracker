@@ -97,7 +97,7 @@ export default function SetPasswordPanel({ userId, userName }: Props) {
             New Password
           </label>
           <input
-            type="password"
+            type="text"
             value={password}
             onChange={e => setPassword(e.target.value)}
             required
@@ -111,7 +111,7 @@ export default function SetPasswordPanel({ userId, userName }: Props) {
             Confirm Password
           </label>
           <input
-            type="password"
+            type="text"
             value={confirm}
             onChange={e => setConfirm(e.target.value)}
             required

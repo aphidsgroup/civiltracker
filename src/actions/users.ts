@@ -87,6 +87,7 @@ export async function createUser(data: any) {
       companyId: companyId,
       role: data.role,
       siteIds: data.siteIds || [],
+      moduleControls: data.moduleControls || null,
     },
   })
 
@@ -140,6 +141,8 @@ export async function updateUser(userId: string, data: any) {
     data: {
       role: data.role,
       isActive: data.isActive,
+      siteIds: data.siteIds || undefined,
+      moduleControls: data.moduleControls !== undefined ? data.moduleControls : undefined,
     },
   })
 

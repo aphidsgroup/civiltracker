@@ -57,6 +57,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           companyId: member?.companyId ?? null,
           companySlug: member?.company?.slug ?? null,
           companyName: member?.company?.name ?? null,
+          moduleControls: member?.moduleControls ?? null,
           image: user.avatar,
         }
       },
@@ -71,6 +72,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.companyId = (user as { companyId?: string }).companyId
         token.companySlug = (user as { companySlug?: string }).companySlug
         token.companyName = (user as { companyName?: string }).companyName
+        token.moduleControls = (user as { moduleControls?: any }).moduleControls
       }
       return token
     },
@@ -81,6 +83,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.companyId = token.companyId as string | undefined
         session.user.companySlug = token.companySlug as string | undefined
         session.user.companyName = token.companyName as string | undefined
+        session.user.moduleControls = token.moduleControls as any
       }
       return session
     },
@@ -98,6 +101,7 @@ declare module 'next-auth' {
     companyId?: string | null
     companySlug?: string | null
     companyName?: string | null
+    moduleControls?: any
   }
   interface Session {
     user: {
@@ -108,6 +112,7 @@ declare module 'next-auth' {
       companyId?: string
       companySlug?: string
       companyName?: string
+      moduleControls?: any
       image?: string | null
     }
   }
@@ -117,5 +122,6 @@ declare module 'next-auth' {
     companyId?: string
     companySlug?: string
     companyName?: string
+    moduleControls?: any
   }
 }

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, User, Building2, Clock } from 'lucide-react'
 import { deleteUser } from '@/actions/super-admin'
 import SetPasswordPanel from '@/components/super-admin/SetPasswordPanel'
-import DeleteUserButton from '@/components/super-admin/DeleteUserButton'
+import RemoveButton from '@/components/ui/RemoveButton'
 
 export default async function SAUserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -59,11 +59,12 @@ export default async function SAUserDetailPage({ params }: { params: Promise<{ i
           </div>
         </div>
         {/* Delete User */}
-        <DeleteUserButton
-          userId={user.id}
-          userName={user.name ?? user.email}
-          deleteAction={handleDelete}
-        />
+        <form action={handleDelete}>
+          <RemoveButton
+            name={user.name ?? user.email}
+            message={`Permanently delete "${user.name ?? user.email}" and ALL their data? This cannot be undone.`}
+          />
+        </form>
       </div>
 
       <div className="p-8 max-w-2xl mx-auto space-y-5">

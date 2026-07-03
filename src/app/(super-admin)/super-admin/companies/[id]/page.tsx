@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { deleteCompany } from '@/actions/super-admin'
-import DeleteCompanyButton from '@/components/super-admin/DeleteCompanyButton'
+import RemoveButton from '@/components/ui/RemoveButton'
 
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -16,7 +16,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
     include: {
       sites: { select: { id: true, name: true, status: true, location: true }, orderBy: { createdAt: 'desc' }, take: 20 },
       members: {
-        include: { user: { select: { name: true, email: true, phone: true } } },
+        include: { user: { select: { id: true, name: true, email: true, phone: true } } },
         orderBy: { joinedAt: 'desc' },
         take: 50,
       },
@@ -61,11 +61,12 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
           </span>
         </div>
         {/* Delete Company */}
-        <DeleteCompanyButton
-          companyId={company.id}
-          companyName={company.name}
-          deleteAction={handleDelete}
-        />
+        <form action={handleDelete}>
+          <RemoveButton
+            name={company.name}
+            message={`Permanently delete "${company.name}" and ALL its data? This cannot be undone.`}
+          />
+        </form>
       </div>
       <div className="p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -135,13 +136,13 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
                     <tr key={m.id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                          <Link href={`/super-admin/users/${m.user.id}`} className="w-7 h-7 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-colors">
                             {getInitials(m.user.name ?? m.user.email)}
-                          </div>
-                          <div>
-                            <div className="font-semibold text-xs text-gray-900">{m.user.name ?? '—'}</div>
-                            <div className="text-[11px] text-gray-500">{m.user.email}</div>
-                          </div>
+                          </Link>
+                          <Link href={`/super-admin/users/${m.user.id}`} className="group">
+                            <div className="font-semibold text-xs text-gray-900 group-hover:text-blue-600 transition-colors">{m.user.name ?? '—'}</div>
+                            <div className="text-[11px] text-gray-500 group-hover:text-blue-500 transition-colors">{m.user.email}</div>
+                          </Link>
                         </div>
                       </td>
                       <td className="px-4 py-3">

@@ -174,6 +174,9 @@ export async function approveApprovalAction(id: string, note?: string) {
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
   const approval = await prisma.approval.findFirst({ where: { id, ...companyFilter } })
   if (!approval) throw new Error('Approval not found')
+  if (approval.currentStatus === 'APPROVED' || approval.currentStatus === 'REJECTED') {
+    throw new Error(`Approval already processed (${approval.currentStatus})`)
+  }
 
   if (!verifyCanApproveEntity(user.role, approval.entityType)) {
     throw new Error(`Forbidden: Role ${user.role} is not authorized to approve ${approval.entityType}`)
@@ -213,10 +216,19 @@ export async function approveApprovalAction(id: string, note?: string) {
   })
 
   if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
-    await prisma.expense.updateMany({
-      where: { id: approval.entityId },
-      data: { approvalStatus: 'APPROVED', approvedById: user.id, approvedAt: new Date() },
-    })
+    const exp = await prisma.expense.findUnique({ where: { id: approval.entityId } })
+    if (exp) {
+      await prisma.expense.update({
+        where: { id: exp.id },
+        data: { approvalStatus: 'APPROVED', approvedById: user.id, approvedAt: new Date() },
+      })
+      if (exp.siteId) {
+        await prisma.site.update({
+          where: { id: exp.siteId },
+          data: { spent: { increment: exp.amount } }
+        })
+      }
+    }
   } else if (approval.entityType === 'SALARY_RUN') {
     await prisma.salaryRun.updateMany({
       where: { id: approval.entityId },

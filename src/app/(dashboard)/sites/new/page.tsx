@@ -15,8 +15,13 @@ async function createSite(formData: FormData) {
   const address = formData.get('address') as string
   const projectType = formData.get('projectType') as string
   const budget = parseFloat(formData.get('budget') as string) || 0
+  const startDateStr = formData.get('startDate') as string
+  const targetEndDateStr = formData.get('targetEndDate') as string
 
   if (!name || !location) return
+
+  const startDate = startDateStr ? new Date(startDateStr) : null
+  const targetEndDate = targetEndDateStr ? new Date(targetEndDateStr) : null
 
   await prisma.site.create({
     data: {
@@ -25,6 +30,8 @@ async function createSite(formData: FormData) {
       address: address || null,
       projectType: projectType || null,
       budget,
+      startDate,
+      targetEndDate,
       slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.random().toString(36).slice(2, 6),
       companyId: session.user.companyId,
     },
@@ -74,6 +81,16 @@ export default async function NewSitePage() {
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1.5">Budget (₹)</label>
                 <input name="budget" type="number" min="0" placeholder="5000000"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Start Date</label>
+                <input name="startDate" type="date"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Target End Date</label>
+                <input name="targetEndDate" type="date"
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" />
               </div>
             </div>

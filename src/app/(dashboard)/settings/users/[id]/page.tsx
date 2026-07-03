@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { Shield, UserMinus, Eye } from 'lucide-react'
 import { resetUserPassword } from '@/actions/users'
 import RemoveButton from '@/components/ui/RemoveButton'
+import ModuleAccessSelector from '@/components/ui/ModuleAccessSelector'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,10 +20,15 @@ async function updateUser(formData: FormData) {
   const role = formData.get('role') as any
   const isActive = formData.get('isActive') === 'true'
   const siteIds = formData.getAll('siteIds') as string[]
+  const moduleControlsStr = formData.get('moduleControls') as string | null
+  let moduleControls = undefined
+  if (moduleControlsStr) {
+    try { moduleControls = JSON.parse(moduleControlsStr) } catch (e) {}
+  }
 
   await prisma.companyMember.update({
     where: { id: memberId, companyId: session.user.companyId },
-    data: { role, isActive, siteIds },
+    data: { role, isActive, siteIds, ...(moduleControls !== undefined && { moduleControls }) },
   })
 
   revalidatePath('/settings/users')
@@ -149,6 +155,11 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
                   ))}
                 </div>
               </div>
+            </div>
+
+            {/* Module Controls */}
+            <div className="pt-2 border-t border-gray-100">
+              <ModuleAccessSelector initialModules={member.moduleControls as string[] | undefined} />
             </div>
 
             <div className="mt-6 flex items-center gap-3 border-t border-gray-100 pt-5">

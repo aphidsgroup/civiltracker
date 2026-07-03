@@ -30,6 +30,7 @@ interface AttendanceRegisterClientProps {
   labourList?: Worker[] // backwards compatibility
   sites?: SiteOption[]
   dateString: string
+  targetDateIso?: string
 }
 
 const STANDARD_TRADES = [
@@ -48,7 +49,8 @@ export default function AttendanceRegisterClient({
   initialLabour,
   labourList,
   sites = [],
-  dateString
+  dateString,
+  targetDateIso
 }: AttendanceRegisterClientProps) {
   const sourceList = initialLabour || labourList || []
 
@@ -221,7 +223,7 @@ export default function AttendanceRegisterClient({
         status: attendance[w.id] || 'PRESENT',
         advance: advances[w.id] || 0
       }))
-      const res = await saveMobileAttendanceAction(payload)
+      const res = await saveMobileAttendanceAction(payload, targetDateIso)
       if (res.success) {
         setSavedSuccess(true)
         setTimeout(() => setSavedSuccess(false), 4000)
@@ -376,7 +378,7 @@ export default function AttendanceRegisterClient({
                 <th className="py-3.5 px-4">Daily Wage</th>
                 <th className="py-3.5 px-4 text-center">Attendance Status</th>
                 <th className="py-3.5 px-4 text-center">OT (Hrs)</th>
-                <th className="py-3.5 px-4">Today&apos;s Advance</th>
+                <th className="py-3.5 px-4">Paid Today / Advance (₹)</th>
                 <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>

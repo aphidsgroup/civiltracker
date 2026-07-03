@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Role } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { Shield, Eye } from 'lucide-react'
+import ModuleAccessSelector from '@/components/ui/ModuleAccessSelector'
 
 async function createUser(formData: FormData) {
   'use server'
@@ -18,6 +19,11 @@ async function createUser(formData: FormData) {
   const password = formData.get('password') as string
   const role = formData.get('role') as Role
   const siteIds = formData.getAll('siteIds') as string[]
+  const moduleControlsStr = formData.get('moduleControls') as string | null
+  let moduleControls = null
+  if (moduleControlsStr) {
+    try { moduleControls = JSON.parse(moduleControlsStr) } catch (e) {}
+  }
 
   if (!name || !email || !password || !role) return
 
@@ -55,6 +61,7 @@ async function createUser(formData: FormData) {
         companyId,
         role,
         siteIds: siteIds.length > 0 ? siteIds : [],
+        moduleControls,
         isActive: true,
       },
     })
@@ -220,6 +227,11 @@ export default async function InviteUserPage() {
                 </div>
               </div>
             )}
+
+            {/* Module Controls */}
+            <div className="pt-2">
+              <ModuleAccessSelector />
+            </div>
 
             <div className="pt-2 flex items-center gap-3 border-t border-slate-100">
               <button

@@ -35,6 +35,7 @@ export default async function LabourPage() {
     include: {
       site: { select: { name: true } },
       _count: { select: { attendance: true } },
+      attendance: { select: { status: true, advance: true, overtimeHours: true } }
     },
     orderBy: { name: 'asc' },
   })
@@ -105,57 +106,89 @@ export default async function LabourPage() {
                     <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Trade</th>
                     <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Site</th>
                     <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Daily Wage</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Phone</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pending Sal.</th>
                     <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
                     <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                  {labour.map(l => (
-                    <tr key={l.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="px-4 py-3.5 text-sm">
-                        <div className="font-bold text-slate-900 dark:text-slate-100">{l.name}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">{l._count.attendance} days logged</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-sm">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold inline-block ${tradeColors[l.trade] ?? 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'}`}>
-                          {l.trade.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-sm text-slate-600 dark:text-slate-300 font-medium">{l.site?.name || 'Unassigned'}</td>
-                      <td className="px-4 py-3.5 text-sm font-bold text-slate-900 dark:text-slate-100">{formatCurrency(Number(l.dailyWage))}</td>
-                      <td className="px-4 py-3.5 text-sm text-slate-500 dark:text-slate-400">{l.phone || '-'}</td>
-                      <td className="px-4 py-3.5 text-sm">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold inline-block ${
-                          l.isActive 
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' 
-                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                        }`}>
-                          {l.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <form action={deactivateLabour}>
-                          <input type="hidden" name="id" value={l.id} />
-                          <RemoveButton
-                            name={l.name}
-                            message={`Remove ${l.name}? Their attendance records are kept.`}
-                          />
-                        </form>
-                      </td>
-                    </tr>
-                  ))}
+                  {labour.map(l => {
+                    let presentDays = 0
+                    let totalAdvances = 0
+                    l.attendance.forEach(a => {
+                      if (a.status === 'PRESENT') presentDays += 1
+                      if (a.status === 'HALF_DAY') presentDays += 0.5
+                      totalAdvances += Number(a.advance) || 0
+                    })
+                    const earned = presentDays * Number(l.dailyWage)
+                    const pendingBalance = Math.max(0, earned - totalAdvances)
+
+                    return (
+                      <tr key={l.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="px-4 py-3.5 text-sm">
+                          <div className="font-bold text-slate-900 dark:text-slate-100">{l.name}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">{l._count.attendance} days logged</div>
+                        </td>
+                        <td className="px-4 py-3.5 text-sm">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold inline-block ${tradeColors[l.trade] ?? 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'}`}>
+                            {l.trade.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-sm text-slate-600 dark:text-slate-300 font-medium">{l.site?.name || 'Unassigned'}</td>
+                        <td className="px-4 py-3.5 text-sm font-bold text-slate-900 dark:text-slate-100">{formatCurrency(Number(l.dailyWage))}</td>
+                        <td className="px-4 py-3.5">
+                          <div className="text-sm font-bold text-amber-600 dark:text-amber-500">
+                            {pendingBalance > 0 ? formatCurrency(pendingBalance) : 'Settled'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-sm">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold inline-block ${
+                            l.isActive 
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' 
+                              : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                          }`}>
+                            {l.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <form action={deactivateLabour}>
+                            <input type="hidden" name="id" value={l.id} />
+                            <RemoveButton
+                              name={l.name}
+                              message={`Remove ${l.name}? Their attendance records are kept.`}
+                            />
+                          </form>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             }
             mobileView={
               <MobileCardList
-                items={labour.map(l => ({
-                  id: l.id,
-                  title: l.name,
-                  subtitle: `${l.site?.name || 'Unassigned'} • ${l._count.attendance} days logged`,
-                  meta: <div className="text-sm font-bold mt-1 text-slate-900 dark:text-slate-100">Wage: {formatCurrency(Number(l.dailyWage))}</div>,
-                  statusNode: (
+                items={labour.map(l => {
+                  let presentDays = 0
+                  let totalAdvances = 0
+                  l.attendance.forEach(a => {
+                    if (a.status === 'PRESENT') presentDays += 1
+                    if (a.status === 'HALF_DAY') presentDays += 0.5
+                    totalAdvances += Number(a.advance) || 0
+                  })
+                  const earned = presentDays * Number(l.dailyWage)
+                  const pendingBalance = Math.max(0, earned - totalAdvances)
+                  
+                  return {
+                    id: l.id,
+                    title: l.name,
+                    subtitle: `${l.site?.name || 'Unassigned'} • ${l._count.attendance} days logged`,
+                    meta: (
+                      <div>
+                        <div className="text-sm font-bold mt-1 text-slate-900 dark:text-slate-100">Wage: {formatCurrency(Number(l.dailyWage))}</div>
+                        <div className="text-sm font-bold mt-0.5 text-amber-600">Pending: {pendingBalance > 0 ? formatCurrency(pendingBalance) : 'Settled'}</div>
+                      </div>
+                    ),
+                    statusNode: (
                     <div className="flex flex-col items-end gap-1">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                         l.isActive 
@@ -169,7 +202,8 @@ export default async function LabourPage() {
                       </span>
                     </div>
                   )
-                }))}
+                }
+                })}
               />
             }
           />

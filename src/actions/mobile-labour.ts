@@ -120,12 +120,18 @@ export async function updateWorkerAction(formData: {
   return { success: true, worker }
 }
 
-export async function saveMobileAttendanceAction(records: { labourId: string; status: string; siteId: string; advance?: number, startTime?: string }[]) {
+export async function saveMobileAttendanceAction(records: { labourId: string; status: string; siteId: string; advance?: number, startTime?: string }[], dateIso?: string) {
   const user = await requireUser()
   if (!user.companyId) throw new Error('No active company context')
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  let targetDate = new Date()
+  if (dateIso) {
+    const parsed = new Date(dateIso)
+    if (!isNaN(parsed.getTime())) {
+      targetDate = parsed
+    }
+  }
+  targetDate.setHours(0, 0, 0, 0)
 
   let count = 0
   for (const item of records) {
@@ -134,13 +140,13 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
       where: {
         labourId_date: {
           labourId: item.labourId,
-          date: today
+          date: targetDate
         }
       },
       create: {
         labourId: item.labourId,
         siteId: item.siteId,
-        date: today,
+        date: targetDate,
         status: item.status as any,
         advance: Number(item.advance) || 0,
         startTime: item.startTime,

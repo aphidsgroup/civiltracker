@@ -161,7 +161,7 @@ export default async function CompanyDashboard() {
               <table className="w-full">
                 <thead>
                   <tr>
-                    {['Site', 'Budget & Progress', 'Spend', 'Status'].map(h => (
+                    {['Site', 'Budget & Progress', 'Spend', 'Timeline', 'Status'].map(h => (
                       <th key={h} className="text-left text-[11px] font-bold text-[#647387] uppercase tracking-[0.03em] px-4 py-3 border-b border-[#e4eaf0]">{h}</th>
                     ))}
                   </tr>
@@ -188,6 +188,17 @@ export default async function CompanyDashboard() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-[13.5px] font-extrabold text-[#16273a] tabular">{fmtAmt(spent)}</td>
+                        <td className="px-4 py-3">
+                          {site.targetEndDate ? (() => {
+                            const diffTime = new Date(site.targetEndDate).getTime() - new Date().getTime();
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            if (diffDays < 0) {
+                              return <div className="text-[11.5px] font-bold text-rose-600 tabular">Overdue {-diffDays}d</div>
+                            } else {
+                              return <div className="text-[11.5px] font-bold text-slate-700 tabular">{diffDays}d left</div>
+                            }
+                          })() : <div className="text-[11.5px] font-semibold text-slate-400">No date</div>}
+                        </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2 py-1 rounded-[7px] ${st.cls}`}>
                             <span className="w-1.5 h-1.5 rounded-full bg-current" />{st.label}

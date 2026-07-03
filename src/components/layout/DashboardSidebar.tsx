@@ -87,7 +87,22 @@ export default function DashboardSidebar({
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto -mx-1 px-1 scrollbar-none">
-        {NAV_ITEMS.map((item, i) => {
+        {NAV_ITEMS.filter((item, index, array) => {
+          if ('type' in item) {
+            // Keep group header only if at least one child item is visible
+            const nextGroupIndex = array.findIndex((n, idx) => idx > index && 'type' in n)
+            const groupItems = array.slice(index + 1, nextGroupIndex === -1 ? undefined : nextGroupIndex)
+            return groupItems.some(subItem => {
+              if ('type' in subItem) return false
+              if (user.role === 'COMPANY_ADMIN') return true
+              if (!user.moduleControls || !Array.isArray(user.moduleControls)) return true
+              return user.moduleControls.includes(subItem.href)
+            })
+          }
+          if (user.role === 'COMPANY_ADMIN') return true
+          if (!user.moduleControls || !Array.isArray(user.moduleControls)) return true
+          return user.moduleControls.includes(item.href)
+        }).map((item, i) => {
           if ('type' in item) {
             return (
               <div key={i} className="text-[10px] font-bold text-[#5f778c] uppercase tracking-[0.08em] px-2.5 pt-3.5 pb-1.5">

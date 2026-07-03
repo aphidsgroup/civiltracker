@@ -65,6 +65,14 @@ export default async function SiteDetailPage({
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
             {site.status.replace('_', ' ')}
           </div>
+          {site.targetEndDate && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+              {(() => {
+                const diff = Math.ceil((new Date(site.targetEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                return diff < 0 ? `Overdue by ${-diff} days` : `${diff} days left`
+              })()}
+            </div>
+          )}
         </div>
         <div className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer shadow-sm transition-colors">
           Share to client

@@ -10,19 +10,26 @@ export const metadata = {
   description: 'Mark daily labour attendance, overtime, and advance payments across project sites.',
 }
 
-export default async function LabourAttendancePage() {
+export default async function LabourAttendancePage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const user = await requireUser()
   if (!user.companyId) redirect('/login')
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const resolvedParams = await searchParams
+  let targetDate = new Date()
+  if (resolvedParams.date) {
+    const parsed = new Date(resolvedParams.date)
+    if (!isNaN(parsed.getTime())) {
+      targetDate = parsed
+    }
+  }
+  targetDate.setHours(0, 0, 0, 0)
 
   const [labourList, sites] = await Promise.all([
     prisma.labour.findMany({
       where: { companyId: user.companyId, isActive: true },
       include: {
         site: true,
-        attendance: { where: { date: today }, take: 1 }
+        attendance: { where: { date: targetDate }, take: 1 }
       },
       orderBy: { name: 'asc' }
     }),
@@ -46,12 +53,15 @@ export default async function LabourAttendancePage() {
   }))
 
 
-  const todayStr = new Date().toLocaleDateString('en-IN', {
+  const dateStr = targetDate.toLocaleDateString('en-IN', {
     weekday: 'long',
     day: 'numeric',
     month: 'short',
     year: 'numeric'
   })
+  
+  // Format for the date picker input (YYYY-MM-DD)
+  const dateInputStr = targetDate.toISOString().split('T')[0]
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto pb-16">
@@ -71,10 +81,16 @@ export default async function LabourAttendancePage() {
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm">
+          <form method="GET" className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-xl px-3 py-1.5 border border-slate-200 dark:border-slate-700 shadow-sm">
             <CalendarCheck className="w-4 h-4 text-[#fc6e20] dark:text-blue-400" />
-            <span>{todayStr}</span>
-          </div>
+            <input 
+              type="date" 
+              name="date" 
+              defaultValue={dateInputStr} 
+              onChange={(e) => e.target.form?.submit()}
+              className="bg-transparent border-none text-xs font-bold text-slate-700 dark:text-slate-300 focus:ring-0 p-0 cursor-pointer" 
+            />
+          </form>
         </div>
       </div>
 
@@ -82,7 +98,8 @@ export default async function LabourAttendancePage() {
       <AttendanceRegisterClient
         initialLabour={formattedLabour}
         sites={sites}
-        dateString={todayStr}
+        dateString={dateStr}
+        targetDateIso={dateInputStr}
       />
     </div>
   )

@@ -326,8 +326,9 @@ model CompanyMember {
   userId    String
   companyId String
   role      Role
-  siteIds   String[] @default([])
-  isActive  Boolean  @default(true)
+  siteIds        String[] @default([])
+  moduleControls Json?
+  isActive       Boolean  @default(true)
   joinedAt  DateTime @default(now())
   updatedAt DateTime @updatedAt
 
