@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { toggleTaskStatus, toggleCategoryNeglect, addCustomTask } from '@/actions/checklists'
+import { toggleTaskStatus, toggleCategoryNeglect, addCustomTask, editChecklistTask, deleteChecklistTask } from '@/actions/checklists'
+import { Pencil, Trash2 } from 'lucide-react'
 
 type Task = {
   id: string
@@ -35,6 +36,8 @@ export function ChecklistClient({ checklist }: { checklist: Checklist }) {
   
   const [newTaskName, setNewTaskName] = useState('')
   const [addingToCategory, setAddingToCategory] = useState<string | null>(null)
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [editTaskName, setEditTaskName] = useState('')
 
   const handleToggleTask = (taskId: string, currentStatus: string, field: 'status' | 'clientDone' | 'neglected', currentValue: any) => {
     startTransition(async () => {
@@ -61,6 +64,22 @@ export function ChecklistClient({ checklist }: { checklist: Checklist }) {
       await addCustomTask(categoryId, newTaskName)
       setNewTaskName('')
       setAddingToCategory(null)
+    })
+  }
+
+  const handleEditTask = async (taskId: string) => {
+    if (!editTaskName.trim()) return
+    startTransition(async () => {
+      await editChecklistTask(taskId, editTaskName)
+      setEditingTaskId(null)
+      setEditTaskName('')
+    })
+  }
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!confirm('Are you sure you want to delete this task?')) return
+    startTransition(async () => {
+      await deleteChecklistTask(taskId)
     })
   }
 
@@ -133,10 +152,31 @@ export function ChecklistClient({ checklist }: { checklist: Checklist }) {
                         disabled={task.isNeglected || task.isClientDone || isPending}
                         className="mt-1 w-5 h-5 rounded border-slate-300 text-green-500 focus:ring-green-500"
                       />
-                      <div>
-                        <p className={`text-sm font-medium ${task.status === 'COMPLETED' ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
-                          {task.name}
-                        </p>
+                      <div className="flex-1">
+                        {editingTaskId === task.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={editTaskName}
+                              onChange={e => setEditTaskName(e.target.value)}
+                              autoFocus
+                              onKeyDown={e => e.key === 'Enter' && handleEditTask(task.id)}
+                              className="flex-1 text-sm border-slate-300 rounded focus:ring-[#fc6e20] focus:border-[#fc6e20] py-1 px-2"
+                            />
+                            <button onClick={() => handleEditTask(task.id)} disabled={isPending} className="text-xs bg-[#fc6e20] text-white px-2 py-1 rounded">Save</button>
+                            <button onClick={() => setEditingTaskId(null)} className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded">Cancel</button>
+                          </div>
+                        ) : (
+                          <div className="group flex items-center gap-2">
+                            <p className={`text-sm font-medium ${task.status === 'COMPLETED' ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                              {task.name}
+                            </p>
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                              <button onClick={() => { setEditingTaskId(task.id); setEditTaskName(task.name) }} className="p-1 text-slate-400 hover:text-blue-500 rounded"><Pencil size={13} /></button>
+                              <button onClick={() => handleDeleteTask(task.id)} className="p-1 text-slate-400 hover:text-red-500 rounded"><Trash2 size={13} /></button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 

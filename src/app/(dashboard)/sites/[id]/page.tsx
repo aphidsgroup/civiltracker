@@ -1,11 +1,11 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils'
-import { ChevronLeft } from 'lucide-react'
+import { formatCurrency, formatDateTime } from '@/lib/utils'
 
-export default async function SiteDetailPage({
+export const dynamic = 'force-dynamic'
+
+export default async function SiteOverviewPage({
   params,
 }: {
   params: Promise<{ id: string }>
@@ -14,12 +14,14 @@ export default async function SiteDetailPage({
   if (!session?.user?.companyId) redirect('/login')
   const { id } = await params
 
-  const site = await prisma.site.findFirst({
+  const site = await prisma.site.findUnique({
     where: { id, companyId: session.user.companyId, deletedAt: null },
     include: {
       dprs: { orderBy: { date: 'desc' }, take: 1, include: { createdBy: true } },
     }
   })
+
+  if (!site) redirect('/sites')
 
   const now = new Date()
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -45,8 +47,6 @@ export default async function SiteDetailPage({
   const contractorLabourCount = todayContractors.reduce((acc, c) => acc + c.labourCount, 0)
   const totalOnsite = presentCount + contractorLabourCount
 
-  if (!site) redirect('/sites')
-
   const budget = Number(site.budget) || 0
   const spent = Number(site.spent) || 0
   const progress = site.progress || 0
@@ -54,42 +54,6 @@ export default async function SiteDetailPage({
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-2.5">
-          <Link href="/sites" className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors">
-            <ChevronLeft className="w-4 h-4" />
-            Sites
-          </Link>
-          <div className="text-lg font-extrabold text-slate-900">{site.name}</div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            {site.status.replace('_', ' ')}
-          </div>
-          {site.targetEndDate && (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-              {(() => {
-                const diff = Math.ceil((new Date(site.targetEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-                return diff < 0 ? `Overdue by ${-diff} days` : `${diff} days left`
-              })()}
-            </div>
-          )}
-        </div>
-        <div className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer shadow-sm transition-colors">
-          Share to client
-        </div>
-      </div>
-      
-      <div className="flex items-center gap-2 border-b border-slate-200 mb-6 overflow-x-auto">
-        <div className="px-3 py-2 text-sm font-semibold text-blue-600 border-b-2 border-blue-600 whitespace-nowrap cursor-pointer">Overview</div>
-        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">DPR</div>
-        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">Expenses</div>
-        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">Bills</div>
-        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">Labour</div>
-        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">Materials</div>
-        <Link href={`/sites/${site.id}/checklist`} className="px-3 py-2 text-sm font-bold text-[#fc6e20] hover:text-[#e55a10] border-b-2 border-transparent hover:border-[#fc6e20] whitespace-nowrap cursor-pointer transition-colors">Checklist</Link>
-        <div className="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 border-b-2 border-transparent whitespace-nowrap cursor-pointer">BOQ</div>
-      </div>
-      
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="p-4 bg-slate-900 text-white rounded-xl shadow-sm">
           <div className="text-2xl font-bold">{progress}%</div>
@@ -111,17 +75,6 @@ export default async function SiteDetailPage({
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200">
-              <div className="font-bold text-slate-800 text-sm">Budget vs Actual by head</div>
-            </div>
-            <div className="p-5">
-              <div className="py-8 text-center text-slate-500 text-xs">
-                Detailed budget breakdown is not configured for this project.
-              </div>
-            </div>
-          </div>
-          
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
               <div className="font-bold text-slate-800 text-sm">Today&apos;s site update</div>
@@ -149,79 +102,31 @@ export default async function SiteDetailPage({
                   No labour marked present today.
                 </div>
               ) : (
-                <div className="divide-y divide-slate-100 max-h-[350px] overflow-y-auto">
-                  {/* Own Labour */}
-                  {todayAttendance.length > 0 && (
-                    <div className="px-5 py-2 bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-500">
-                      Internal Workforce ({presentCount})
-                    </div>
-                  )}
-                  {todayAttendance.map((att) => (
-                    <div key={att.id} className="flex items-center justify-between px-5 py-3">
+                <div className="divide-y divide-slate-100">
+                  {todayAttendance.map(a => (
+                    <div key={a.id} className="flex justify-between items-center p-4">
                       <div>
-                        <div className="font-semibold text-sm text-slate-900">{att.labour.name}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">{att.labour.trade}</div>
+                        <div className="font-bold text-slate-800 text-sm">{a.labour.name}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">{a.labour.trade}</div>
                       </div>
-                      <div className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 uppercase tracking-wide">
+                      <div className="px-2 py-1 bg-emerald-50 text-emerald-700 font-semibold text-[10px] uppercase rounded border border-emerald-100">
                         Present
                       </div>
                     </div>
                   ))}
-
-                  {/* Contractors */}
-                  {todayContractors.length > 0 && (
-                    <div className="px-5 py-2 bg-blue-50 border-t border-slate-100 text-[10px] font-black uppercase tracking-wider text-blue-600">
-                      Outside Contractors ({contractorLabourCount})
-                    </div>
-                  )}
-                  {todayContractors.map((ca) => (
-                    <div key={ca.id} className="flex items-center justify-between px-5 py-3">
+                  {todayContractors.map(c => (
+                    <div key={c.id} className="flex justify-between items-center p-4 bg-slate-50/50">
                       <div>
-                        <div className="font-semibold text-sm text-slate-900">{ca.subcontractor.name}</div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-slate-500">{ca.contractorType}</span>
-                          {Number(ca.dailyAdvance) > 0 && (
-                            <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
-                              Adv: {formatCurrency(Number(ca.dailyAdvance))}
-                            </span>
-                          )}
-                        </div>
+                        <div className="font-bold text-slate-800 text-sm">{c.subcontractor.name}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">Subcontractor team</div>
                       </div>
-                      <div className="inline-flex items-center px-2 py-1 rounded text-[11px] font-black bg-blue-100 text-blue-700">
-                        {ca.labourCount} Workers
+                      <div className="font-bold text-slate-700 text-sm">
+                        {c.labourCount} Workers
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200">
-              <div className="font-bold text-slate-800 text-sm">Site facts</div>
-            </div>
-            <div className="p-5">
-              <div className="flex items-center justify-between py-2.5 border-b border-slate-100 text-xs">
-                <span className="text-slate-500 font-medium">Client</span>
-                <span className="text-slate-900 font-semibold text-right">{site.clientName || '-'}</span>
-              </div>
-              <div className="flex items-center justify-between py-2.5 border-b border-slate-100 text-xs">
-                <span className="text-slate-500 font-medium">Contract</span>
-                <span className="text-slate-900 font-semibold text-right">Item-rate • {formatCurrency(budget)}</span>
-              </div>
-              <div className="flex items-center justify-between py-2.5 border-b border-slate-100 text-xs">
-                <span className="text-slate-500 font-medium">Start</span>
-                <span className="text-slate-900 font-semibold text-right">{formatDate(site.startDate)}</span>
-              </div>
-              <div className="flex items-center justify-between py-2.5 border-b border-slate-100 text-xs">
-                <span className="text-slate-500 font-medium">Handover</span>
-                <span className="text-slate-900 font-semibold text-right">{formatDate(site.handoverDate)}</span>
-              </div>
-              <div className="flex items-center justify-between py-2.5 text-xs">
-                <span className="text-slate-500 font-medium">Location</span>
-                <span className="text-slate-900 font-semibold text-right">{site.location}</span>
-              </div>
             </div>
           </div>
         </div>

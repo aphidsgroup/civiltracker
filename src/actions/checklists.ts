@@ -110,3 +110,26 @@ export async function addCustomTask(categoryId: string, name: string) {
 
   return { success: true }
 }
+
+export async function editChecklistTask(taskId: string, newName: string) {
+  const session = await auth()
+  if (!session?.user?.companyId) throw new Error('Unauthorized')
+
+  await prisma.projectChecklistTask.update({
+    where: { id: taskId },
+    data: { name: newName }
+  })
+
+  return { success: true }
+}
+
+export async function deleteChecklistTask(taskId: string) {
+  const session = await auth()
+  if (!session?.user?.companyId) throw new Error('Unauthorized')
+
+  await prisma.projectChecklistTask.delete({
+    where: { id: taskId }
+  })
+
+  return { success: true }
+}
