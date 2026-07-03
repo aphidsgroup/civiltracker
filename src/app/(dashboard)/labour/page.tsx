@@ -114,7 +114,7 @@ export default async function LabourPage() {
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                   {labour.map(l => {
                     let presentDays = 0
-                    let totalAdvances = 0
+                    let totalAdvances = Number(l.openingAdvance) || 0
                     l.attendance.forEach(a => {
                       if (a.status === 'PRESENT') presentDays += 1
                       if (a.status === 'HALF_DAY') presentDays += 0.5
@@ -172,7 +172,7 @@ export default async function LabourPage() {
               <MobileCardList
                 items={labour.map(l => {
                   let presentDays = 0
-                  let totalAdvances = 0
+                  let totalAdvances = Number(l.openingAdvance) || 0
                   l.attendance.forEach(a => {
                     if (a.status === 'PRESENT') presentDays += 1
                     if (a.status === 'HALF_DAY') presentDays += 0.5

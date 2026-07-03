@@ -24,6 +24,23 @@ export default async function EditLabourPage({ params }: { params: { id: string 
     orderBy: { name: 'asc' },
   })
 
+  const attendances = await prisma.labourAttendance.findMany({
+    where: { labourId: params.id }
+  })
+
+  let totalAdvance = Number(labour.openingAdvance) || 0
+  let totalEarned = 0
+  
+  attendances.forEach(a => {
+    totalAdvance += Number(a.advance) || 0
+    const wage = Number(labour.dailyWage) || 0
+    if (a.status === 'PRESENT') totalEarned += wage
+    if (a.status === 'HALF_DAY') totalEarned += (wage / 2)
+    if (a.overtimeHours > 0) totalEarned += (wage / 8) * a.overtimeHours
+  })
+
+  const pendingSalary = Math.max(0, totalEarned - totalAdvance)
+
   const trades: { value: LabourTrade; label: string }[] = [
     { value: 'MASON', label: 'Mason' },
     { value: 'HELPER', label: 'Helper' },
@@ -47,7 +64,27 @@ export default async function EditLabourPage({ params }: { params: { id: string 
         <Link href="/labour" className="text-sm text-slate-500 hover:text-slate-900 font-medium transition-colors">← Back</Link>
       </div>
 
-      <div className="p-6 max-w-2xl mx-auto">
+      <div className="p-6 max-w-2xl mx-auto space-y-6">
+        {/* Financial Summary */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Total Earned</p>
+            <p className="text-lg font-black text-slate-800">₹{totalEarned.toLocaleString('en-IN')}</p>
+          </div>
+          <div className="w-px h-10 bg-slate-200" />
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Total Advances</p>
+            <p className="text-lg font-black text-[#fc6e20]">₹{totalAdvance.toLocaleString('en-IN')}</p>
+          </div>
+          <div className="w-px h-10 bg-slate-200" />
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Pending Salary</p>
+            <p className={`text-lg font-black ${pendingSalary > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+              ₹{pendingSalary.toLocaleString('en-IN')}
+            </p>
+          </div>
+        </div>
+
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
           <form action={updateLabourAction} className="space-y-5">
             <input type="hidden" name="id" value={labour.id} />
@@ -99,6 +136,15 @@ export default async function EditLabourPage({ params }: { params: { id: string 
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Overtime / Hr (₹)</label>
                 <input
                   name="overtimeRate" type="number" step="0.01" defaultValue={Number(labour.overtimeRate) || ''} placeholder="0.00"
+                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
+                />
+              </div>
+
+              {/* Opening Advance */}
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Upfront Advance Paid (₹)</label>
+                <input
+                  name="openingAdvance" type="number" step="0.01" defaultValue={Number(labour.openingAdvance) || ''} placeholder="0.00"
                   className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
                 />
               </div>

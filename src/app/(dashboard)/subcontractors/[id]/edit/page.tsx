@@ -15,6 +15,9 @@ async function updateSubcontractor(formData: FormData) {
   const trade = formData.get('trade') as string
   const gst = formData.get('gst') as string
   const workOrderValue = formData.get('workOrderValue') as string
+  const raBilled = formData.get('raBilled') as string
+  const advance = formData.get('advance') as string
+  const retention = formData.get('retention') as string
   const status = formData.get('status') as string
 
   if (!id || !name) return
@@ -27,6 +30,9 @@ async function updateSubcontractor(formData: FormData) {
       trade: trade || null,
       gst: gst || null,
       workOrderValue: workOrderValue ? parseFloat(workOrderValue) : 0,
+      raBilled: raBilled ? parseFloat(raBilled) : 0,
+      advance: advance ? parseFloat(advance) : 0,
+      retention: retention ? parseFloat(retention) : 0,
       status: status || 'Active',
     },
   })
@@ -104,6 +110,39 @@ export default async function EditSubcontractorPage({ params }: { params: { id: 
                   name="workOrderValue" 
                   step="0.01"
                   defaultValue={Number(sub.workOrderValue) || ''}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">RA Billed (₹)</label>
+                <input 
+                  type="number" 
+                  name="raBilled" 
+                  step="0.01"
+                  defaultValue={Number(sub.raBilled) || ''}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Advance Paid (₹)</label>
+                <input 
+                  type="number" 
+                  name="advance" 
+                  step="0.01"
+                  defaultValue={Number(sub.advance) || ''}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Retention (₹)</label>
+                <input 
+                  type="number" 
+                  name="retention" 
+                  step="0.01"
+                  defaultValue={Number(sub.retention) || ''}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
                 />
               </div>

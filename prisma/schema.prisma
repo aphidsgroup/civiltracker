@@ -485,18 +485,19 @@ model MediaAsset {
 // ============================================================
 
 model Labour {
-  id           String      @id @default(cuid())
-  companyId    String
-  siteId       String
-  name         String
-  phone        String?
-  trade        LabourTrade @default(HELPER)
-  dailyWage    Decimal     @db.Decimal(10, 2)
-  overtimeRate Decimal?    @db.Decimal(10, 2)
-  supervisorId String?
-  isActive     Boolean     @default(true)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id             String      @id @default(cuid())
+  companyId      String
+  siteId         String
+  name           String
+  phone          String?
+  trade          LabourTrade @default(HELPER)
+  dailyWage      Decimal     @db.Decimal(10, 2)
+  overtimeRate   Decimal?    @db.Decimal(10, 2)
+  openingAdvance Decimal     @default(0) @db.Decimal(10, 2)
+  supervisorId   String?
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   site        Site               @relation(fields: [siteId], references: [id])

@@ -17,6 +17,7 @@ export async function updateLabourAction(formData: FormData) {
   const trade = formData.get('trade') as LabourTrade
   const dailyWage = parseFloat(formData.get('dailyWage') as string)
   const overtimeRate = formData.get('overtimeRate') ? parseFloat(formData.get('overtimeRate') as string) : undefined
+  const openingAdvance = formData.get('openingAdvance') ? parseFloat(formData.get('openingAdvance') as string) : 0
   const siteId = formData.get('siteId') as string
   const isActive = formData.get('isActive') === 'true'
 
@@ -31,6 +32,7 @@ export async function updateLabourAction(formData: FormData) {
       trade,
       dailyWage,
       overtimeRate,
+      openingAdvance,
       isActive,
     },
   })

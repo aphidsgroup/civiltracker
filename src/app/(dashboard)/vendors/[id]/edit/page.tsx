@@ -17,6 +17,7 @@ async function updateVendor(formData: FormData) {
   const category = formData.get('category') as string
   const paymentTerms = formData.get('paymentTerms') as string
   const address = formData.get('address') as string
+  const amountPayable = formData.get('amountPayable') as string
   const isActive = formData.get('isActive') === 'true'
 
   if (!id || !name) return
@@ -31,6 +32,7 @@ async function updateVendor(formData: FormData) {
       category: category || null,
       paymentTerms: paymentTerms || null,
       address: address || null,
+      amountPayable: amountPayable ? parseFloat(amountPayable) : 0,
       isActive,
     },
   })
@@ -121,16 +123,25 @@ export default async function EditVendorPage({ params }: { params: { id: string 
                 className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
               />
             </div>
-            
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Status</label>
-              <select
-                name="isActive" required defaultValue={vendor.isActive ? 'true' : 'false'}
-                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all bg-white"
-              >
-                <option value="true">Active</option>
-                <option value="false">Inactive</option>
-              </select>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Amount Payable (₹)</label>
+                <input
+                  name="amountPayable" type="number" step="0.01" defaultValue={Number(vendor.amountPayable) || ''}
+                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Status</label>
+                <select
+                  name="isActive" required defaultValue={vendor.isActive ? 'true' : 'false'}
+                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all bg-white"
+                >
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </div>
             </div>
 
             <div className="pt-4 flex justify-end">

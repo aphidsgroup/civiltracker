@@ -37,7 +37,9 @@ async function getCachedDashboardData(companyId: string) {
     prisma.vendor.count({ where: { companyId, isActive: true } }),
     prisma.subcontractor.count({ where: { companyId, isActive: true } }),
     prisma.material.count({ where: { companyId, isActive: true } }),
-    prisma.labourAttendance.findMany({ where: { siteId: { in: siteIds } }, select: { advance: true, status: true, overtimeHours: true, labour: { select: { dailyWage: true } } } })
+    prisma.labourAttendance.findMany({ where: { siteId: { in: siteIds } }, select: { advance: true, status: true, overtimeHours: true, labour: { select: { dailyWage: true } } } }),
+    prisma.vendor.aggregate({ where: { companyId, isActive: true }, _sum: { amountPayable: true } }),
+    prisma.subcontractor.aggregate({ where: { companyId, isActive: true }, _sum: { raBilled: true, advance: true, retention: true } })
   ])
 }
 
@@ -56,7 +58,8 @@ export default async function CompanyDashboard() {
   const [
     activeSitesCount, todayExpenseAgg, pendingExpenses,
     totalLabour, todayAttendance, recentPendingExpenses, recentExpenses, sites,
-    salaryDueAgg, invoicesDueAgg, vendorCount, subCount, materialCount, allAttendance
+    salaryDueAgg, invoicesDueAgg, vendorCount, subCount, materialCount, allAttendance,
+    vendorAgg, subAgg
   ] = await cachedDataFetcher()
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
@@ -112,15 +115,21 @@ export default async function CompanyDashboard() {
   const salaryDue = Number(salaryDueAgg._sum.totalNet ?? 0)
   const invoicesDue = Number(invoicesDueAgg._sum.amount ?? 0)
 
+  const vendorPending = Number(vendorAgg?._sum?.amountPayable ?? 0)
+  const subRaBilled = Number(subAgg?._sum?.raBilled ?? 0)
+  const subAdvance = Number(subAgg?._sum?.advance ?? 0)
+  const subRetention = Number(subAgg?._sum?.retention ?? 0)
+  const subPending = Math.max(0, subRaBilled - subAdvance - subRetention)
+
   const kpis = [
     { label: 'Active Sites', value: activeSitesCount, sub: 'Active this month', trend: 'up', Icon: Building2 },
     { label: "Today's Expense", value: fmtAmt(todaySpend), sub: 'Across all sites today', trend: 'up', Icon: DollarSign, featured: true },
     { label: 'Bills Pending', value: pendingCount, sub: `${fmtAmt(pendingTotal)} to approve`, trend: 'warn', Icon: Clock },
     { label: 'Labour Present', value: `${todayAttendance}/${totalLabour || '—'}`, sub: `${totalLabour > 0 ? Math.round((todayAttendance / totalLabour) * 100) : 0}% attendance`, trend: 'up', Icon: Users },
-    { label: 'Pending Salaries', value: fmtAmt(labourPendingSalaries), sub: 'Unpaid earned wages', trend: labourPendingSalaries > 0 ? 'warn' : 'flat', Icon: Wallet },
+    { label: 'Labour Pending', value: fmtAmt(labourPendingSalaries), sub: 'Unpaid earned wages', trend: labourPendingSalaries > 0 ? 'warn' : 'flat', Icon: Wallet },
     { label: 'Labour Advances', value: fmtAmt(totalAdvances), sub: 'Total upfront paid', trend: 'up', Icon: CreditCard },
-    { label: 'Active Vendors', value: vendorCount, sub: 'Approved suppliers', trend: 'flat', Icon: Truck },
-    { label: 'Subcontractors', value: subCount, sub: 'Active tradesmen', trend: 'flat', Icon: Users },
+    { label: 'Vendor Pending', value: fmtAmt(vendorPending), sub: 'Payable to active vendors', trend: vendorPending > 0 ? 'warn' : 'flat', Icon: Truck },
+    { label: 'Sub Pending', value: fmtAmt(subPending), sub: 'Unpaid approved RA bills', trend: subPending > 0 ? 'warn' : 'flat', Icon: Users },
     { label: 'Materials Tracked', value: materialCount, sub: 'Across all sites', trend: 'flat', Icon: Package },
   ]
 
