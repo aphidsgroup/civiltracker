@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { deleteCompany } from '@/actions/super-admin'
+import DeleteCompanyButton from '@/components/super-admin/DeleteCompanyButton'
 
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -60,15 +61,11 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
           </span>
         </div>
         {/* Delete Company */}
-        <form action={handleDelete}
-          onSubmit={(e) => {
-            if (!confirm(`Permanently delete "${company.name}" and ALL its data? This cannot be undone.`)) e.preventDefault()
-          }}>
-          <button type="submit"
-            className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-sm font-semibold rounded-lg transition-colors cursor-pointer">
-            🗑 Delete Company
-          </button>
-        </form>
+        <DeleteCompanyButton
+          companyId={company.id}
+          companyName={company.name}
+          deleteAction={handleDelete}
+        />
       </div>
       <div className="p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
