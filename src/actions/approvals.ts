@@ -223,10 +223,8 @@ export async function approveApprovalAction(id: string, note?: string) {
         data: { approvalStatus: 'APPROVED', approvedById: user.id, approvedAt: new Date() },
       })
       if (exp.siteId) {
-        await prisma.site.update({
-          where: { id: exp.siteId },
-          data: { spent: { increment: exp.amount } }
-        })
+        const { syncSiteBudget } = await import('@/lib/budget')
+        await syncSiteBudget(exp.siteId)
       }
     }
   } else if (approval.entityType === 'SALARY_RUN') {

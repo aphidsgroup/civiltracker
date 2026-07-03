@@ -162,6 +162,15 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
     count++
   }
 
+  // Recalculate budget for all affected sites (if they gave advances)
+  const affectedSiteIds = [...new Set(records.map(r => r.siteId))]
+  if (affectedSiteIds.length > 0) {
+    const { syncSiteBudget } = await import('@/lib/budget')
+    for (const sId of affectedSiteIds) {
+      await syncSiteBudget(sId)
+    }
+  }
+
   revalidatePath('/mobile/attendance')
   revalidatePath('/labour/attendance')
 

@@ -1,27 +1,18 @@
 import { PrismaClient } from '@prisma/client'
+import { syncSiteBudget } from '../src/lib/budget'
 
 const prisma = new PrismaClient()
 
 async function main() {
-  console.log('Recalculating site budgets...')
+  console.log('Recalculating site budgets with advances...')
   const sites = await prisma.site.findMany({
     where: { deletedAt: null }
   })
 
   for (const site of sites) {
-    const expenses = await prisma.expense.aggregate({
-      where: { siteId: site.id, approvalStatus: 'APPROVED', deletedAt: null },
-      _sum: { amount: true }
-    })
-    
-    const totalSpent = Number(expenses._sum.amount || 0)
-    
-    if (Number(site.spent) !== totalSpent) {
-      console.log(`Updating site ${site.name}: old spent = ${site.spent}, new spent = ${totalSpent}`)
-      await prisma.site.update({
-        where: { id: site.id },
-        data: { spent: totalSpent }
-      })
+    const totalSpent = await syncSiteBudget(site.id)
+    if (totalSpent !== null) {
+      console.log(`Site ${site.name} sync complete. New spent = ${totalSpent}`)
     }
   }
 
