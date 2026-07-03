@@ -108,7 +108,7 @@ export default async function CompanyDashboard() {
     { href: '/bills/upload', Icon: Upload, label: 'Upload Bill', color: 'text-[#0f7a45]', bg: 'bg-[#e2f3ea]' },
     { href: '/expenses/new', Icon: Receipt, label: 'Add Expense', color: 'text-[#b6740a]', bg: 'bg-[#fcefd4]' },
     { href: '/labour', Icon: CheckSquare, label: 'Mark Attendance', color: 'text-[#5b47b8]', bg: 'bg-[#ece8fa]' },
-    { href: '/dpr', Icon: FileText, label: 'Create DPR', color: 'text-[#0369a1]', bg: 'bg-[#e0f2fe]' },
+    { href: '/checklists', Icon: FileText, label: 'Manage Checklists', color: 'text-[#0369a1]', bg: 'bg-[#e0f2fe]' },
     { href: '/reports', Icon: BarChart3, label: 'Generate Report', color: 'text-[#be123c]', bg: 'bg-[#ffe4e6]' },
   ]
 
