@@ -69,7 +69,7 @@ export default async function MobileChecklistsPage({ searchParams }: { searchPar
             </p>
           </div>
         ) : (
-          <ChecklistMobileClient checklist={checklist} />
+          <ChecklistMobileClient siteId={siteId} checklist={checklist} />
         )}
       </div>
     </div>

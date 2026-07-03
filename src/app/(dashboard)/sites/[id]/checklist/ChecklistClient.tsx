@@ -43,25 +43,25 @@ export function ChecklistClient({ siteId, checklist }: { siteId: string, checkli
     startTransition(async () => {
       if (field === 'status') {
         const next = currentStatus === 'COMPLETED' ? 'PENDING' : 'COMPLETED'
-        await toggleTaskStatus(taskId, next, false, false)
+        await toggleTaskStatus(siteId, taskId, next, false, false)
       } else if (field === 'clientDone') {
-        await toggleTaskStatus(taskId, 'PENDING', !currentValue, false)
+        await toggleTaskStatus(siteId, taskId, 'PENDING', !currentValue, false)
       } else if (field === 'neglected') {
-        await toggleTaskStatus(taskId, 'PENDING', false, !currentValue)
+        await toggleTaskStatus(siteId, taskId, 'PENDING', false, !currentValue)
       }
     })
   }
 
   const handleToggleCategory = (categoryId: string, currentNeglected: boolean) => {
     startTransition(async () => {
-      await toggleCategoryNeglect(categoryId, !currentNeglected)
+      await toggleCategoryNeglect(siteId, categoryId, !currentNeglected)
     })
   }
 
   const handleAddTask = async (categoryId: string) => {
     if (!newTaskName.trim()) return
     startTransition(async () => {
-      await addCustomTask(categoryId, newTaskName)
+      await addCustomTask(siteId, categoryId, newTaskName)
       setNewTaskName('')
       setAddingToCategory(null)
     })
@@ -70,7 +70,7 @@ export function ChecklistClient({ siteId, checklist }: { siteId: string, checkli
   const handleEditTask = async (taskId: string) => {
     if (!editTaskName.trim()) return
     startTransition(async () => {
-      await editChecklistTask(taskId, editTaskName)
+      await editChecklistTask(siteId, taskId, editTaskName)
       setEditingTaskId(null)
       setEditTaskName('')
     })
@@ -79,7 +79,7 @@ export function ChecklistClient({ siteId, checklist }: { siteId: string, checkli
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm('Are you sure you want to delete this task?')) return
     startTransition(async () => {
-      await deleteChecklistTask(taskId)
+      await deleteChecklistTask(siteId, taskId)
     })
   }
 

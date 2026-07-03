@@ -65,7 +65,7 @@ export async function enableChecklistForProject(siteId: string, templateId: stri
   return { success: true }
 }
 
-export async function toggleTaskStatus(taskId: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED', isClientDone = false, isNeglected = false) {
+export async function toggleTaskStatus(siteId: string, taskId: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED', isClientDone = false, isNeglected = false) {
   const session = await auth()
   if (!session?.user) throw new Error('Unauthorized')
 
@@ -80,11 +80,11 @@ export async function toggleTaskStatus(taskId: string, status: 'PENDING' | 'IN_P
     }
   })
   
-  // Could revalidate site checklisth path
+  revalidatePath(`/sites/${siteId}`)
   return { success: true }
 }
 
-export async function toggleCategoryNeglect(categoryId: string, isNeglected: boolean) {
+export async function toggleCategoryNeglect(siteId: string, categoryId: string, isNeglected: boolean) {
   const session = await auth()
   if (!session?.user?.companyId) throw new Error('Unauthorized')
 
@@ -93,10 +93,11 @@ export async function toggleCategoryNeglect(categoryId: string, isNeglected: boo
     data: { isNeglected }
   })
 
+  revalidatePath(`/sites/${siteId}`)
   return { success: true }
 }
 
-export async function addCustomTask(categoryId: string, name: string) {
+export async function addCustomTask(siteId: string, categoryId: string, name: string) {
   const session = await auth()
   if (!session?.user?.companyId) throw new Error('Unauthorized')
 
@@ -108,10 +109,11 @@ export async function addCustomTask(categoryId: string, name: string) {
     }
   })
 
+  revalidatePath(`/sites/${siteId}`)
   return { success: true }
 }
 
-export async function editChecklistTask(taskId: string, newName: string) {
+export async function editChecklistTask(siteId: string, taskId: string, newName: string) {
   const session = await auth()
   if (!session?.user?.companyId) throw new Error('Unauthorized')
 
@@ -120,10 +122,11 @@ export async function editChecklistTask(taskId: string, newName: string) {
     data: { name: newName }
   })
 
+  revalidatePath(`/sites/${siteId}`)
   return { success: true }
 }
 
-export async function deleteChecklistTask(taskId: string) {
+export async function deleteChecklistTask(siteId: string, taskId: string) {
   const session = await auth()
   if (!session?.user?.companyId) throw new Error('Unauthorized')
 
@@ -131,6 +134,7 @@ export async function deleteChecklistTask(taskId: string) {
     where: { id: taskId }
   })
 
+  revalidatePath(`/sites/${siteId}`)
   return { success: true }
 }
 

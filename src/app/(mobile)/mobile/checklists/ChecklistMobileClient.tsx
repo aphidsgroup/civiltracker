@@ -27,7 +27,7 @@ type Checklist = {
   stages: Stage[]
 }
 
-export function ChecklistMobileClient({ checklist }: { checklist: Checklist }) {
+export function ChecklistMobileClient({ siteId, checklist }: { siteId: string, checklist: Checklist }) {
   const [isPending, startTransition] = useTransition()
   const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({
     [checklist.stages[0]?.id]: true
@@ -45,7 +45,7 @@ export function ChecklistMobileClient({ checklist }: { checklist: Checklist }) {
   const handleToggleTask = (taskId: string, currentStatus: string) => {
     startTransition(async () => {
       const next = currentStatus === 'COMPLETED' ? 'PENDING' : 'COMPLETED'
-      await toggleTaskStatus(taskId, next, false, false)
+      await toggleTaskStatus(siteId, taskId, next, false, false)
     })
   }
 
