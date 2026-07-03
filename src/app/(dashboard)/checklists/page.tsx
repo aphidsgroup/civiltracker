@@ -1,11 +1,9 @@
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
-import { CheckCircle2, Plus } from 'lucide-react'
+import { CheckCircle2, ChevronRight, Copy, Eye } from 'lucide-react'
 import { CloneTemplateBtn } from './CloneTemplateBtn'
-import { createTemplate } from '@/actions/template-checklists'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,109 +13,151 @@ export default async function ChecklistsIndexPage() {
 
   const companyId = session.user.companyId
 
-  // Fetch global templates (companyId IS NULL) and company-specific templates
   const [globalTemplates, companyTemplates] = await Promise.all([
     prisma.checklistTemplate.findMany({
       where: { isGlobal: true },
-      include: { _count: { select: { stages: true, projects: true } } },
+      include: {
+        stages: {
+          include: { categories: { include: { tasks: true } } }
+        },
+        _count: { select: { stages: true, projects: true } }
+      },
       orderBy: { createdAt: 'asc' }
     }),
     prisma.checklistTemplate.findMany({
       where: { companyId, isGlobal: false },
-      include: { _count: { select: { stages: true, projects: true } } },
+      include: {
+        stages: {
+          include: { categories: { include: { tasks: true } } }
+        },
+        _count: { select: { stages: true, projects: true } }
+      },
       orderBy: { createdAt: 'desc' }
     })
   ])
 
-  const templates = [...globalTemplates, ...companyTemplates]
+  const totalTasks = (t: typeof globalTemplates[0]) =>
+    t.stages.reduce((s, st) => s + st.categories.reduce((s2, c) => s2 + c.tasks.length, 0), 0)
+
+  const totalCats = (t: typeof globalTemplates[0]) =>
+    t.stages.reduce((s, st) => s + st.categories.length, 0)
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Checklist Templates</h1>
-          <p className="text-sm text-slate-500 font-medium mt-1">
-            Manage and customise checklists to assign to your site engineers.
-          </p>
-        </div>
+    <div className="p-6 max-w-5xl mx-auto space-y-8">
+      <div>
+        <h1 className="text-2xl font-black text-slate-800 tracking-tight">Checklist Templates</h1>
+        <p className="text-sm text-slate-500 font-medium mt-1">
+          Templates are applied automatically when you create a new site. Clone a master to customise it for your company.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Create New Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-dashed border-slate-300 p-6 flex flex-col items-center justify-center text-center">
-          <div className="w-12 h-12 bg-sky-50 text-sky-600 rounded-xl flex items-center justify-center mb-4">
-            <Plus size={24} strokeWidth={2.5} />
-          </div>
-          <h3 className="font-bold text-slate-800">Create Custom Template</h3>
-          <p className="text-xs text-slate-500 mt-1 mb-4">Build a site checklist from scratch for your company.</p>
-          <form action={createTemplate} className="w-full space-y-3">
-            <input
-              name="name"
-              required
-              placeholder="Template Name..."
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/30"
-            />
-            <input
-              name="description"
-              placeholder="Description (optional)..."
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/30"
-            />
-            <button type="submit" className="w-full py-2 bg-[#fc6e20] text-white rounded-lg text-sm font-bold shadow-sm hover:bg-[#e85b0d] transition-colors">
-              Create Blank
-            </button>
-          </form>
+      {/* Global Master Templates (read-only) */}
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-2 h-2 rounded-full bg-amber-400" />
+          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Global Master Templates</h2>
+          <span className="text-xs text-slate-400 ml-1">(read-only — clone to customise)</span>
         </div>
 
-        {templates.length === 0 ? (
-          <div className="md:col-span-2 bg-amber-50 border border-amber-200 rounded-2xl p-8 flex items-center justify-center">
-            <p className="text-sm text-amber-700 font-medium text-center">
-              No master templates found. Create a blank one to get started!
-            </p>
-          </div>
-        ) : (
-          templates.map(t => (
-            <div key={t.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col relative overflow-hidden">
-              {t.isGlobal && (
-                <div className="absolute top-4 right-4 bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full">
-                  Master Template
-                </div>
-              )}
-
-              <div className="mb-4">
-                <CheckCircle2 size={24} className={t.isGlobal ? 'text-amber-500' : 'text-sky-500'} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {globalTemplates.length === 0 && (
+            <div className="col-span-2 bg-amber-50 border border-amber-200 rounded-2xl p-6 text-amber-700 text-sm font-medium">
+              No global template found. Contact your system administrator.
+            </div>
+          )}
+          {globalTemplates.map(t => (
+            <div key={t.id} className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-6 relative overflow-hidden">
+              <div className="absolute top-4 right-4 bg-amber-500 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full">
+                Master
               </div>
-              <h3 className="font-bold text-slate-800 pr-20 leading-snug">{t.name}</h3>
-              <p className="text-xs text-slate-500 mt-1 line-clamp-2 min-h-[32px]">{(t as any).description || 'Standard construction site checklist.'}</p>
-
-              <div className="mt-4 flex items-center gap-4 text-xs font-semibold text-slate-400">
-                <span>{t._count.stages} Stages</span>
-                <span>{t._count.projects} Sites using</span>
+              <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-xl flex items-center justify-center mb-4">
+                <CheckCircle2 size={20} />
               </div>
+              <h3 className="font-bold text-slate-800 pr-16 text-base leading-snug">{t.name}</h3>
+              <p className="text-xs text-slate-500 mt-1 mb-4">{t.description || 'Standard construction checklist template.'}</p>
 
-              <div className="mt-auto pt-5 flex flex-col gap-2">
-                {t.companyId === companyId ? (
-                  <Link href={`/checklists/${t.id}`} className="block w-full text-center py-2 bg-[#fc6e20] hover:bg-[#e85b0d] text-white rounded-lg text-sm font-bold transition-colors">
-                    ✏️ Edit Template
-                  </Link>
-                ) : (
-                  <>
-                    <CloneTemplateBtn templateId={t.id} />
-                    <Link href={`/checklists/${t.id}/preview`} className="block w-full text-center py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-bold transition-colors">
-                      👁 Preview
-                    </Link>
-                  </>
+              {/* Stage breakdown */}
+              <div className="space-y-1.5 mb-4">
+                {t.stages.slice(0, 5).map(stage => (
+                  <div key={stage.id} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <ChevronRight size={12} className="text-amber-400" />
+                      <span className="text-slate-600 font-medium truncate max-w-[180px]">{stage.name}</span>
+                    </div>
+                    <span className="text-slate-400 flex-shrink-0">
+                      {stage.categories.length} cats · {stage.categories.reduce((s, c) => s + c.tasks.length, 0)} tasks
+                    </span>
+                  </div>
+                ))}
+                {t.stages.length > 5 && (
+                  <div className="text-xs text-amber-600 font-semibold pl-4">+{t.stages.length - 5} more stages…</div>
                 )}
               </div>
-            </div>
-          ))
-        )}
-      </div>
 
-      {companyTemplates.length > 0 && (
-        <p className="text-xs text-slate-400 text-center">
-          Your custom templates above can be assigned to any site via the site's Checklist tab.
-        </p>
-      )}
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 mb-5 pt-2 border-t border-amber-100">
+                <span>{t._count.stages} Stages</span>
+                <span>·</span>
+                <span>{totalCats(t)} Categories</span>
+                <span>·</span>
+                <span>{totalTasks(t)} Tasks</span>
+                <span>·</span>
+                <span>{t._count.projects} Sites</span>
+              </div>
+
+              <CloneTemplateBtn templateId={t.id} />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Company Templates (editable) */}
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-2 h-2 rounded-full bg-sky-400" />
+          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Your Company Templates</h2>
+        </div>
+
+        {companyTemplates.length === 0 ? (
+          <div className="bg-sky-50 border border-dashed border-sky-200 rounded-2xl p-8 text-center">
+            <Copy size={32} className="mx-auto text-sky-300 mb-3" />
+            <p className="text-sm font-semibold text-slate-600">No custom templates yet.</p>
+            <p className="text-xs text-slate-400 mt-1">Clone a master template above to create your own editable version. It will be applied when you add new sites.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {companyTemplates.map(t => (
+              <div key={t.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                <div className="w-10 h-10 bg-sky-50 text-sky-600 rounded-xl flex items-center justify-center mb-4">
+                  <CheckCircle2 size={20} />
+                </div>
+                <h3 className="font-bold text-slate-800 text-base leading-snug">{t.name}</h3>
+                <p className="text-xs text-slate-500 mt-1 mb-4">{t.description || 'Custom company checklist.'}</p>
+
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 mb-5 pt-2 border-t border-slate-100">
+                  <span>{t._count.stages} Stages</span>
+                  <span>·</span>
+                  <span>{totalCats(t)} Categories</span>
+                  <span>·</span>
+                  <span>{totalTasks(t)} Tasks</span>
+                  <span>·</span>
+                  <span>{t._count.projects} Sites using</span>
+                </div>
+
+                <Link
+                  href={`/checklists/${t.id}`}
+                  className="block w-full text-center py-2.5 bg-[#fc6e20] hover:bg-[#e85b0d] text-white rounded-lg text-sm font-bold transition-colors"
+                >
+                  ✏️ Edit Template
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <p className="text-xs text-slate-400 text-center pb-4">
+        When you create a new site, the template is applied automatically. You can tick/untick stages and tasks per-site during site creation.
+      </p>
     </div>
   )
 }

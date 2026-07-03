@@ -13,7 +13,6 @@ function siteStatusChip(progress: number) {
   return { label: 'Needs review', cls: 'bg-[#fbeacb] text-[#a96c08]' }
 }
 
-import { unstable_cache } from 'next/cache'
 
 async function getCachedDashboardData(companyId: string) {
   const today = new Date()
@@ -50,19 +49,12 @@ export default async function CompanyDashboard() {
   if (!session?.user?.companyId) redirect('/login')
   const { companyId } = session.user
 
-  // Cache dashboard aggregations for 10s to prevent DB exhaustion while keeping data fresh
-  const cachedDataFetcher = unstable_cache(
-    async () => getCachedDashboardData(companyId),
-    [`dashboard_data_${companyId}`],
-    { revalidate: 10 }
-  )
-
   const [
     activeSitesCount, todayExpenseAgg, pendingExpenses,
     totalLabour, todayAttendance, recentPendingExpenses, recentExpenses, sites,
     salaryDueAgg, invoicesDueAgg, vendorCount, subCount, materialCount, allAttendance,
     vendorAgg, subAgg
-  ] = await cachedDataFetcher()
+  ] = await getCachedDashboardData(companyId)
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
   const pendingCount = pendingExpenses._count

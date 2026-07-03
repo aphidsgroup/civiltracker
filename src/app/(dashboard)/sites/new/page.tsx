@@ -1,12 +1,13 @@
 import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import prisma from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import Link from 'next/link'
+import { NewSiteClient } from './NewSiteClient'
 
-async function createSite(formData: FormData) {
+export const dynamic = 'force-dynamic'
+
+async function createSiteAction(formData: FormData) {
   'use server'
-  const { auth } = await import('@/lib/auth')
   const session = await auth()
   if (!session?.user?.companyId) return
 
@@ -17,25 +18,89 @@ async function createSite(formData: FormData) {
   const budget = parseFloat(formData.get('budget') as string) || 0
   const startDateStr = formData.get('startDate') as string
   const targetEndDateStr = formData.get('targetEndDate') as string
+  const selectedTaskIdsRaw = formData.get('selectedTaskIds') as string
+  const templateId = formData.get('templateId') as string
 
   if (!name || !location) return
 
-  const startDate = startDateStr ? new Date(startDateStr) : null
-  const targetEndDate = targetEndDateStr ? new Date(targetEndDateStr) : null
+  const selectedTaskIds: string[] = selectedTaskIdsRaw ? JSON.parse(selectedTaskIdsRaw) : []
 
-  await prisma.site.create({
+  const site = await prisma.site.create({
     data: {
       name,
       location,
       address: address || null,
       projectType: projectType || null,
       budget,
-      startDate,
-      targetEndDate,
+      startDate: startDateStr ? new Date(startDateStr) : null,
+      targetEndDate: targetEndDateStr ? new Date(targetEndDateStr) : null,
       slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.random().toString(36).slice(2, 6),
       companyId: session.user.companyId,
     },
   })
+
+  // If a template was selected, snapshot only the chosen tasks into ProjectChecklist
+  if (templateId && selectedTaskIds.length > 0) {
+    const template = await prisma.checklistTemplate.findUnique({
+      where: { id: templateId },
+      include: {
+        stages: {
+          orderBy: { order: 'asc' },
+          include: {
+            categories: {
+              orderBy: { order: 'asc' },
+              include: {
+                tasks: { orderBy: { order: 'asc' } }
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (template) {
+      const selectedSet = new Set(selectedTaskIds)
+
+      // Build filtered stages/categories/tasks (skip categories with 0 selected tasks)
+      const filteredStages = template.stages.map(stage => {
+        const filteredCats = stage.categories.map(cat => {
+          const filteredTasks = cat.tasks.filter(t => selectedSet.has(t.id))
+          return { ...cat, tasks: filteredTasks }
+        }).filter(cat => cat.tasks.length > 0)
+        return { ...stage, categories: filteredCats }
+      }).filter(stage => stage.categories.length > 0)
+
+      if (filteredStages.length > 0) {
+        await prisma.projectChecklist.create({
+          data: {
+            siteId: site.id,
+            templateId: template.id,
+            companyId: session.user.companyId,
+            stages: {
+              create: filteredStages.map(stage => ({
+                name: stage.name,
+                order: stage.order,
+                weight: stage.weight,
+                categories: {
+                  create: stage.categories.map(cat => ({
+                    name: cat.name,
+                    order: cat.order,
+                    tasks: {
+                      create: cat.tasks.map(task => ({
+                        name: task.name,
+                        order: task.order,
+                        isRequired: task.isRequired,
+                      }))
+                    }
+                  }))
+                }
+              }))
+            }
+          }
+        })
+      }
+    }
+  }
 
   revalidatePath('/sites')
   redirect('/sites')
@@ -45,62 +110,46 @@ export default async function NewSitePage() {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
+  const companyId = session.user.companyId
+
+  // Load the best available template: company-cloned first, then global master
+  const template = companyId
+    ? await prisma.checklistTemplate.findFirst({
+        where: {
+          OR: [
+            { companyId, isGlobal: false },
+            { isGlobal: true },
+          ]
+        },
+        include: {
+          stages: {
+            orderBy: { order: 'asc' },
+            include: {
+              categories: {
+                orderBy: { order: 'asc' },
+                include: {
+                  tasks: { orderBy: { order: 'asc' } }
+                }
+              }
+            }
+          }
+        },
+        orderBy: [
+          { isGlobal: 'asc' }, // company templates first (isGlobal=false → 'asc' sorts false before true)
+          { createdAt: 'desc' }
+        ]
+      })
+    : null
+
   return (
     <>
-      <div className="flex items-center justify-between pb-6 border-b border-slate-200 mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">New Site</h1>
-      </div>
-      <div className="max-w-2xl">
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-          <form action={createSite}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">Site Name *</label>
-                <input name="name" required placeholder="e.g. Marina Towers Block A"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">Location *</label>
-                <input name="location" required placeholder="e.g. Chennai, Tamil Nadu"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">Address</label>
-                <input name="address" placeholder="Full street address"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">Project Type</label>
-                <select name="projectType"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white">
-                  <option value="">Select type</option>
-                  <option>RESIDENTIAL</option><option>COMMERCIAL</option>
-                  <option>INFRASTRUCTURE</option><option>INDUSTRIAL</option><option>RENOVATION</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">Budget (₹)</label>
-                <input name="budget" type="number" min="0" placeholder="5000000"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">Start Date</label>
-                <input name="startDate" type="date"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">Target End Date</label>
-                <input name="targetEndDate" type="date"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent bg-white" />
-              </div>
-            </div>
-            <div className="mt-6 flex items-center gap-3">
-              <button type="submit" className="bg-[#fc6e20] text-white border-none rounded-lg px-6 py-2.5 text-sm font-bold hover:bg-[#e85b0d] cursor-pointer transition-colors">Create Site</button>
-              <Link href="/sites" className="bg-slate-100 text-slate-700 border border-slate-200 rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-slate-200 text-center transition-colors">Cancel</Link>
-            </div>
-          </form>
+      <div className="flex items-center justify-between pb-6 border-b border-slate-200 mb-8">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">New Site</h1>
+          <p className="text-sm text-slate-500 mt-1">Add a new construction site to your company</p>
         </div>
       </div>
+      <NewSiteClient template={template} createSiteAction={createSiteAction} />
     </>
   )
 }
