@@ -25,6 +25,33 @@ async function deactivateLabour(formData: FormData) {
   revalidatePath('/labour')
 }
 
+async function markLabourPaid(formData: FormData) {
+  'use server'
+  const session = await auth()
+  if (!session?.user?.companyId) return
+  const id = formData.get('id') as string
+  const amount = parseFloat(formData.get('amount') as string)
+  if (isNaN(amount) || amount <= 0) return
+  // Record payment as an advance on latest attendance date
+  const latest = await prisma.labourAttendance.findFirst({
+    where: { labourId: id },
+    orderBy: { date: 'desc' },
+  })
+  if (latest) {
+    await prisma.labourAttendance.update({
+      where: { id: latest.id },
+      data: { advance: Number(latest.advance) + amount }
+    })
+  } else {
+    // No attendance yet — store as openingAdvance
+    await prisma.labour.updateMany({
+      where: { id, companyId: session.user.companyId },
+      data: { openingAdvance: amount }
+    })
+  }
+  revalidatePath('/labour')
+}
+
 export default async function LabourPage() {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
@@ -122,6 +149,7 @@ export default async function LabourPage() {
                     })
                     const earned = presentDays * Number(l.dailyWage)
                     const pendingBalance = Math.max(0, earned - totalAdvances)
+                    const isPending = pendingBalance > 0
 
                     return (
                       <tr key={l.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
@@ -151,7 +179,16 @@ export default async function LabourPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {isPending && (
+                              <form action={markLabourPaid} className="flex items-center gap-1">
+                                <input type="hidden" name="id" value={l.id} />
+                                <input type="hidden" name="amount" value={pendingBalance} />
+                                <button type="submit" className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition-colors">
+                                  ✓ Mark Paid
+                                </button>
+                              </form>
+                            )}
                             <Link href={`/labour/${l.id}/edit`} className="text-xs font-bold text-slate-500 hover:text-[#fc6e20] transition-colors">Edit</Link>
                             <form action={deactivateLabour}>
                               <input type="hidden" name="id" value={l.id} />
