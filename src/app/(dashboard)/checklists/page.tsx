@@ -6,6 +6,8 @@ import { CheckCircle2, Copy, Plus } from 'lucide-react'
 import { CloneTemplateBtn } from './CloneTemplateBtn'
 import { createTemplate } from '@/actions/template-checklists'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ChecklistsIndexPage() {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')

@@ -43,6 +43,8 @@ async function getCachedDashboardData(companyId: string) {
   ])
 }
 
+export const dynamic = 'force-dynamic'
+
 export default async function CompanyDashboard() {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
