@@ -33,6 +33,7 @@ const NAV_ITEMS = [
   { type: 'group', label: 'Project' },
   { href: '/boq', label: 'BOQ & Budget', icon: Layers },
   { href: '/tasks', label: 'Tasks & Schedule', icon: CalendarCheck },
+  { href: '/checklists', label: 'Checklists', icon: CheckCircle2 },
   { type: 'group', label: 'Workspace' },
   { href: '/documents', label: 'Documents', icon: FolderOpen },
   { href: '/clients', label: 'Billing Clients', icon: UserCircle },
