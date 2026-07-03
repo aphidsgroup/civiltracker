@@ -30,9 +30,9 @@ export async function createCompany(data: any) {
       pincode: data.pincode,
       status: data.status || CompanyStatus.ACTIVE,
       plan: data.plan || CompanyPlan.TRIAL,
-      userLimit: Number(data.userLimit) || 5,
-      siteLimit: Number(data.siteLimit) || 1,
-      storageLimitMb: Number(data.storageLimitMb) || 100,
+      userLimit: Number(data.userLimit) || 15,
+      siteLimit: Number(data.siteLimit) || 15,
+      storageLimitMb: Number(data.storageLimitMb) || 1024,
       modulesJson: data.modulesJson || ['SITES', 'APPROVALS', 'REPORTS', 'EXPENSES', 'BILLS', 'LABOUR', 'MATERIALS', 'DPR', 'TASKS', 'DOCUMENTS'],
       createdById: user.id,
     }

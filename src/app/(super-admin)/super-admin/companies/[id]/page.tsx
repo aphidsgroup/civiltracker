@@ -1,6 +1,8 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect, notFound } from 'next/navigation'
+import Link from 'next/link'
+import { deleteCompany } from '@/actions/super-admin'
 
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -42,13 +44,31 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   }
 
+  async function handleDelete() {
+    'use server'
+    await deleteCompany(id)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50/50">
-      <div className="flex items-center px-6 py-4 bg-white border-b border-gray-200">
-        <h1 className="text-xl font-semibold text-gray-900">{company.name}</h1>
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ml-3 ${statusColor[company.status] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}>
-          {company.status}
-        </span>
+      <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
+        <div className="flex items-center gap-3">
+          <Link href="/super-admin/companies" className="text-sm text-gray-500 hover:text-gray-900 font-medium">← Back</Link>
+          <h1 className="text-xl font-semibold text-gray-900">{company.name}</h1>
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusColor[company.status] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+            {company.status}
+          </span>
+        </div>
+        {/* Delete Company */}
+        <form action={handleDelete}
+          onSubmit={(e) => {
+            if (!confirm(`Permanently delete "${company.name}" and ALL its data? This cannot be undone.`)) e.preventDefault()
+          }}>
+          <button type="submit"
+            className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-sm font-semibold rounded-lg transition-colors cursor-pointer">
+            🗑 Delete Company
+          </button>
+        </form>
       </div>
       <div className="p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">

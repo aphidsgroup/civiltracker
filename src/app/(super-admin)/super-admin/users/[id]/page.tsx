@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { ArrowLeft, Shield, User, Building2 } from 'lucide-react'
 import { resetUserPassword } from '@/actions/users'
+import { deleteUser } from '@/actions/super-admin'
 
 async function handleReset(formData: FormData) {
   'use server'
@@ -36,20 +37,37 @@ export default async function SAUserDetailPage({ params }: { params: Promise<{ i
 
   const member = user.companyMembers[0]
 
+  async function handleDelete() {
+    'use server'
+    await deleteUser(userId)
+  }
+
   return (
     <div className="min-h-screen bg-slate-50/50">
       {/* Header */}
-      <div className="flex items-center gap-4 px-8 py-5 bg-white border-b border-slate-200">
-        <Link
-          href="/super-admin/users"
-          className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
-        >
-          <ArrowLeft size={16} className="text-slate-600" />
-        </Link>
-        <div>
-          <h1 className="text-lg font-extrabold text-slate-800 tracking-tight">Manage User</h1>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">Super Admin — Reset Password & View Details</p>
+      <div className="flex items-center justify-between gap-4 px-8 py-5 bg-white border-b border-slate-200">
+        <div className="flex items-center gap-4">
+          <Link
+            href="/super-admin/users"
+            className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+          >
+            <ArrowLeft size={16} className="text-slate-600" />
+          </Link>
+          <div>
+            <h1 className="text-lg font-extrabold text-slate-800 tracking-tight">Manage User</h1>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">Super Admin — Reset Password & View Details</p>
+          </div>
         </div>
+        {/* Delete User */}
+        <form action={handleDelete}
+          onSubmit={(e) => {
+            if (!confirm(`Permanently delete user "${user.name || user.email}"? This cannot be undone.`)) e.preventDefault()
+          }}>
+          <button type="submit"
+            className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-sm font-semibold rounded-lg transition-colors cursor-pointer">
+            🗑 Delete User
+          </button>
+        </form>
       </div>
 
       <div className="p-8 max-w-2xl mx-auto space-y-5">
