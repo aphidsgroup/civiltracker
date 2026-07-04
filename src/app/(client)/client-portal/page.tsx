@@ -27,7 +27,8 @@ export default async function ClientPortal() {
       photos: {
         where: { approvedForClient: true },
         orderBy: { createdAt: 'desc' },
-        take: 6
+        take: 6,
+        include: { task: true }
       }
     }
   })
@@ -56,8 +57,39 @@ export default async function ClientPortal() {
   const progress = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : (site.progress || 0)
   const recentTasks = allTasks.slice(0, 5)
 
+  // Fetch checklist with stages for dynamic phase calculation
+  const checklist = await prisma.projectChecklist.findFirst({
+    where: { siteId: site.id },
+    include: {
+      stages: {
+        orderBy: { order: 'asc' },
+        include: {
+          categories: {
+            include: {
+              tasks: true
+            }
+          }
+        }
+      }
+    }
+  })
+
+  // Calculate current phase
+  let currentPhase = site.currentStage || 'Planning'
+  if (checklist && checklist.stages.length > 0) {
+    const activeStage = checklist.stages.find(s => 
+      s.categories.some(c => c.tasks.some(t => t.status !== 'COMPLETED'))
+    )
+    if (activeStage) {
+      currentPhase = activeStage.name
+    } else {
+      currentPhase = 'Completed'
+    }
+  }
+
   const budget = Number(site.budget) || 0
   const spent = Number(site.spent) || 0
+
 
   // Live payment data from invoices
   const invoices = clientRecord?.invoices ?? []
@@ -102,7 +134,7 @@ export default async function ClientPortal() {
               <div className="bg-white/5 p-3 rounded-2xl backdrop-blur-sm border border-white/5">
                 {/* Current phase from live site.currentStage */}
                 <div className="text-lg md:text-xl font-bold text-amber-300 truncate">
-                  {site.currentStage || 'Planning'}
+                  {currentPhase}
                 </div>
                 <div className="text-xs text-slate-400 font-medium">Current phase</div>
               </div>
@@ -189,8 +221,17 @@ export default async function ClientPortal() {
                       </div>
                     </div>
                     <div className="p-3 bg-white flex-1">
-                      <div className="text-xs font-bold text-gray-800 line-clamp-1">{p.caption || 'Site update'}</div>
-                      <div className="text-[10px] text-gray-400 mt-1">{new Date(p.createdAt).toLocaleDateString()}</div>
+                      {p.task ? (
+                        <>
+                          <div className="text-xs font-bold text-gray-800 line-clamp-1">{p.task.name}</div>
+                          <div className="text-[10px] text-gray-400 mt-1">{new Date(p.createdAt).toLocaleDateString()} · Task completed</div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-xs font-bold text-gray-800 line-clamp-1">{p.caption || p.category || 'Site update'}</div>
+                          <div className="text-[10px] text-gray-400 mt-1">{new Date(p.createdAt).toLocaleDateString()}</div>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
