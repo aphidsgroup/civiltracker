@@ -15,7 +15,7 @@ export default async function MobileSingleSitePage({ params }: { params: Promise
   const siteId = resolvedParams.id
 
   const site = await prisma.site.findUnique({
-    where: { id: siteId, companyId: user.companyId },
+    where: { id: siteId, companyId: user.companyId, deletedAt: null },
     include: {
       labour: { where: { isActive: true }, select: { id: true } },
       expenses: { take: 5, orderBy: { createdAt: 'desc' } }

@@ -41,8 +41,8 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
 
   // Fetch all sites user has access to
   const allSitesRecords = siteIds.length > 0
-    ? await prisma.site.findMany({ where: { id: { in: siteIds }, companyId }, include: { company: true }, orderBy: { name: 'asc' } })
-    : await prisma.site.findMany({ where: { companyId }, include: { company: true }, orderBy: { name: 'asc' } })
+    ? await prisma.site.findMany({ where: { id: { in: siteIds }, companyId, deletedAt: null }, include: { company: true }, orderBy: { name: 'asc' } })
+    : await prisma.site.findMany({ where: { companyId, deletedAt: null }, include: { company: true }, orderBy: { name: 'asc' } })
 
   const allSites = allSitesRecords.map(s => ({
     id: s.id,

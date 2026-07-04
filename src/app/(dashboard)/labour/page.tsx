@@ -81,7 +81,7 @@ export default async function LabourPage() {
       orderBy: { name: 'asc' },
     }),
     prisma.site.findMany({
-      where: { companyId },
+      where: { companyId, deletedAt: null },
       select: { id: true, name: true },
       orderBy: { name: 'asc' }
     })

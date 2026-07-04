@@ -21,7 +21,7 @@ export default async function MobileSitesPage() {
   const isSiteEngineer = user.role === 'SITE_ENGINEER' || user.role === 'SUPERVISOR'
 
   let sites = await prisma.site.findMany({
-    where: { companyId: user.companyId },
+    where: { companyId: user.companyId, deletedAt: null },
     orderBy: { createdAt: 'desc' }
   })
 

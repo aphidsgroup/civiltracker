@@ -20,7 +20,7 @@ async function getCachedDashboardData(companyId: string) {
   const todayEnd = new Date(today)
   todayEnd.setHours(23, 59, 59, 999)
 
-  const siteIds = await prisma.site.findMany({ where: { companyId }, select: { id: true } }).then(s => s.map(x => x.id))
+  const siteIds = await prisma.site.findMany({ where: { companyId, deletedAt: null }, select: { id: true } }).then(s => s.map(x => x.id))
 
   return Promise.all([
     prisma.site.count({ where: { companyId, deletedAt: null, status: 'ACTIVE' } }),

@@ -25,7 +25,7 @@ export default async function MobileChecklistsPage({ searchParams }: { searchPar
   if (!siteId) redirect('/mobile/home')
 
   const site = await prisma.site.findFirst({
-    where: { id: siteId, companyId }
+    where: { id: siteId, companyId, deletedAt: null }
   })
 
   if (!site) redirect('/mobile/home')

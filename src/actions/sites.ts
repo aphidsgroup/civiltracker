@@ -32,8 +32,8 @@ export async function createSite(data: any) {
   }
 
   const slug = slugify(data.name)
-  const existing = await prisma.site.findUnique({
-    where: { companyId_slug: { companyId, slug } }
+  const existing = await prisma.site.findFirst({
+    where: { companyId, slug, deletedAt: null }
   })
   
   if (existing) {

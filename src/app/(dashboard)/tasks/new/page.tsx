@@ -42,7 +42,7 @@ export default async function NewTaskPage() {
 
   const [sites, staff] = await Promise.all([
     prisma.site.findMany({
-      where: { companyId: session.user.companyId, status: 'ACTIVE' },
+      where: { companyId: session.user.companyId, status: 'ACTIVE', deletedAt: null },
       select: { id: true, name: true }
     }),
     prisma.companyMember.findMany({

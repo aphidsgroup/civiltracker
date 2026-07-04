@@ -42,7 +42,7 @@ export default async function NewMaterialPage() {
   if (!session?.user?.companyId) redirect('/login')
 
   const sites = await prisma.site.findMany({
-    where: { companyId: session.user.companyId, status: 'ACTIVE' },
+    where: { companyId: session.user.companyId, status: 'ACTIVE', deletedAt: null },
     select: { id: true, name: true }
   })
 
