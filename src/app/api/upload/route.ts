@@ -13,7 +13,10 @@ export async function POST(request: Request) {
   const formData = await request.formData()
   const file = formData.get('file') as File
   const moduleName = formData.get('module') as string ?? 'general'
-  const siteId = formData.get('siteId') as string | null
+  let siteId = formData.get('siteId') as string | null
+  if (siteId === 'undefined' || siteId === 'null' || siteId?.trim() === '') {
+    siteId = null
+  }
 
   if (!VALID_MODULES.includes(moduleName)) {
     return NextResponse.json({ error: 'Forbidden: Invalid upload module' }, { status: 403 })
@@ -38,10 +41,10 @@ export async function POST(request: Request) {
   // If siteId provided, verify it belongs to the resolved companyId (skip for SUPER_ADMIN)
   if (siteId && session.user.role !== 'SUPER_ADMIN' && companyId) {
     const site = await prisma.site.findFirst({
-      where: { id: siteId, companyId, deletedAt: null }
+      where: { id: siteId, companyId }
     })
     if (!site) {
-      return NextResponse.json({ error: 'Forbidden: Site access denied' }, { status: 403 })
+      return NextResponse.json({ error: `Forbidden: Site access denied for company ${companyId}` }, { status: 403 })
     }
   }
 

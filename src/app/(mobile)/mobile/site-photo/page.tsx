@@ -11,16 +11,34 @@ export default async function MobileSitePhotoPage({ searchParams }: { searchPara
   const user = await requireUser()
   const { siteId } = await searchParams
 
-  const sites = user.companyId
-    ? await prisma.site.findMany({
-        where: { companyId: user.companyId, deletedAt: null },
-        select: { id: true, name: true },
-        orderBy: { name: 'asc' }
-      })
+  let companyId = user.companyId
+  let siteIds: string[] = []
+
+  const member = await prisma.companyMember.findFirst({
+    where: { userId: user.id },
+  })
+  
+  if (member) {
+    companyId = companyId || member.companyId
+    siteIds = member.siteIds || []
+  }
+
+  const sites = companyId
+    ? siteIds.length > 0 
+      ? await prisma.site.findMany({
+          where: { id: { in: siteIds }, companyId, deletedAt: null },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' }
+        })
+      : await prisma.site.findMany({
+          where: { companyId, deletedAt: null },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' }
+        })
     : []
 
   const photos = await prisma.sitePhoto.findMany({
-    where: { companyId: user.companyId },
+    where: companyId ? { companyId } : { uploadedById: user.id },
     include: { site: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
     take: 20

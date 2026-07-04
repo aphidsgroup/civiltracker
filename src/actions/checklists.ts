@@ -244,11 +244,19 @@ export async function getPendingTasks(siteId: string) {
 
 export async function getPendingChecklistPhotos(siteId?: string) {
   const session = await auth()
-  if (!session?.user?.companyId) return []
+  if (!session?.user?.id) return []
+
+  let companyId = session.user.companyId
+  if (!companyId) {
+    const member = await prisma.companyMember.findFirst({ where: { userId: session.user.id } })
+    if (member) companyId = member.companyId
+  }
+
+  if (!companyId) return []
 
   const pendingTasks = await prisma.projectChecklistTask.findMany({
     where: {
-      category: { stage: { checklist: { companyId: session.user.companyId, siteId: siteId || undefined } } },
+      category: { stage: { checklist: { companyId, siteId: siteId || undefined } } },
       OR: [ { status: 'COMPLETED' }, { isClientDone: true } ],
       sitePhotos: { none: {} }
     },
