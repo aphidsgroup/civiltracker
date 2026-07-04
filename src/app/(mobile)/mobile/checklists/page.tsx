@@ -9,7 +9,15 @@ export const dynamic = 'force-dynamic'
 
 export default async function MobileChecklistsPage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
   const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  if (!session?.user?.id) redirect('/login')
+
+  // Resolve companyId — site engineers may not have it in their JWT token
+  let companyId = session.user.companyId
+  if (!companyId) {
+    const member = await prisma.companyMember.findFirst({ where: { userId: session.user.id, isActive: true } })
+    if (!member) redirect('/login')
+    companyId = member.companyId
+  }
 
   const resolvedParams = await searchParams
   const siteId = resolvedParams?.siteId
@@ -17,7 +25,7 @@ export default async function MobileChecklistsPage({ searchParams }: { searchPar
   if (!siteId) redirect('/mobile/home')
 
   const site = await prisma.site.findFirst({
-    where: { id: siteId, companyId: session.user.companyId }
+    where: { id: siteId, companyId }
   })
 
   if (!site) redirect('/mobile/home')
