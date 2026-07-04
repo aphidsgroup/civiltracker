@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { uploadMobileSitePhotoAction } from '@/actions/mobile-photo'
-import { Camera, MapPin, ArrowLeft, Loader2, X, Plus, Sparkles, Send } from 'lucide-react'
+import { Camera, MapPin, ArrowLeft, Loader2, X, Send } from 'lucide-react'
 import Link from 'next/link'
 
 type PhotoCard = {
@@ -39,17 +39,21 @@ export default function MobilePhotoClient({
   const [siteId, setSiteId] = useState(initialSiteId)
   const [caption, setCaption] = useState('')
   const [captureTag, setCaptureTag] = useState('Civil')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [gpsCoords, setGpsCoords] = useState<string | null>(null)
   const [gpsLoading, setGpsLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const filterTabs = ['All', 'Civil', 'Material', 'Electrical', 'Issue', 'Quality', 'Safety']
 
   const handleSnapPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      setSelectedFile(file)
       setPreviewUrl(URL.createObjectURL(file))
+      setUploadError(null)
       triggerGpsLock()
     }
   }
@@ -74,22 +78,29 @@ export default function MobilePhotoClient({
     }
   }
 
-  const handleSimulatePC = () => {
-    setPreviewUrl('https://images.unsplash.com/photo-1541888946425-d0fbb18f0317?auto=format&fit=crop&w=800&q=80')
-    triggerGpsLock()
-    if (!caption) setCaption('Slab shuttering reinforcement steel checked')
-  }
+  // Simulate removed
 
   const handleSaveCapture = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!previewUrl) return
+    if (!selectedFile || !previewUrl) return
     setSaving(true)
+    setUploadError(null)
     const finalGps = gpsCoords || '28.5355° N, 77.3910° E'
     try {
+      // Step 1: upload to Cloudinary to get a persistent URL
+      const fd = new FormData()
+      fd.append('file', selectedFile)
+      fd.append('module', 'SITE_PHOTO')
+      if (siteId) fd.append('siteId', siteId)
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      if (!res.ok) throw new Error('Upload failed')
+      const { url: cloudinaryUrl } = await res.json()
+
+      // Step 2: save to DB with real Cloudinary URL
       if (siteId) {
         await uploadMobileSitePhotoAction({
           siteId,
-          imageUrl: previewUrl,
+          imageUrl: cloudinaryUrl,
           caption: caption || `${captureTag} progress photo`,
           gps: finalGps
         })
@@ -99,14 +110,15 @@ export default function MobilePhotoClient({
         title: caption || `${captureTag} telemetry entry`,
         meta: `You - ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
         tag: captureTag,
-        imageUrl: previewUrl
+        imageUrl: cloudinaryUrl  // use real URL so it loads immediately in grid
       }
       setPhotos(prev => [newCard, ...prev])
       setShowModal(false)
       setPreviewUrl(null)
+      setSelectedFile(null)
       setCaption('')
-    } catch {
-      // Ignore errors for now
+    } catch (err: any) {
+      setUploadError(err?.message || 'Upload failed. Try again.')
     } finally {
       setSaving(false)
     }
@@ -239,14 +251,6 @@ export default function MobilePhotoClient({
                       <Camera size={16} strokeWidth={2.5} />
                       <span>Launch Camera</span>
                     </label>
-                    <button
-                      type="button"
-                      onClick={handleSimulatePC}
-                      className="block mt-3 text-[10.5px] font-bold text-[#fc6e20] bg-transparent border-none cursor-pointer hover:underline mx-auto"
-                    >
-                      <Sparkles size={11} className="inline mr-1" />
-                      Simulate PC snapshot
-                    </button>
                   </>
                 ) : (
                   <div className="space-y-2">
@@ -291,13 +295,16 @@ export default function MobilePhotoClient({
                 />
               </div>
 
+              {uploadError && (
+                <div className="text-xs text-red-600 font-semibold bg-red-50 border border-red-100 rounded-xl p-2 text-center">{uploadError}</div>
+              )}
               <button
                 type="submit"
-                disabled={!previewUrl || saving}
+                disabled={!previewUrl || !selectedFile || saving}
                 className="w-full py-3 bg-[#1e40af] hover:bg-[#1d4ed8] disabled:opacity-50 text-white rounded-xl font-black text-xs flex items-center justify-center gap-1.5 border-none cursor-pointer shadow-md"
               >
                 {saving ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-                <span>Save Telemetry Photo</span>
+                <span>{saving ? 'Uploading to cloud...' : 'Save Telemetry Photo'}</span>
               </button>
             </form>
           </div>
