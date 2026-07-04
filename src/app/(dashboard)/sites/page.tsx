@@ -13,15 +13,12 @@ export default async function SitesPage() {
   if (!session?.user?.companyId) redirect('/login')
   const { companyId } = session.user
 
-  // Lazy cleanup of soft-deleted sites older than 15 days
+  // Lazy cleanup of soft-deleted sites older than 15 days (non-blocking)
   const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000)
-  try {
-    await prisma.site.deleteMany({
-      where: { companyId, deletedAt: { lt: fifteenDaysAgo } }
-    })
-  } catch (e) {
-    console.error('Failed to cleanup old deleted sites', e)
-  }
+  // Run in background - do NOT await so it never blocks the page render
+  void prisma.site.deleteMany({
+    where: { companyId, deletedAt: { lt: fifteenDaysAgo } }
+  }).catch(e => console.error('[Sites cleanup] Failed:', e?.message ?? e))
 
   const sites = await prisma.site.findMany({
     where: { 
@@ -31,7 +28,7 @@ export default async function SitesPage() {
         { deletedAt: { gte: fifteenDaysAgo } }
       ]
     },
-    include: { _count: { select: { labour: true, expenses: true, dprs: true } } },
+    include: { _count: { select: { labour: true, expenses: true } } },
     orderBy: { createdAt: 'desc' },
   })
 
