@@ -21,10 +21,6 @@ export default async function ClientPortal() {
         where: { approvedForClient: true },
         orderBy: { createdAt: 'desc' },
         take: 3
-      },
-      tasks: {
-        orderBy: { createdAt: 'desc' },
-        take: 5
       }
     }
   })
@@ -44,9 +40,21 @@ export default async function ClientPortal() {
     )
   }
 
+  // Calculate dynamic progress from new checklist tasks
+  const allTasks = await prisma.projectChecklistTask.findMany({
+    where: { category: { stage: { checklist: { siteId: site.id } } } },
+    orderBy: { updatedAt: 'desc' }
+  })
+  
+  const totalTasksCount = allTasks.length
+  const completedTasksCount = allTasks.filter(t => t.status === 'COMPLETED').length
+  const calculatedProgress = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : (site.progress || 0)
+  
+  const recentTasks = allTasks.slice(0, 5)
+
   const budget = Number(site.budget) || 0
   const spent = Number(site.spent) || 0
-  const progress = site.progress || 0
+  const progress = calculatedProgress
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6 pb-24 min-h-screen bg-gray-50">
@@ -116,10 +124,10 @@ export default async function ClientPortal() {
             </div>
             
             <div className="space-y-6 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-gray-100">
-              {site.tasks.length === 0 ? (
+              {recentTasks.length === 0 ? (
                 <div className="text-center text-gray-500 py-6 text-sm">No construction milestones tracked yet.</div>
               ) : (
-                site.tasks.map(task => (
+                recentTasks.map(task => (
                   <div key={task.id} className="relative flex items-start gap-4 pl-1">
                     {task.status === 'COMPLETED' ? (
                       <div className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center shadow-sm relative z-10 flex-shrink-0 mt-0.5">
@@ -138,7 +146,7 @@ export default async function ClientPortal() {
                         </span>
                       </div>
                       <p className={`text-xs ${task.status === 'COMPLETED' ? 'text-gray-500' : task.status === 'IN_PROGRESS' ? 'text-amber-700/80 font-medium' : 'text-gray-400'}`}>
-                        {task.description || (task.status === 'COMPLETED' ? 'Completed successfully' : task.status === 'IN_PROGRESS' ? 'Currently active phase' : 'Upcoming phase')}
+                        {task.status === 'COMPLETED' ? 'Completed successfully' : task.status === 'IN_PROGRESS' ? 'Currently active phase' : 'Upcoming phase'}
                       </p>
                     </div>
                   </div>

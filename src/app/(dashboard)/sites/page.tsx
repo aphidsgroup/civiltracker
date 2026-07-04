@@ -15,9 +15,13 @@ export default async function SitesPage() {
 
   // Lazy cleanup of soft-deleted sites older than 15 days
   const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000)
-  prisma.site.deleteMany({
-    where: { companyId, deletedAt: { lt: fifteenDaysAgo } }
-  }).catch(e => console.error('Failed to cleanup old deleted sites', e))
+  try {
+    await prisma.site.deleteMany({
+      where: { companyId, deletedAt: { lt: fifteenDaysAgo } }
+    })
+  } catch (e) {
+    console.error('Failed to cleanup old deleted sites', e)
+  }
 
   const sites = await prisma.site.findMany({
     where: { 
@@ -76,7 +80,7 @@ export default async function SitesPage() {
           return (
             <CardWrapper 
               key={site.id} 
-              href={isDeleted ? '#' : `/sites/${site.id}`} 
+              {...(isDeleted ? {} : { href: `/sites/${site.id}` })}
               className={`no-underline text-inherit ${isDeleted ? 'opacity-80' : ''}`}
             >
               <div className={`bg-white rounded-xl border ${isDeleted ? 'border-red-200 shadow-none' : 'border-gray-100 shadow-sm hover:shadow-md'} p-5 transition-shadow h-full flex flex-col relative overflow-hidden`}>
