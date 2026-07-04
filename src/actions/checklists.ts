@@ -67,9 +67,9 @@ export async function enableChecklistForProject(siteId: string, templateId: stri
 
 export async function toggleTaskStatus(siteId: string, taskId: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED', isClientDone = false, isNeglected = false) {
   const session = await auth()
-  if (!session?.user) throw new Error('Unauthorized')
+  if (!session?.user?.companyId) throw new Error('Unauthorized')
 
-  await prisma.projectChecklistTask.update({
+  const task = await prisma.projectChecklistTask.update({
     where: { id: taskId },
     data: {
       status,
@@ -79,6 +79,19 @@ export async function toggleTaskStatus(siteId: string, taskId: string, status: '
       completedById: status === 'COMPLETED' ? session.user.id : null,
     }
   })
+  
+  if (status === 'COMPLETED' || status === 'PENDING') {
+    await prisma.auditLog.create({
+      data: {
+        userId: session.user.id,
+        companyId: session.user.companyId,
+        module: 'CHECKLIST',
+        action: status === 'COMPLETED' ? 'TICK' : 'UNTICK',
+        recordId: siteId,
+        after: { taskName: task.name, status }
+      }
+    })
+  }
   
   revalidatePath(`/sites/${siteId}`)
   return { success: true }
@@ -148,4 +161,49 @@ export async function deleteProjectChecklist(siteId: string) {
   
   revalidatePath(`/sites/${siteId}`)
   return { success: true }
+}
+
+export async function getPendingTasks(siteId: string) {
+  const session = await auth()
+  if (!session?.user?.companyId) return []
+
+  const checklist = await prisma.projectChecklist.findUnique({
+    where: { siteId },
+    include: {
+      stages: {
+        orderBy: { order: 'asc' },
+        include: {
+          categories: {
+            where: { isNeglected: false },
+            orderBy: { order: 'asc' },
+            include: {
+              tasks: {
+                where: { isNeglected: false, status: { in: ['PENDING', 'IN_PROGRESS'] } },
+                orderBy: { order: 'asc' }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+
+  if (!checklist) return []
+
+  const tasks: { id: string, name: string, categoryName: string, stageName: string }[] = []
+
+  for (const stage of checklist.stages) {
+    for (const cat of stage.categories) {
+      for (const task of cat.tasks) {
+        tasks.push({
+          id: task.id,
+          name: task.name,
+          categoryName: cat.name,
+          stageName: stage.name
+        })
+      }
+    }
+  }
+
+  return tasks
 }

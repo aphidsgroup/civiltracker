@@ -6,6 +6,7 @@ import { hasPermission } from '@/lib/permissions'
 import { Role } from '@prisma/client'
 import { createApprovalAction } from '@/actions/approvals'
 import { ClipboardList, Send } from 'lucide-react'
+import DprFormClient from './DprFormClient'
 
 export default async function MobileDprPage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
   const session = await auth()
@@ -70,42 +71,7 @@ export default async function MobileDprPage({ searchParams }: { searchParams: Pr
         <h1 className="text-lg font-bold text-gray-900">Submit Daily Progress</h1>
       </div>
       
-      <form action={submitDpr} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-4">
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Site</label>
-          <select name="siteId" defaultValue={siteId || ""} className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm" required>
-            <option value="">Select a site...</option>
-            {sites.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Date</label>
-          <input type="date" name="date" className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm" defaultValue={new Date().toISOString().split('T')[0]} required />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Work Done Today</label>
-          <textarea name="workDone" className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm resize-none" rows={3} placeholder="Describe the activities completed today..." required></textarea>
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Total Labour Count</label>
-          <input type="number" name="labourCount" className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm" placeholder="0" min="0" required />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-600 mb-1.5">Delay Reasons (if any)</label>
-          <input type="text" name="delayReason" className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm" placeholder="e.g. Rain, Material shortage" />
-        </div>
-
-        <button type="submit" className="w-full mt-2 py-3.5 px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-bold rounded-xl text-sm shadow-md transition-colors flex items-center justify-center gap-2">
-          <Send className="w-4 h-4" />
-          Submit DPR
-        </button>
-      </form>
+      <DprFormClient sites={sites} defaultSiteId={siteId} submitAction={submitDpr} />
     </div>
   )
 }

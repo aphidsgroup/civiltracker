@@ -1,17 +1,47 @@
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import BillApprovalList from '@/components/bills/BillApprovalList'
+
 export const dynamic = 'force-dynamic'
 
-export default function SiteBillsPage() {
+export default async function SiteBillsPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ tab?: string }> }) {
+  const session = await auth()
+  if (!session?.user?.companyId) redirect('/login')
+  const { companyId } = session.user
+  
+  const { id: siteId } = await params
+  const { tab } = await searchParams
+  const activeTab = tab || 'PENDING'
+
+  const whereClause: any = { companyId, siteId, deletedAt: null }
+  if (activeTab !== 'ALL') {
+    whereClause.approvalStatus = activeTab
+  }
+
+  const bills = await prisma.expense.findMany({
+    where: whereClause,
+    include: { site: { select: { name: true, id: true } }, createdBy: { select: { name: true } }, billAttachments: true },
+    orderBy: { createdAt: 'desc' },
+  })
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col items-center justify-center p-12">
-      <div className="w-16 h-16 bg-blue-50 text-blue-500 flex items-center justify-center rounded-full mb-4">
-        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
+    <div className="flex flex-col gap-5.5 mt-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between border-b border-slate-200 pb-4 gap-4">
+        <div>
+          <h2 className="text-xl font-extrabold m-0 mb-1 tracking-tight text-slate-900">Site Bills</h2>
+          <p className="text-slate-500 text-xs m-0">{bills.length} bills found for this site</p>
+        </div>
+        <div className="flex bg-slate-100 p-1 rounded-lg overflow-x-auto w-full sm:w-auto">
+          {['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'PAID'].map(t => (
+            <Link key={t} href={`/sites/${siteId}/bills?tab=${t}`} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${activeTab === t ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
+              {t}
+            </Link>
+          ))}
+        </div>
       </div>
-      <h2 className="text-xl font-bold text-slate-800 mb-2">Vendor Bills</h2>
-      <p className="text-slate-500 text-center max-w-md">
-        Vendor and Subcontractor billing linked to this site is currently under development. Track all payments centrally in the Expenses module.
-      </p>
+      <BillApprovalList bills={bills} />
     </div>
   )
 }

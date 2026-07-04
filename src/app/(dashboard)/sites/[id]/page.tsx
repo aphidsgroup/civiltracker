@@ -47,20 +47,43 @@ export default async function SiteOverviewPage({
   const contractorLabourCount = todayContractors.reduce((acc, c) => acc + c.labourCount, 0)
   const totalOnsite = presentCount + contractorLabourCount
 
+  const checklist = await prisma.projectChecklist.findUnique({
+    where: { siteId: id },
+    include: { stages: { include: { categories: { include: { tasks: true } } } } }
+  })
+
+  let totalTasks = 0
+  let completedTasks = 0
+  if (checklist) {
+    checklist.stages.forEach(s => s.categories.forEach(c => c.tasks.forEach(t => {
+      totalTasks++
+      if (t.status === 'COMPLETED') completedTasks++
+    })))
+  }
+  const calculatedProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : (site.progress || 0)
+
+  const approvedExpenses = await prisma.expense.aggregate({
+    where: { siteId: id, approvalStatus: { in: ['APPROVED', 'PAID'] } },
+    _sum: { amount: true }
+  })
+  const calculatedSpent = Number(approvedExpenses._sum.amount || 0)
+
+  const pendingApprovalsCount = await prisma.approval.count({
+    where: { siteId: id, currentStatus: 'PENDING' }
+  })
+
   const budget = Number(site.budget) || 0
-  const spent = Number(site.spent) || 0
-  const progress = site.progress || 0
   const latestDpr = site.dprs[0]
 
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="p-4 bg-slate-900 text-white rounded-xl shadow-sm">
-          <div className="text-2xl font-bold">{progress}%</div>
+          <div className="text-2xl font-bold">{calculatedProgress}%</div>
           <div className="text-xs text-slate-400 mt-1">Overall progress • {site.currentStage || 'Planning'} stage</div>
         </div>
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-          <div className="text-2xl font-bold text-slate-900">{formatCurrency(spent)}</div>
+          <div className="text-2xl font-bold text-slate-900">{formatCurrency(calculatedSpent)}</div>
           <div className="text-xs text-slate-500 mt-1">Spent of {formatCurrency(budget)}</div>
         </div>
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
@@ -68,7 +91,7 @@ export default async function SiteOverviewPage({
           <div className="text-xs text-slate-500 mt-1">Labour present today ({presentCount} Own + {contractorLabourCount} Cont.)</div>
         </div>
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-          <div className="text-2xl font-bold text-amber-600">0</div>
+          <div className="text-2xl font-bold text-amber-600">{pendingApprovalsCount}</div>
           <div className="text-xs text-slate-500 mt-1">Pending approvals</div>
         </div>
       </div>
