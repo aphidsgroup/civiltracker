@@ -80,15 +80,16 @@ export async function toggleTaskStatus(siteId: string, taskId: string, status: '
     }
   })
   
-  if (status === 'COMPLETED' || status === 'PENDING') {
+  // Only log to activity when task is COMPLETED (ticked) — never log untick
+  if (status === 'COMPLETED') {
     await prisma.auditLog.create({
       data: {
         userId: session.user.id,
         companyId: session.user.companyId,
         module: 'CHECKLIST',
-        action: status === 'COMPLETED' ? 'TICK' : 'UNTICK',
+        action: 'TICK',
         recordId: siteId,
-        after: { taskName: task.name, status }
+        after: { taskName: task.name, status: 'COMPLETED' }
       }
     })
   }

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { uploadMobileSitePhotoAction } from '@/actions/mobile-photo'
-import { Camera, MapPin, ArrowLeft, Loader2, X, Send } from 'lucide-react'
+import { deleteSitePhotoAction } from '@/actions/site-photos'
+import { Camera, MapPin, ArrowLeft, Loader2, X, Send, Trash2, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 
 type PhotoCard = {
@@ -11,6 +12,8 @@ type PhotoCard = {
   meta: string
   tag: string
   imageUrl?: string
+  dbId?: string  // real DB id for delete/retake
+  siteId?: string
 }
 
 type SiteOption = {
@@ -34,6 +37,9 @@ export default function MobilePhotoClient({
   const [showModal, setShowModal] = useState(false)
 
   const [photos, setPhotos] = useState<PhotoCard[]>(initialPhotos)
+  const retakeInputRef = useRef<HTMLInputElement>(null)
+  const [retakeTargetId, setRetakeTargetId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   // Capture Modal State
   const [siteId, setSiteId] = useState(initialSiteId)
@@ -87,7 +93,6 @@ export default function MobilePhotoClient({
     setUploadError(null)
     const finalGps = gpsCoords || '28.5355° N, 77.3910° E'
     try {
-      // Step 1: upload to Cloudinary to get a persistent URL
       const fd = new FormData()
       fd.append('file', selectedFile)
       fd.append('module', 'SITE_PHOTO')
@@ -96,7 +101,6 @@ export default function MobilePhotoClient({
       if (!res.ok) throw new Error('Upload failed')
       const { url: cloudinaryUrl } = await res.json()
 
-      // Step 2: save to DB with real Cloudinary URL
       if (siteId) {
         await uploadMobileSitePhotoAction({
           siteId,
@@ -110,7 +114,7 @@ export default function MobilePhotoClient({
         title: caption || `${captureTag} telemetry entry`,
         meta: `You - ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
         tag: captureTag,
-        imageUrl: cloudinaryUrl  // use real URL so it loads immediately in grid
+        imageUrl: cloudinaryUrl
       }
       setPhotos(prev => [newCard, ...prev])
       setShowModal(false)
@@ -121,6 +125,53 @@ export default function MobilePhotoClient({
       setUploadError(err?.message || 'Upload failed. Try again.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async (photoId: string, dbId?: string) => {
+    if (!dbId) {
+      // local-only card, just remove from UI
+      setPhotos(prev => prev.filter(p => p.id !== photoId))
+      return
+    }
+    setDeletingId(photoId)
+    try {
+      await deleteSitePhotoAction(dbId)
+      setPhotos(prev => prev.filter(p => p.id !== photoId))
+    } catch {
+      // ignore
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleRetakeFile = async (e: React.ChangeEvent<HTMLInputElement>, photo: PhotoCard) => {
+    const file = e.target.files?.[0]
+    if (!file || !photo.siteId) return
+    setDeletingId(photo.id)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('module', 'SITE_PHOTO')
+      fd.append('siteId', photo.siteId)
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      if (!res.ok) throw new Error('Upload failed')
+      const { url: cloudinaryUrl } = await res.json()
+
+      // delete old, create new
+      if (photo.dbId) await deleteSitePhotoAction(photo.dbId)
+      await uploadMobileSitePhotoAction({
+        siteId: photo.siteId,
+        imageUrl: cloudinaryUrl,
+        caption: photo.title,
+        gps: ''
+      })
+      setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, imageUrl: cloudinaryUrl } : p))
+    } catch {
+      // ignore
+    } finally {
+      setDeletingId(null)
+      setRetakeTargetId(null)
     }
   }
 
@@ -199,27 +250,54 @@ export default function MobilePhotoClient({
                   <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 ) : (
                   <>
-                    {/* Subtle diagonal stripe CSS background matching mockup */}
                     <div className="absolute inset-0 opacity-40 bg-[linear-gradient(135deg,#e2e8f0_25%,transparent_25%,transparent_50%,#e2e8f0_50%,#e2e8f0_75%,transparent_75%,transparent)] bg-[length:20px_20px]" />
                     <span className="text-[11px] font-mono font-black text-slate-400 tracking-widest uppercase relative z-10 select-none">
                       site photo
                     </span>
                   </>
                 )}
-
                 {/* Tag Pill Badge */}
                 <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-slate-800/85 text-white font-black text-[9.5px] tracking-wide backdrop-blur-xs shadow-xs z-20">
                   {item.tag}
                 </div>
+                {/* Loading overlay for retake/delete */}
+                {deletingId === item.id && (
+                  <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-30">
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
+                  </div>
+                )}
               </div>
 
-              {/* Caption & Meta Subtitle */}
+              {/* Caption & Meta */}
               <div className="p-3 bg-white flex-1 flex flex-col justify-between min-w-0">
                 <div className="text-xs font-black text-slate-900 leading-snug mb-1 truncate">
                   {item.title}
                 </div>
-                <div className="text-[10.5px] font-bold text-slate-400 truncate">
+                <div className="text-[10.5px] font-bold text-slate-400 truncate mb-2">
                   {item.meta}
+                </div>
+                {/* Retake + Delete actions */}
+                <div className="flex gap-1.5">
+                  {/* Retake: hidden file input */}
+                  <label className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-[10px] font-bold cursor-pointer hover:bg-blue-100 transition-colors">
+                    <RefreshCw className="w-3 h-3" />
+                    Retake
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => handleRetakeFile(e, item)}
+                    />
+                  </label>
+                  <button
+                    onClick={() => handleDelete(item.id, item.dbId)}
+                    disabled={deletingId === item.id}
+                    className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 text-[10px] font-bold hover:bg-red-100 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Delete
+                  </button>
                 </div>
               </div>
             </div>

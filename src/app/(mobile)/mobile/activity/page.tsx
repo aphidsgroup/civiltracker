@@ -4,7 +4,10 @@ import { FileText, Image as ImageIcon, Users, IndianRupee, Clock, CheckSquare } 
 import Link from 'next/link'
 
 function formatTime(date: Date) {
-  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hour12: true }).format(date)
+  return new Intl.DateTimeFormat('en-IN', {
+    hour: 'numeric', minute: 'numeric', hour12: true,
+    timeZone: 'Asia/Kolkata'
+  }).format(date)
 }
 
 function parseTime(timeStr: string | null | undefined, fallbackDate: Date, todayDate: Date) {
@@ -107,7 +110,7 @@ export default async function MobileActivityPage({
         take,
       }) : Promise.resolve([]),
       fetchChecklist ? prisma.auditLog.findMany({
-        where: { recordId: siteId, module: 'CHECKLIST' },
+        where: { recordId: siteId, module: 'CHECKLIST', action: 'TICK' },
         orderBy: { createdAt: 'desc' },
         take,
         include: { user: { select: { name: true } } }
@@ -166,12 +169,11 @@ export default async function MobileActivityPage({
 
     checklistLogs.forEach(log => {
       const data = log.after as any
-      const actionText = log.action === 'TICK' ? 'completed' : 'marked pending'
       activities.push({
         id: `chk-${log.id}`,
         type: 'CHECKLIST',
-        title: `Task "${data?.taskName || 'Unknown'}" ${actionText}`,
-        desc: `Checklist Update \u2022 By ${log.user.name}`,
+        title: `Task "${data?.taskName || 'Unknown'}" completed`,
+        desc: `Checklist \u2022 By ${log.user.name}`,
         time: log.createdAt,
       })
     })
@@ -182,7 +184,10 @@ export default async function MobileActivityPage({
   // Group by date
   const grouped = activities.reduce((acc, act) => {
     const d = act.time
-    const dateStr = d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    const dateStr = d.toLocaleDateString('en-IN', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      timeZone: 'Asia/Kolkata'
+    })
     if (!acc[dateStr]) acc[dateStr] = []
     acc[dateStr].push(act)
     return acc

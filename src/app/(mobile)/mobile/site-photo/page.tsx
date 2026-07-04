@@ -28,11 +28,14 @@ export default async function MobileSitePhotoPage({ searchParams }: { searchPara
 
   const mappedPhotos = photos.map(p => ({
     id: p.id,
+    dbId: p.id,
     title: p.caption || 'Site Photo',
-    meta: p.createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
+    meta: p.createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }),
     tag: p.category || 'Civil',
-    imageUrl: p.secureUrl
+    imageUrl: p.secureUrl,
+    siteId: p.siteId ?? undefined
   }))
+
 
   return <MobilePhotoClient sites={sites} defaultSiteId={siteId} initialPhotos={mappedPhotos} />
 }
