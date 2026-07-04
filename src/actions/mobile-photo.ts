@@ -11,20 +11,28 @@ export async function uploadMobileSitePhotoAction(formData: {
   gps: string
 }) {
   const user = await requireUser()
-  if (!user.companyId) throw new Error('No active workspace context')
 
-  const photo = await prisma.sitePhoto.create({
+  // Resolve companyId — site engineers may not have it in their JWT
+  let companyId = user.companyId ?? null
+  if (!companyId) {
+    const site = await prisma.site.findUnique({ where: { id: formData.siteId }, select: { companyId: true } })
+    if (!site) throw new Error('Site not found')
+    companyId = site.companyId
+  }
+
+  await prisma.sitePhoto.create({
     data: {
-      companyId: user.companyId,
+      companyId,
       siteId: formData.siteId,
       secureUrl: formData.imageUrl,
       cloudinaryPublicId: `field_gps_${Date.now()}`,
       caption: formData.caption.trim() || 'Site Operations Photo',
-      category: `GPS:${formData.gps}`,
+      category: formData.gps ? `GPS:${formData.gps}` : 'Civil',
       uploadedById: user.id
     }
   })
 
   revalidatePath('/mobile/site-photo')
-  return { success: true, photo }
+  return { success: true }
 }
+

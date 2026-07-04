@@ -9,9 +9,6 @@ const VALID_MODULES = ['BILL', 'SITE_PHOTO', 'DOCUMENT', 'SALARY_PROOF', 'DELIVE
 export async function POST(request: Request) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!session.user.companyId && session.user.role !== 'SUPER_ADMIN') {
-    return NextResponse.json({ error: 'Forbidden: No active company context' }, { status: 403 })
-  }
 
   const formData = await request.formData()
   const file = formData.get('file') as File
@@ -24,14 +21,27 @@ export async function POST(request: Request) {
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
-  const companyId = session.user.companyId!
+  // Resolve companyId — prefer session, fall back to looking up the site
+  let companyId = session.user.companyId ?? null
 
-  if (siteId && session.user.role !== 'SUPER_ADMIN') {
+  if (!companyId && session.user.role !== 'SUPER_ADMIN') {
+    if (siteId) {
+      // Site engineer may not have companyId on token — look it up from the site
+      const site = await prisma.site.findUnique({ where: { id: siteId }, select: { companyId: true } })
+      if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 })
+      companyId = site.companyId
+    } else {
+      return NextResponse.json({ error: 'Forbidden: No active company context' }, { status: 403 })
+    }
+  }
+
+  // If siteId provided, verify it belongs to the resolved companyId (skip for SUPER_ADMIN)
+  if (siteId && session.user.role !== 'SUPER_ADMIN' && companyId) {
     const site = await prisma.site.findFirst({
       where: { id: siteId, companyId, deletedAt: null }
     })
     if (!site) {
-      return NextResponse.json({ error: 'Forbidden: Site not found or access denied' }, { status: 403 })
+      return NextResponse.json({ error: 'Forbidden: Site access denied' }, { status: 403 })
     }
   }
 
@@ -56,22 +66,25 @@ export async function POST(request: Request) {
     })
   })
 
-  await prisma.mediaAsset.create({
-    data: {
-      companyId: siteId ? (await prisma.site.findUnique({ where: { id: siteId } }))?.companyId || companyId : companyId,
-      siteId: siteId ?? null,
-      module: moduleName,
-      cloudinaryPublicId: result.public_id,
-      secureUrl: result.secure_url,
-      format: result.format,
-      bytes: result.bytes,
-      width: result.width,
-      height: result.height,
-      folder,
-      originalName: file.name,
-      uploadedById: session.user.id,
-    },
-  })
+  // Only create mediaAsset if we have a valid companyId
+  if (companyId) {
+    await prisma.mediaAsset.create({
+      data: {
+        companyId,
+        siteId: siteId ?? null,
+        module: moduleName,
+        cloudinaryPublicId: result.public_id,
+        secureUrl: result.secure_url,
+        format: result.format,
+        bytes: result.bytes,
+        width: result.width,
+        height: result.height,
+        folder,
+        originalName: file.name,
+        uploadedById: session.user.id,
+      },
+    })
+  }
 
   return NextResponse.json({ success: true, url: result.secure_url, publicId: result.public_id })
 }

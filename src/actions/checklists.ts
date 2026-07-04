@@ -251,11 +251,19 @@ export async function getPendingChecklistPhotos(siteId?: string) {
 
 export async function uploadChecklistPhotoAction(taskId: string, siteId: string, imageUrl: string) {
   const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
+  if (!session?.user) throw new Error('Unauthorized')
+
+  // Resolve companyId — site engineers may not have it in their session token
+  let companyId = session.user.companyId ?? null
+  if (!companyId) {
+    const site = await prisma.site.findUnique({ where: { id: siteId }, select: { companyId: true } })
+    if (!site) throw new Error('Site not found')
+    companyId = site.companyId
+  }
 
   await prisma.sitePhoto.create({
     data: {
-      companyId: session.user.companyId,
+      companyId,
       siteId,
       taskId,
       secureUrl: imageUrl,
@@ -269,6 +277,7 @@ export async function uploadChecklistPhotoAction(taskId: string, siteId: string,
   revalidatePath(`/mobile/checklist`)
   return { success: true }
 }
+
 
 // Admin approves a site photo → makes it visible to client
 export async function approvePhotoAction(photoId: string) {
