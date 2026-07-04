@@ -12,7 +12,24 @@ export async function deleteSitePhotoAction(photoId: string) {
   if (!photo) throw new Error('Photo not found')
 
   // Only allow the uploader or same company admin to delete
-  if (photo.companyId !== user.companyId) throw new Error('Unauthorized')
+  if (photo.companyId !== user.companyId && user.role !== 'SUPER_ADMIN') throw new Error('Unauthorized')
+
+  // Delete from Cloudinary
+  try {
+    const cloudinary = (await import('@/lib/cloudinary')).default
+    await cloudinary.uploader.destroy(photo.cloudinaryPublicId)
+  } catch (err) {
+    console.error('Failed to delete from Cloudinary', err)
+  }
+
+  // Delete MediaAsset if it exists
+  try {
+    await prisma.mediaAsset.deleteMany({
+      where: { cloudinaryPublicId: photo.cloudinaryPublicId }
+    })
+  } catch (err) {
+    console.error('Failed to delete MediaAsset', err)
+  }
 
   await prisma.sitePhoto.delete({ where: { id: photoId } })
 
