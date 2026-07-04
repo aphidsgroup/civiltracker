@@ -2,6 +2,9 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { Users } from 'lucide-react'
+import { RaiseInvoiceButton } from '@/components/client/RaiseInvoiceButton'
+
+export const dynamic = 'force-dynamic'
 
 export default async function ClientsPage() {
   const session = await auth()
@@ -12,6 +15,7 @@ export default async function ClientsPage() {
     where: { companyId },
     include: {
       _count: { select: { payments: true, invoices: true } },
+      invoices: { where: { status: { not: 'PAID' } }, orderBy: { createdAt: 'desc' }, take: 1 }
     },
     orderBy: { name: 'asc' },
   })
@@ -30,6 +34,7 @@ export default async function ClientsPage() {
       </div>
 
       <div className="p-6">
+        {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
             <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Clients</div>
@@ -67,40 +72,57 @@ export default async function ClientsPage() {
                   <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Contract Value</th>
                   <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Paid</th>
                   <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Due</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Invoices</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Payments</th>
+                  <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Next Due</th>
                   <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Portal</th>
+                  <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {clients.map(c => (
-                  <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
-                          {c.name.substring(0, 2).toUpperCase()}
+                {clients.map(c => {
+                  const nextInvoice = c.invoices[0]
+                  return (
+                    <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#fc6e20] to-[#e85b0d] text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                            {c.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-sm text-gray-900">{c.name}</div>
+                            <div className="text-xs text-gray-400">{c._count.invoices} invoice{c._count.invoices !== 1 ? 's' : ''}</div>
+                          </div>
                         </div>
-                        <div className="font-semibold text-sm text-gray-900">{c.name}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {c.phone && <div className="text-sm font-medium text-gray-800">{c.phone}</div>}
-                      {c.email && <div className="text-xs text-gray-500">{c.email}</div>}
-                    </td>
-                    <td className="px-6 py-4 font-semibold text-sm text-gray-900">₹{Number(c.contractValue).toLocaleString('en-IN')}</td>
-                    <td className="px-6 py-4 font-semibold text-sm text-emerald-600">₹{Number(c.amountPaid).toLocaleString('en-IN')}</td>
-                    <td className={`px-6 py-4 font-semibold text-sm ${Number(c.amountDue) > 0 ? 'text-rose-600' : 'text-gray-900'}`}>
-                      ₹{Number(c.amountDue).toLocaleString('en-IN')}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-gray-700">{c._count.invoices}</td>
-                    <td className="px-6 py-4 text-sm font-semibold text-gray-700">{c._count.payments}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${c.portalAccess ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                        {c.portalAccess ? 'Active' : 'Disabled'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-6 py-4">
+                        {c.phone && <div className="text-sm font-medium text-gray-800">{c.phone}</div>}
+                        {c.email && <div className="text-xs text-gray-500">{c.email}</div>}
+                      </td>
+                      <td className="px-6 py-4 font-semibold text-sm text-gray-900">₹{Number(c.contractValue).toLocaleString('en-IN')}</td>
+                      <td className="px-6 py-4 font-semibold text-sm text-emerald-600">₹{Number(c.amountPaid).toLocaleString('en-IN')}</td>
+                      <td className={`px-6 py-4 font-bold text-sm ${Number(c.amountDue) > 0 ? 'text-rose-600' : 'text-gray-500'}`}>
+                        ₹{Number(c.amountDue).toLocaleString('en-IN')}
+                      </td>
+                      <td className="px-6 py-4">
+                        {nextInvoice ? (
+                          <div>
+                            <div className="text-sm font-bold text-amber-700">₹{Number(nextInvoice.amount).toLocaleString('en-IN')}</div>
+                            <div className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{nextInvoice.milestone || 'Pending'}</div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">No dues</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${c.portalAccess ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                          {c.portalAccess ? 'Active' : 'Disabled'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <RaiseInvoiceButton client={{ id: c.id, name: c.name, siteId: c.siteId }} />
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

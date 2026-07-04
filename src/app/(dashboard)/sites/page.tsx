@@ -13,16 +13,12 @@ export default async function SitesPage() {
   if (!session?.user?.companyId) redirect('/login')
   const { companyId } = session.user
 
-  // Lazy cleanup of soft-deleted sites older than 15 days (non-blocking)
   const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000)
-  // Run in background - do NOT await so it never blocks the page render
-  void prisma.site.deleteMany({
-    where: { companyId, deletedAt: { lt: fifteenDaysAgo } }
-  }).catch(e => console.error('[Sites cleanup] Failed:', e?.message ?? e))
 
+  // Fetch all sites - active + soft-deleted within 15 days
   const sites = await prisma.site.findMany({
-    where: { 
-      companyId, 
+    where: {
+      companyId,
       OR: [
         { deletedAt: null },
         { deletedAt: { gte: fifteenDaysAgo } }
@@ -31,6 +27,11 @@ export default async function SitesPage() {
     include: { _count: { select: { labour: true, expenses: true } } },
     orderBy: { createdAt: 'desc' },
   })
+
+  // Background cleanup of expired deleted sites (fire and forget)
+  prisma.site.deleteMany({
+    where: { companyId, deletedAt: { not: null, lt: fifteenDaysAgo } }
+  }).catch(() => {})
 
   const statusChip: Record<string, string> = {
     ACTIVE:    'bg-green-100 text-green-700 border border-green-200',
@@ -64,20 +65,16 @@ export default async function SitesPage() {
           const budget = Number(site.budget)
           const overBudget = spent > budget
           const isDeleted = site.deletedAt !== null
-          
+
           let daysRemaining = 0
-          if (isDeleted) {
-            const deleteTime = new Date(site.deletedAt!).getTime()
-            const expiryTime = deleteTime + (15 * 24 * 60 * 60 * 1000)
+          if (isDeleted && site.deletedAt) {
+            const expiryTime = new Date(site.deletedAt).getTime() + (15 * 24 * 60 * 60 * 1000)
             daysRemaining = Math.max(0, Math.ceil((expiryTime - Date.now()) / (1000 * 60 * 60 * 24)))
           }
 
           const innerContent = (
-            <div className={`bg-white rounded-xl border ${isDeleted ? 'border-red-200 shadow-none' : 'border-gray-100 shadow-sm hover:shadow-md'} p-5 transition-shadow h-full flex flex-col relative overflow-hidden`}>
-              
-              {isDeleted && (
-                <div className="absolute top-0 left-0 right-0 h-1 bg-red-500" />
-              )}
+            <div className={`bg-white rounded-xl border ${isDeleted ? 'border-red-200' : 'border-gray-100 shadow-sm hover:shadow-md'} p-5 transition-shadow h-full flex flex-col relative overflow-hidden`}>
+              {isDeleted && <div className="absolute top-0 left-0 right-0 h-1 bg-red-500" />}
 
               {/* Site name + actions */}
               <div className="flex justify-between items-start mb-3">
@@ -88,32 +85,27 @@ export default async function SitesPage() {
                     {site.location}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   {isDeleted ? (
-                    <span className="text-[10.5px] font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700 border border-red-200">
-                      Deleted
-                    </span>
+                    <span className="text-[10.5px] font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700 border border-red-200">Deleted</span>
                   ) : (
                     <span className={`text-[10.5px] font-bold px-2.5 py-1 rounded-full ${statusChip[site.status] ?? 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
                       {site.status.replace(/_/g, ' ')}
                     </span>
                   )}
-                  <div onClick={e => e.preventDefault()}>
-                    <SiteCardActions siteId={site.id} isDeleted={isDeleted} />
-                  </div>
+                  <SiteCardActions siteId={site.id} isDeleted={isDeleted} />
                 </div>
               </div>
 
               {isDeleted ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-6 bg-red-50/50 rounded-lg border border-red-100 border-dashed mt-2 mb-2">
+                <div className="flex-1 flex flex-col items-center justify-center py-6 bg-red-50/50 rounded-lg border border-red-100 border-dashed mt-2">
                   <Clock className="w-8 h-8 text-red-400 mb-2" />
                   <div className="text-sm font-bold text-red-900">Pending Deletion</div>
-                  <div className="text-xs font-semibold text-red-600 mt-1">Permanently removed in {daysRemaining} days</div>
+                  <div className="text-xs font-semibold text-red-600 mt-1">Permanently removed in {daysRemaining} day{daysRemaining !== 1 ? 's' : ''}</div>
                 </div>
               ) : (
                 <>
-                  {/* Budget / Spent */}
-                  <div className="grid grid-cols-2 gap-3 mb-3.5 mt-auto">
+                  <div className="grid grid-cols-2 gap-3 mb-3.5">
                     <div>
                       <div className="text-[10.5px] text-gray-400 font-bold uppercase mb-0.5 tracking-wide">Budget</div>
                       <div className="text-[15px] font-extrabold">{formatCurrency(budget)}</div>
@@ -124,7 +116,6 @@ export default async function SitesPage() {
                     </div>
                   </div>
 
-                  {/* Progress bar */}
                   <div className="mb-3.5">
                     <div className="flex justify-between mb-1.5">
                       <span className="text-[11.5px] text-gray-500 font-semibold">Progress</span>
@@ -138,8 +129,7 @@ export default async function SitesPage() {
                     </div>
                   </div>
 
-                  {/* Footer stats */}
-                  <div className="flex gap-3 flex-wrap">
+                  <div className="flex gap-3 flex-wrap mt-auto">
                     <span className="flex items-center gap-1 text-[11.5px] text-gray-500 font-semibold">
                       <HardHat className="w-3 h-3" /> {site._count.labour}
                     </span>
@@ -156,7 +146,7 @@ export default async function SitesPage() {
           )
 
           return isDeleted ? (
-            <div key={site.id} className="no-underline text-inherit opacity-80">
+            <div key={site.id} className="opacity-80 cursor-default">
               {innerContent}
             </div>
           ) : (
@@ -171,10 +161,7 @@ export default async function SitesPage() {
             <div className="text-4xl mb-3">🏗</div>
             <div className="font-bold text-[15px] mb-1.5">No sites yet</div>
             <div className="text-gray-500 text-sm mb-4">Create your first construction site to get started</div>
-            <Link
-              href="/sites/new"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#fc6e20] text-white text-sm font-bold hover:bg-[#e85b0d] transition-colors no-underline shadow-sm"
-            >
+            <Link href="/sites/new" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#fc6e20] text-white text-sm font-bold hover:bg-[#e85b0d] transition-colors no-underline shadow-sm">
               + New Site
             </Link>
           </div>

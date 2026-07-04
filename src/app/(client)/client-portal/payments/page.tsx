@@ -34,6 +34,10 @@ export default async function ClientPortalPaymentsPage() {
   const totalBilled = displayInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0)
   const totalPaid = displayInvoices.filter(inv => inv.status.toUpperCase() === 'PAID').reduce((sum, inv) => sum + Number(inv.amount), 0)
   const totalOutstanding = totalBilled - totalPaid
+  const nextDue = displayInvoices.find(inv => inv.status !== 'PAID')
+  const nextDueLabel = nextDue?.dueDate
+    ? `Next Due: ${new Date(nextDue.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+    : totalOutstanding > 0 ? 'Payment pending' : 'All paid up ✓'
 
   const getStatusChip = (status: string) => {
     const st = status.toUpperCase()
@@ -113,7 +117,7 @@ export default async function ClientPortalPaymentsPage() {
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-amber-100 mb-1">Outstanding Balance</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-white">{formatCurrency(totalOutstanding)}</div>
-            <div className="text-xs text-amber-100 mt-1 font-semibold">Next Due: 10 Jul 2026</div>
+            <div className="text-xs text-amber-100 mt-1 font-semibold">{nextDueLabel}</div>
           </div>
           <div className="p-3.5 rounded-2xl bg-white/15 text-white backdrop-blur-md">
             <Wallet className="w-7 h-7" />
