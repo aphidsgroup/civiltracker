@@ -16,7 +16,7 @@ export default async function MaterialsPage() {
   const { companyId } = session.user
 
   const materials = await prisma.material.findMany({
-    where: { companyId, isActive: true },
+    where: { companyId, isActive: true, site: { deletedAt: null } },
     include: { site: { select: { name: true } } },
     orderBy: { name: 'asc' },
   })

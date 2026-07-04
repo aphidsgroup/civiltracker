@@ -36,7 +36,7 @@ async function getCachedDashboardData(companyId: string) {
     prisma.invoice.aggregate({ where: { companyId, status: 'DUE', OR: [{ siteId: null }, { siteId: { in: siteIds } }] }, _sum: { amount: true } }),
     prisma.vendor.count({ where: { companyId, isActive: true } }),
     prisma.subcontractor.count({ where: { companyId, isActive: true } }),
-    prisma.material.count({ where: { companyId, isActive: true } }),
+    prisma.material.count({ where: { companyId, isActive: true, siteId: { in: siteIds } } }),
     prisma.labourAttendance.findMany({ where: { siteId: { in: siteIds } }, select: { advance: true, status: true, overtimeHours: true, labour: { select: { dailyWage: true } } } }),
     prisma.vendor.aggregate({ where: { companyId, isActive: true }, _sum: { amountPayable: true } }),
     prisma.subcontractor.aggregate({ where: { companyId, isActive: true }, _sum: { raBilled: true, advance: true, retention: true } })
