@@ -1,0 +1,135 @@
+'use client'
+
+import { useState } from 'react'
+import Image from 'next/image'
+import { CheckCircle2, XCircle, Loader2, Check, Clock } from 'lucide-react'
+import { approvePhotoAction, rejectPhotoAction } from '@/actions/checklists'
+
+interface Photo {
+  id: string
+  secureUrl: string
+  caption: string | null
+  category: string | null
+  createdAt: Date
+  approvedForClient: boolean
+  approvedAt: Date | null
+  task?: {
+    id: string
+    name: string
+    category?: {
+      name: string
+      stage?: { name: string }
+    }
+  } | null
+}
+
+interface Props {
+  photo: Photo
+  mode: 'pending' | 'approved'
+}
+
+export function PhotoApprovalCard({ photo, mode }: Props) {
+  const [loading, setLoading] = useState<'approve' | 'reject' | null>(null)
+  const [done, setDone] = useState<'approved' | 'rejected' | null>(null)
+
+  const handleApprove = async () => {
+    setLoading('approve')
+    try {
+      await approvePhotoAction(photo.id)
+      setDone('approved')
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleReject = async () => {
+    setLoading('reject')
+    try {
+      await rejectPhotoAction(photo.id)
+      setDone('rejected')
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  if (done === 'rejected') return null
+
+  return (
+    <div className={`rounded-2xl overflow-hidden border shadow-sm bg-white flex flex-col ${mode === 'pending' ? 'border-amber-200' : 'border-emerald-200'}`}>
+      {/* Photo */}
+      <div className="relative aspect-[4/3] bg-slate-100">
+        <Image src={photo.secureUrl} alt={photo.caption || 'Site photo'} fill className="object-cover" />
+
+        {/* Status badge */}
+        <div className={`absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${mode === 'pending' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'}`}>
+          {mode === 'pending' ? <Clock className="w-2.5 h-2.5" /> : <Check className="w-2.5 h-2.5 stroke-[3]" />}
+          {mode === 'pending' ? 'Pending' : 'Approved'}
+        </div>
+
+        {done === 'approved' && (
+          <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
+            <div className="bg-white rounded-full p-2 shadow-lg">
+              <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="p-3 flex-1 flex flex-col gap-2">
+        {photo.task && (
+          <div>
+            <div className="text-xs font-bold text-slate-800 line-clamp-2">{photo.task.name}</div>
+            {photo.task.category && (
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                {photo.task.category.stage?.name} / {photo.task.category.name}
+              </div>
+            )}
+          </div>
+        )}
+        {!photo.task && (
+          <div className="text-xs font-semibold text-slate-600">{photo.caption || photo.category || 'Site update'}</div>
+        )}
+        <div className="text-[10px] text-slate-400">
+          {new Date(photo.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+        </div>
+
+        {/* Action buttons — only for pending mode */}
+        {mode === 'pending' && !done && (
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={handleReject}
+              disabled={!!loading}
+              className="flex-1 flex items-center justify-center gap-1 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs font-bold transition-colors disabled:opacity-50"
+            >
+              {loading === 'reject' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+              Reject
+            </button>
+            <button
+              onClick={handleApprove}
+              disabled={!!loading}
+              className="flex-1 flex items-center justify-center gap-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-50"
+            >
+              {loading === 'approve' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              Approve
+            </button>
+          </div>
+        )}
+
+        {mode === 'approved' && (
+          <div className="flex items-center gap-1 pt-1">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+            <span className="text-[10px] text-emerald-600 font-bold">Visible to client</span>
+            <button
+              onClick={handleReject}
+              disabled={!!loading}
+              className="ml-auto text-[10px] text-red-400 hover:text-red-600 font-bold transition-colors disabled:opacity-50"
+            >
+              {loading === 'reject' ? '...' : 'Revoke'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

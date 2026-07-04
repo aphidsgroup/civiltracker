@@ -268,3 +268,72 @@ export async function uploadChecklistPhotoAction(taskId: string, siteId: string,
   revalidatePath(`/mobile/checklist`)
   return { success: true }
 }
+
+// Admin approves a site photo → makes it visible to client
+export async function approvePhotoAction(photoId: string) {
+  const session = await auth()
+  if (!session?.user?.companyId) throw new Error('Unauthorized')
+
+  const photo = await prisma.sitePhoto.update({
+    where: { id: photoId },
+    data: {
+      approvedForClient: true,
+      approvedById: session.user.id,
+      approvedAt: new Date()
+    },
+    include: { task: true }
+  })
+
+  if (photo.siteId) {
+    revalidatePath(`/sites/${photo.siteId}/photos`)
+    revalidatePath(`/client-portal`)
+    revalidatePath(`/client-portal/photos`)
+  }
+  return { success: true }
+}
+
+// Admin rejects / un-approves a photo
+export async function rejectPhotoAction(photoId: string) {
+  const session = await auth()
+  if (!session?.user?.companyId) throw new Error('Unauthorized')
+
+  const photo = await prisma.sitePhoto.update({
+    where: { id: photoId },
+    data: { approvedForClient: false, approvedById: null, approvedAt: null }
+  })
+
+  if (photo.siteId) revalidatePath(`/sites/${photo.siteId}/photos`)
+  return { success: true }
+}
+
+// Client confirms they have seen / accepted a task photo → marks task completed
+export async function clientApproveTaskPhoto(photoId: string) {
+  const session = await auth()
+  if (!session?.user) throw new Error('Unauthorized')
+
+  const photo = await prisma.sitePhoto.findUnique({
+    where: { id: photoId },
+    include: { task: true }
+  })
+
+  if (!photo) throw new Error('Photo not found')
+
+  // Mark the linked task as client-confirmed
+  if (photo.taskId) {
+    await prisma.projectChecklistTask.update({
+      where: { id: photo.taskId },
+      data: {
+        isClientDone: true,
+        status: 'COMPLETED',
+        completedAt: new Date()
+      }
+    })
+  }
+
+  if (photo.siteId) {
+    revalidatePath(`/client-portal`)
+    revalidatePath(`/client-portal/photos`)
+  }
+  return { success: true }
+}
+
