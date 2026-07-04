@@ -44,3 +44,29 @@ export async function updateSiteDetails(formData: FormData) {
   revalidatePath(`/sites`)
   return { success: true }
 }
+
+export async function softDeleteSite(id: string) {
+  const session = await auth()
+  if (!session?.user?.companyId) throw new Error('Unauthorized')
+
+  await prisma.site.updateMany({
+    where: { id, companyId: session.user.companyId },
+    data: { deletedAt: new Date() }
+  })
+
+  revalidatePath('/sites')
+  return { success: true }
+}
+
+export async function restoreSite(id: string) {
+  const session = await auth()
+  if (!session?.user?.companyId) throw new Error('Unauthorized')
+
+  await prisma.site.updateMany({
+    where: { id, companyId: session.user.companyId },
+    data: { deletedAt: null }
+  })
+
+  revalidatePath('/sites')
+  return { success: true }
+}

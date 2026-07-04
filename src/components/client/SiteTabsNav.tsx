@@ -16,6 +16,7 @@ export function SiteTabsNav({ siteId }: { siteId: string }) {
     { name: 'Subcontractors', href: `/sites/${siteId}/subcontractors` },
     { name: 'Materials', href: `/sites/${siteId}/materials` },
     { name: 'Checklist', href: `/sites/${siteId}/checklist` },
+    { name: 'Photos', href: `/sites/${siteId}/photos` },
     { name: 'BOQ', href: `/sites/${siteId}/boq` },
   ]
 

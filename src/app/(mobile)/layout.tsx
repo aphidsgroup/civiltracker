@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import MobileTabbar from '@/components/mobile/MobileTabbar'
 import MobileHeader from '@/components/mobile/MobileHeader'
+import { ChecklistPhotoNag } from '@/components/mobile/ChecklistPhotoNag'
 
 export default async function MobileLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -12,6 +13,7 @@ export default async function MobileLayout({ children }: { children: React.React
       <MobileHeader />
       <main className="flex-1 pb-28">
         {children}
+        <ChecklistPhotoNag />
       </main>
       <MobileTabbar />
     </div>

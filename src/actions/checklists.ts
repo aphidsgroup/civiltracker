@@ -207,3 +207,64 @@ export async function getPendingTasks(siteId: string) {
 
   return tasks
 }
+
+export async function getPendingChecklistPhotos(siteId?: string) {
+  const session = await auth()
+  if (!session?.user?.companyId) return []
+
+  const pendingTasks = await prisma.projectChecklistTask.findMany({
+    where: {
+      category: { stage: { checklist: { companyId: session.user.companyId, siteId: siteId || undefined } } },
+      OR: [ { status: 'COMPLETED' }, { isClientDone: true } ],
+      sitePhotos: { none: {} }
+    },
+    include: { 
+      category: { 
+        include: { 
+          stage: { 
+            include: { checklist: true } 
+          } 
+        } 
+      } 
+    },
+    orderBy: { updatedAt: 'desc' }
+  })
+
+  // Fetch site names since ProjectChecklist doesn't have a direct site relation in prisma include
+  const siteIds = [...new Set(pendingTasks.map(t => t.category.stage.checklist.siteId))]
+  const sites = await prisma.site.findMany({
+    where: { id: { in: siteIds } },
+    select: { id: true, name: true }
+  })
+  const siteMap = new Map(sites.map(s => [s.id, s.name]))
+
+  return pendingTasks.map(t => ({
+    taskId: t.id,
+    taskName: t.name,
+    categoryName: t.category.name,
+    stageName: t.category.stage.name,
+    siteId: t.category.stage.checklist.siteId,
+    siteName: siteMap.get(t.category.stage.checklist.siteId) || 'Unknown Site'
+  }))
+}
+
+export async function uploadChecklistPhotoAction(taskId: string, siteId: string, imageUrl: string) {
+  const session = await auth()
+  if (!session?.user?.companyId) throw new Error('Unauthorized')
+
+  await prisma.sitePhoto.create({
+    data: {
+      companyId: session.user.companyId,
+      siteId,
+      taskId,
+      secureUrl: imageUrl,
+      cloudinaryPublicId: `checklist_${taskId}_${Date.now()}`,
+      caption: 'Checklist Task Completed',
+      uploadedById: session.user.id
+    }
+  })
+
+  revalidatePath(`/sites/${siteId}/photos`)
+  revalidatePath(`/mobile/checklist`)
+  return { success: true }
+}

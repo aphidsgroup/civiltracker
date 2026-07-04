@@ -428,7 +428,7 @@ model Expense {
   deletedAt      DateTime?
 
   company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site            Site             @relation(fields: [siteId], references: [id])
+  site            Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
   createdBy       User             @relation("ExpenseCreatedBy", fields: [createdById], references: [id])
   billAttachments BillAttachment[]
 
@@ -473,7 +473,7 @@ model MediaAsset {
   createdAt          DateTime @default(now())
 
   company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site       Site?   @relation(fields: [siteId], references: [id])
+  site       Site?   @relation(fields: [siteId], references: [id], onDelete: Cascade)
   uploadedBy User    @relation("MediaUploadedBy", fields: [uploadedById], references: [id])
 
   @@index([companyId])
@@ -501,7 +501,7 @@ model Labour {
   updatedAt      DateTime    @updatedAt
 
   company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site        Site               @relation(fields: [siteId], references: [id])
+  site        Site               @relation(fields: [siteId], references: [id], onDelete: Cascade)
   attendance  LabourAttendance[]
   salaryItems SalaryRunItem[]
 
@@ -600,7 +600,7 @@ model Material {
   updatedAt    DateTime @updatedAt
 
   company          Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site             Site                  @relation(fields: [siteId], references: [id])
+  site             Site                  @relation(fields: [siteId], references: [id], onDelete: Cascade)
   transactions     MaterialTransaction[]
   purchaseRequests PurchaseRequest[]
 
@@ -693,7 +693,7 @@ model ContractorAttendance {
   updatedAt       DateTime @updatedAt
 
   company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site          Site          @relation(fields: [siteId], references: [id])
+  site          Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
   subcontractor Subcontractor @relation(fields: [subcontractorId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
@@ -724,7 +724,7 @@ model DailyProgressReport {
   updatedAt     DateTime @updatedAt
 
   company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site      Site        @relation(fields: [siteId], references: [id])
+  site      Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
   createdBy User        @relation("DPRCreatedBy", fields: [createdById], references: [id])
   photos    SitePhoto[]
 
@@ -739,6 +739,7 @@ model SitePhoto {
   companyId          String
   siteId             String
   dprId              String?
+  taskId             String?
   cloudinaryPublicId String
   secureUrl          String
   category           String?
@@ -749,12 +750,14 @@ model SitePhoto {
   uploadedById       String?
   createdAt          DateTime  @default(now())
 
-  dpr  DailyProgressReport? @relation(fields: [dprId], references: [id])
-  site Site                 @relation(fields: [siteId], references: [id])
+  dpr  DailyProgressReport?  @relation(fields: [dprId], references: [id])
+  site Site                  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  task ProjectChecklistTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([siteId])
   @@index([dprId])
+  @@index([taskId])
 }
 
 // ============================================================
@@ -780,7 +783,7 @@ model Task {
   updatedAt    DateTime   @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site    Site    @relation(fields: [siteId], references: [id])
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([siteId])
@@ -806,7 +809,7 @@ model BOQItem {
   updatedAt        DateTime  @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site    Site    @relation(fields: [siteId], references: [id])
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([siteId])
@@ -835,7 +838,7 @@ model PurchaseRequest {
   updatedAt     DateTime              @updatedAt
 
   company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site     Site      @relation(fields: [siteId], references: [id])
+  site     Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
   material Material? @relation(fields: [materialId], references: [id])
 
   @@index([companyId])
@@ -882,7 +885,7 @@ model Document {
   updatedAt          DateTime         @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site    Site?   @relation(fields: [siteId], references: [id])
+  site    Site?   @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([siteId])
@@ -991,7 +994,7 @@ model Approval {
   deletedAt DateTime?
 
   company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site        Site?              @relation(fields: [siteId], references: [id])
+  site        Site?              @relation(fields: [siteId], references: [id], onDelete: Cascade)
   requestedBy User               @relation("ApprovalRequestedBy", fields: [requestedById], references: [id])
   reviewedBy  User?              @relation("ApprovalReviewedBy", fields: [reviewedById], references: [id])
   approvedBy  User?              @relation("ApprovalGivenBy", fields: [approvedById], references: [id])
@@ -1243,6 +1246,7 @@ model ProjectChecklistTask {
 
   category    ProjectChecklistCategory         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   attachments ProjectChecklistTaskAttachment[]
+  sitePhotos  SitePhoto[]
 
   @@index([categoryId])
 }
