@@ -24,15 +24,16 @@ async function getCachedDashboardData(companyId: string) {
 
   return Promise.all([
     prisma.site.count({ where: { companyId, deletedAt: null, status: 'ACTIVE' } }),
-    prisma.expense.aggregate({ where: { companyId, deletedAt: null, createdAt: { gte: today, lte: todayEnd } }, _sum: { amount: true } }),
-    prisma.expense.aggregate({ where: { companyId, deletedAt: null, approvalStatus: 'PENDING' }, _sum: { amount: true }, _count: true }),
-    prisma.labour.count({ where: { companyId, isActive: true } }),
+    // Expense queries scoped to non-deleted sites via siteId filter
+    prisma.expense.aggregate({ where: { companyId, deletedAt: null, siteId: { in: siteIds }, createdAt: { gte: today, lte: todayEnd } }, _sum: { amount: true } }),
+    prisma.expense.aggregate({ where: { companyId, deletedAt: null, siteId: { in: siteIds }, approvalStatus: 'PENDING' }, _sum: { amount: true }, _count: true }),
+    prisma.labour.count({ where: { companyId, isActive: true, siteId: { in: siteIds } } }),
     prisma.labourAttendance.count({ where: { siteId: { in: siteIds }, date: { gte: today, lte: todayEnd }, status: 'PRESENT' } }),
-    prisma.expense.findMany({ where: { companyId, deletedAt: null, approvalStatus: 'PENDING' }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, category: true, site: { select: { name: true } }, createdAt: true } }),
-    prisma.expense.findMany({ where: { companyId, deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, approvalStatus: true, category: true, createdAt: true, site: { select: { name: true } } } }),
+    prisma.expense.findMany({ where: { companyId, deletedAt: null, siteId: { in: siteIds }, approvalStatus: 'PENDING' }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, category: true, site: { select: { name: true } }, createdAt: true } }),
+    prisma.expense.findMany({ where: { companyId, deletedAt: null, siteId: { in: siteIds } }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, approvalStatus: true, category: true, createdAt: true, site: { select: { name: true } } } }),
     prisma.site.findMany({ where: { companyId, deletedAt: null, status: 'ACTIVE' }, orderBy: { spent: 'desc' }, take: 5 }),
-    prisma.salaryRun.aggregate({ where: { companyId, status: 'APPROVED' }, _sum: { totalNet: true } }),
-    prisma.invoice.aggregate({ where: { companyId, status: 'DUE' }, _sum: { amount: true } }),
+    prisma.salaryRun.aggregate({ where: { companyId, status: 'APPROVED', OR: [{ siteId: null }, { siteId: { in: siteIds } }] }, _sum: { totalNet: true } }),
+    prisma.invoice.aggregate({ where: { companyId, status: 'DUE', OR: [{ siteId: null }, { siteId: { in: siteIds } }] }, _sum: { amount: true } }),
     prisma.vendor.count({ where: { companyId, isActive: true } }),
     prisma.subcontractor.count({ where: { companyId, isActive: true } }),
     prisma.material.count({ where: { companyId, isActive: true } }),
