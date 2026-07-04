@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { getPendingChecklistPhotos, uploadChecklistPhotoAction } from '@/actions/checklists'
+import { compressImage } from '@/lib/compress-image'
 import { Camera, AlertTriangle, Loader2, X, Upload, CheckCircle2 } from 'lucide-react'
 
 export function ChecklistPhotoNag() {
@@ -68,9 +69,12 @@ export function ChecklistPhotoNag() {
     setErrorMsg(null)
 
     try {
-      // Step 1: Upload file to Cloudinary via /api/upload
+      // Step 0: Compress image client-side before upload
+      const compressed = await compressImage(selectedFile)
+
+      // Step 1: Upload compressed file to Cloudinary via /api/upload
       const fd = new FormData()
-      fd.append('file', selectedFile)
+      fd.append('file', compressed)
       fd.append('module', 'SITE_PHOTO')
       fd.append('siteId', task.siteId)
 

@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { uploadMobileSitePhotoAction } from '@/actions/mobile-photo'
 import { deleteSitePhotoAction } from '@/actions/site-photos'
+import { compressImage } from '@/lib/compress-image'
 import { Camera, MapPin, ArrowLeft, Loader2, X, Send, Trash2, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 
@@ -93,12 +94,17 @@ export default function MobilePhotoClient({
     setUploadError(null)
     const finalGps = gpsCoords || '28.5355° N, 77.3910° E'
     try {
+      // Compress image before upload
+      const compressed = await compressImage(selectedFile)
       const fd = new FormData()
-      fd.append('file', selectedFile)
+      fd.append('file', compressed)
       fd.append('module', 'SITE_PHOTO')
       if (siteId) fd.append('siteId', siteId)
       const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      if (!res.ok) throw new Error('Upload failed')
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData?.error || 'Upload failed')
+      }
       const { url: cloudinaryUrl } = await res.json()
 
       if (siteId) {
@@ -150,12 +156,17 @@ export default function MobilePhotoClient({
     if (!file || !photo.siteId) return
     setDeletingId(photo.id)
     try {
+      // Compress image before upload
+      const compressed = await compressImage(file)
       const fd = new FormData()
-      fd.append('file', file)
+      fd.append('file', compressed)
       fd.append('module', 'SITE_PHOTO')
       fd.append('siteId', photo.siteId)
       const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      if (!res.ok) throw new Error('Upload failed')
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData?.error || 'Upload failed')
+      }
       const { url: cloudinaryUrl } = await res.json()
 
       // delete old, create new

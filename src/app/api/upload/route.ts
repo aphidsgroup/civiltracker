@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getCloudinaryFolder } from '@/lib/cloudinary'
 
-const VALID_MODULES = ['BILL', 'SITE_PHOTO', 'DOCUMENT', 'SALARY_PROOF', 'DELIVERY_CHALLAN', 'QUALITY_PHOTO', 'SAFETY_PHOTO', 'PAYMENT_PROOF', 'general']
+const VALID_MODULES = ['BILL', 'SITE_PHOTO', 'DOCUMENT', 'SALARY_PROOF', 'DELIVERY_CHALLAN', 'QUALITY_PHOTO', 'SAFETY_PHOTO', 'PAYMENT_PROOF', 'GENERAL']
 
 export async function POST(request: Request) {
   const session = await auth()
@@ -12,14 +12,14 @@ export async function POST(request: Request) {
 
   const formData = await request.formData()
   const file = formData.get('file') as File
-  const moduleName = formData.get('module') as string ?? 'general'
+  const moduleName = ((formData.get('module') as string) ?? 'general').toUpperCase()
   let siteId = formData.get('siteId') as string | null
   if (siteId === 'undefined' || siteId === 'null' || siteId?.trim() === '') {
     siteId = null
   }
 
   if (!VALID_MODULES.includes(moduleName)) {
-    return NextResponse.json({ error: 'Forbidden: Invalid upload module' }, { status: 403 })
+    return NextResponse.json({ error: `Forbidden: Invalid upload module '${moduleName}'` }, { status: 403 })
   }
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
