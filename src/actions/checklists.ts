@@ -67,7 +67,14 @@ export async function enableChecklistForProject(siteId: string, templateId: stri
 
 export async function toggleTaskStatus(siteId: string, taskId: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED', isClientDone = false, isNeglected = false) {
   const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
+  if (!session?.user) throw new Error('Unauthorized')
+
+  // Resolve companyId — site engineers may not have it in their JWT
+  let companyId = session.user.companyId ?? null
+  if (!companyId) {
+    const site = await prisma.site.findUnique({ where: { id: siteId }, select: { companyId: true } })
+    companyId = site?.companyId ?? null
+  }
 
   const task = await prisma.projectChecklistTask.update({
     where: { id: taskId },
@@ -79,24 +86,50 @@ export async function toggleTaskStatus(siteId: string, taskId: string, status: '
       completedById: status === 'COMPLETED' ? session.user.id : null,
     }
   })
-  
-  // Only log to activity when task is COMPLETED (ticked) — never log untick
+
   if (status === 'COMPLETED') {
+    // Task ticked — create TICK entry, storing taskId so we can delete it on untick
     await prisma.auditLog.create({
       data: {
         userId: session.user.id,
-        companyId: session.user.companyId,
+        companyId,
         module: 'CHECKLIST',
         action: 'TICK',
         recordId: siteId,
-        after: { taskName: task.name, status: 'COMPLETED' }
+        after: { taskId, taskName: task.name, status: 'COMPLETED' }
       }
     })
+  } else {
+    // Task unticked — fetch all checklist entries for this site, delete matching ones
+    const allEntries = await prisma.auditLog.findMany({
+      where: { module: 'CHECKLIST', recordId: siteId },
+      select: { id: true, action: true, after: true }
+    })
+
+    const toDelete = allEntries
+      .filter(e => {
+        // Delete if it's any UNTICK entry (legacy cleanup)
+        if (e.action === 'UNTICK') return true
+        // Delete TICK entries that belong to this specific task
+        if (e.action === 'TICK') {
+          const data = e.after as any
+          return data?.taskId === taskId
+        }
+        return false
+      })
+      .map(e => e.id)
+
+    if (toDelete.length > 0) {
+      await prisma.auditLog.deleteMany({ where: { id: { in: toDelete } } })
+    }
   }
-  
+
+
   revalidatePath(`/sites/${siteId}`)
+  revalidatePath(`/activity`)
   return { success: true }
 }
+
 
 export async function toggleCategoryNeglect(siteId: string, categoryId: string, isNeglected: boolean) {
   const session = await auth()
