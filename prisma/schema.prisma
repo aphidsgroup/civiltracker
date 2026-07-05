@@ -393,6 +393,8 @@ model Site {
   purchaseRequests      PurchaseRequest[]
   mediaAssets           MediaAsset[]
   approvals             Approval[]
+  vendors               Vendor[]
+  subcontractors        Subcontractor[]
 
   @@unique([companyId, slug])
   @@index([companyId])
@@ -631,6 +633,7 @@ model MaterialTransaction {
 model Vendor {
   id            String   @id @default(cuid())
   companyId     String
+  siteId        String?
   name          String
   phone         String?
   email         String?
@@ -646,14 +649,17 @@ model Vendor {
   updatedAt     DateTime @updatedAt
 
   company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site           Site?           @relation(fields: [siteId], references: [id], onDelete: SetNull)
   purchaseOrders PurchaseOrder[]
 
   @@index([companyId])
+  @@index([siteId])
 }
 
 model Subcontractor {
   id             String   @id @default(cuid())
   companyId      String
+  siteId         String?
   name           String
   phone          String?
   trade          String?
@@ -668,9 +674,11 @@ model Subcontractor {
   updatedAt      DateTime @updatedAt
 
   company     Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site        Site?                  @relation(fields: [siteId], references: [id], onDelete: SetNull)
   attendances ContractorAttendance[]
 
   @@index([companyId])
+  @@index([siteId])
 }
 
 // ============================================================

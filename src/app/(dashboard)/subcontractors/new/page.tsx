@@ -14,12 +14,14 @@ async function createSubcontractor(formData: FormData) {
   const trade = formData.get('trade') as string
   const gst = formData.get('gst') as string
   const workOrderValue = formData.get('workOrderValue') as string
+  const siteId = formData.get('siteId') as string
 
   if (!name) return
 
   await prisma.subcontractor.create({
     data: {
       companyId,
+      siteId: siteId || null,
       name,
       phone: phone || null,
       trade: trade || null,
@@ -35,6 +37,13 @@ async function createSubcontractor(formData: FormData) {
 export default async function NewSubcontractorPage() {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
+  const { companyId } = session.user
+
+  const sites = await prisma.site.findMany({
+    where: { companyId, deletedAt: null, status: 'ACTIVE' },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  })
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -50,6 +59,17 @@ export default async function NewSubcontractorPage() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Subcontractor / PRW Name *</label>
                 <input name="name" required placeholder="A.K. Builders"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Assign to Site</label>
+                <select name="siteId"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent">
+                  <option value="">— Company-wide (no specific site) —</option>
+                  {sites.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
               </div>
               
               <div>

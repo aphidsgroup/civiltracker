@@ -16,12 +16,14 @@ async function createVendor(formData: FormData) {
   const category = formData.get('category') as string
   const paymentTerms = formData.get('paymentTerms') as string
   const address = formData.get('address') as string
+  const siteId = formData.get('siteId') as string
 
   if (!name) return
 
   await prisma.vendor.create({
     data: {
       companyId,
+      siteId: siteId || null,
       name,
       email: email || null,
       phone: phone || null,
@@ -38,6 +40,13 @@ async function createVendor(formData: FormData) {
 export default async function NewVendorPage() {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
+  const { companyId } = session.user
+
+  const sites = await prisma.site.findMany({
+    where: { companyId, deletedAt: null, status: 'ACTIVE' },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  })
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -53,6 +62,17 @@ export default async function NewVendorPage() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Vendor / Supplier Name *</label>
                 <input name="name" required placeholder="Sri Ram Traders"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Assign to Site</label>
+                <select name="siteId"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent">
+                  <option value="">— Company-wide (no specific site) —</option>
+                  {sites.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
               </div>
               
               <div>
@@ -77,10 +97,10 @@ export default async function NewVendorPage() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Category</label>
                 <select name="category" defaultValue="Cement & Steel"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent">
-                  <option value="Cement & Steel">Cement & Steel</option>
+                  <option value="Cement & Steel">Cement &amp; Steel</option>
                   <option value="Electrical">Electrical</option>
                   <option value="Plumbing">Plumbing</option>
-                  <option value="Paint & Hardware">Paint & Hardware</option>
+                  <option value="Paint & Hardware">Paint &amp; Hardware</option>
                   <option value="Machinery">Machinery Rental</option>
                   <option value="General">General Supply</option>
                 </select>

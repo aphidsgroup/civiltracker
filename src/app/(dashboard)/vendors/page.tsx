@@ -63,7 +63,12 @@ export default async function VendorsPage() {
   if (!session?.user?.companyId) redirect('/login')
 
   const vendors = await prisma.vendor.findMany({
-    where: { companyId: session.user.companyId, isActive: true },
+    where: {
+      companyId: session.user.companyId,
+      isActive: true,
+      OR: [{ siteId: null }, { site: { deletedAt: null } }]
+    },
+    include: { site: { select: { name: true } } },
     orderBy: { name: 'asc' },
   })
 

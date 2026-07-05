@@ -68,7 +68,12 @@ export default async function SubcontractorsPage() {
   const { companyId } = session.user
 
   const subcontractors = await prisma.subcontractor.findMany({
-    where: { companyId, isActive: true },
+    where: {
+      companyId,
+      isActive: true,
+      OR: [{ siteId: null }, { site: { deletedAt: null } }]
+    },
+    include: { site: { select: { name: true } } },
     orderBy: { name: 'asc' },
   })
 
