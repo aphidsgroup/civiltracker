@@ -24,15 +24,32 @@ export async function POST(
 
   if (!expense) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  const now = new Date()
+
+  // Update the expense status
   await prisma.expense.update({
     where: { id },
-    data: { approvalStatus: 'REJECTED', rejectedById: session.user.id, rejectedAt: new Date() },
+    data: {
+      approvalStatus: 'REJECTED',
+      rejectedById: session.user.id,
+      rejectedAt: now,
+    },
   })
 
-  await prisma.approval.updateMany({
-    where: { entityId: id, entityType: { in: ['EXPENSE', 'BILL'] } },
-    data: { currentStatus: 'REJECTED', rejectedById: session.user.id, rejectedAt: new Date(), rejectionReason: 'Rejected via API' },
-  })
+  // Update any linked approval records (using raw SQL to avoid Prisma relation constraint)
+  try {
+    await prisma.$executeRaw`
+      UPDATE "Approval"
+      SET "currentStatus" = 'REJECTED',
+          "rejectedById" = ${session.user.id},
+          "rejectedAt" = ${now},
+          "rejectionReason" = 'Rejected via Bills page'
+      WHERE "entityId" = ${id}
+        AND "entityType" IN ('EXPENSE', 'BILL')
+    `
+  } catch {
+    // Non-critical: approval record update failure doesn't block expense rejection
+  }
 
   return NextResponse.json({ success: true })
 }

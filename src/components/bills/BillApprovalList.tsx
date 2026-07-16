@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Check, X, Paperclip, CheckCircle2, Loader2 } from 'lucide-react'
 
@@ -29,13 +30,24 @@ const CATEGORY_LABELS: Record<string, string> = {
 export default function BillApprovalList({ bills }: { bills: Bill[] }) {
   const [loading, setLoading] = useState<string | null>(null)
   const [done, setDone] = useState<string[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   async function handleAction(id: string, action: 'approve' | 'reject') {
     setLoading(id)
+    setError(null)
     try {
       const res = await fetch(`/api/expenses/${id}/${action}`, { method: 'POST' })
-      if (res.ok) setDone(prev => [...prev, id])
-    } catch {}
+      if (res.ok) {
+        setDone(prev => [...prev, id])
+        router.refresh()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setError(data?.error || `Failed to ${action} bill (${res.status}). Please try again.`)
+      }
+    } catch (e) {
+      setError(`Network error. Please check your connection and try again.`)
+    }
     setLoading(null)
   }
 
@@ -55,6 +67,12 @@ export default function BillApprovalList({ bills }: { bills: Bill[] }) {
 
   return (
     <div className="flex flex-col gap-3.5">
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 font-medium flex items-center gap-2">
+          <X className="w-4 h-4 flex-shrink-0" />
+          {error}
+        </div>
+      )}
       {visible.map(bill => (
         <div key={bill.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
           <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
