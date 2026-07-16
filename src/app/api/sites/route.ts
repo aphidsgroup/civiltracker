@@ -12,9 +12,9 @@ export async function GET() {
   const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : { companyId: session.user.companyId }
 
   const sites = await prisma.site.findMany({
-    where: { ...companyFilter, deletedAt: null },
+    where: { ...companyFilter, deletedAt: null, status: 'ACTIVE' },
     select: { id: true, name: true, status: true, progress: true, location: true, spent: true, budget: true, currentStage: true },
-    orderBy: { createdAt: 'desc' },
+    orderBy: { name: 'asc' },
   })
 
   return NextResponse.json({ sites })

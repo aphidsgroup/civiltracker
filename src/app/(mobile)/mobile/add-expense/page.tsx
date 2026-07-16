@@ -13,7 +13,7 @@ export default async function MobileAddExpensePage({ searchParams }: { searchPar
 
   const sites = user.companyId
     ? await prisma.site.findMany({
-        where: { companyId: user.companyId, deletedAt: null },
+        where: { companyId: user.companyId, deletedAt: null, status: 'ACTIVE' },
         select: { id: true, name: true },
         orderBy: { name: 'asc' }
       })
