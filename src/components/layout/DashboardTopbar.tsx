@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import type { SessionUser } from '@/types'
 import Link from 'next/link'
 import { Search, Bell, Plus, Menu } from 'lucide-react'
+import LiveClock from '@/components/ui/LiveClock'
 
 export default function DashboardTopbar({
   user,
@@ -36,11 +37,10 @@ export default function DashboardTopbar({
     if (pathname.includes('/tasks')) return { title: 'Tasks & Schedule', crumb: 'Project timeline and tasks' }
     if (pathname.includes('/documents')) return { title: 'Documents', crumb: 'Project files and documents' }
     if (pathname.includes('/clients')) return { title: 'Clients', crumb: 'Client management' }
-    const todayStr = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
-    return { title: 'Dashboard', crumb: `${companyName ?? 'Company'} · ${todayStr}` }
+    return { title: 'Dashboard', crumb: null, showClock: true }
   }
 
-  const { title, crumb } = getPageInfo()
+  const { title, crumb, showClock } = getPageInfo() as { title: string; crumb: string | null; showClock?: boolean }
 
   return (
     <div className="h-[60px] md:h-16 flex-shrink-0 bg-white border-b border-[#e4eaf0] flex items-center gap-3 md:gap-4 px-4 md:px-6">
@@ -53,7 +53,11 @@ export default function DashboardTopbar({
 
       <div className="flex-1 min-w-0">
         <div className="text-[17px] md:text-[19px] font-extrabold text-[#16273a] tracking-[-0.02em] truncate">{title}</div>
-        <div className="text-[11px] md:text-[12px] text-[#647387] font-semibold mt-0.5 truncate">{crumb}</div>
+        <div className="text-[11px] md:text-[12px] text-[#647387] font-semibold mt-0.5 truncate">
+          {showClock ? (
+            <><span>{companyName ?? 'Company'} · </span><LiveClock showTime={true} showDate={true} /></>
+          ) : crumb}
+        </div>
       </div>
 
       <div className="ml-auto flex items-center gap-2 md:gap-2.5 flex-shrink-0">

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import PWAInstallBanner from '@/components/mobile/PWAInstallBanner'
 import SiteSelectorClient from '@/components/mobile/SiteSelectorClient'
+import LiveClock from '@/components/ui/LiveClock'
 
 function getGreeting() {
   // Use IST (UTC+5:30) so server-side time matches Indian local time
@@ -135,12 +136,6 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
   const firstName = session?.user?.name?.split(' ')[0] ?? 'Engineer'
   const roleTitle = session?.user?.role?.replace(/_/g, ' ') ?? 'Site Engineer'
 
-  const formattedDate = new Date().toLocaleDateString('en-IN', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric'
-  })
 
   return (
     <div className="space-y-6 p-4 sm:p-6 select-none bg-[#f8fafc] min-h-screen">
@@ -179,8 +174,9 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
           </p>
         </div>
         <div className="text-right text-[11px] font-bold text-slate-400 whitespace-nowrap leading-tight">
-          {formattedDate.split(', ')[0]}<br />
-          {formattedDate.split(', ')[1]}
+          <LiveClock showDate={true} showTime={false} compact={true} />
+          <br />
+          <LiveClock showDate={false} showTime={true} compact={true} />
         </div>
       </div>
 
@@ -364,7 +360,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
               ) : (
                 <div className="flex items-center gap-1.5 text-[11px] text-amber-300 font-bold">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                  <span>Not submitted for {formattedDate.split(', ')[0]}</span>
+                  <span>Not submitted for <LiveClock showDate={true} showTime={false} compact={true} /></span>
                 </div>
               )}
             </div>

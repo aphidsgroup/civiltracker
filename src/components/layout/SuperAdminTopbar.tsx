@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import { Search, Menu } from 'lucide-react'
+import LiveClock from '@/components/ui/LiveClock'
 
 export default function SuperAdminTopbar() {
   const pathname = usePathname()
@@ -16,11 +17,10 @@ export default function SuperAdminTopbar() {
     if (pathname.includes('/support')) return { title: 'Support', crumb: 'Support tickets' }
     if (pathname.includes('/logs')) return { title: 'System Logs', crumb: 'Platform activity logs' }
     if (pathname.includes('/settings')) return { title: 'Settings', crumb: 'Platform configuration' }
-    const today = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
-    return { title: 'Platform Dashboard', crumb: `All companies · ${today}` }
+    return { title: 'Platform Dashboard', crumb: null, showClock: true }
   }
 
-  const { title, crumb } = getPageInfo()
+  const { title, crumb, showClock } = getPageInfo() as { title: string; crumb: string | null; showClock?: boolean }
 
   return (
     <div className="h-[60px] md:h-16 flex-shrink-0 bg-white border-b border-[#e4eaf0] flex items-center gap-3 md:gap-4 px-4 md:px-6">
@@ -33,7 +33,11 @@ export default function SuperAdminTopbar() {
 
       <div className="flex-1 min-w-0">
         <div className="text-[17px] md:text-[19px] font-extrabold text-[#16273a] tracking-[-0.02em] truncate">{title}</div>
-        <div className="text-[11px] md:text-[12px] text-[#647387] font-semibold mt-0.5 truncate">{crumb}</div>
+        <div className="text-[11px] md:text-[12px] text-[#647387] font-semibold mt-0.5 truncate">
+          {showClock ? (
+            <><span>All companies · </span><LiveClock showTime={true} showDate={true} /></>
+          ) : crumb}
+        </div>
       </div>
 
       <div className="ml-auto flex items-center gap-2 md:gap-2.5 flex-shrink-0">

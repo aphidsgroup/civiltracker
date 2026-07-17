@@ -6,6 +6,7 @@ import { createExpenseAction } from '@/actions/expense'
 import type { ExpenseCategory, PaymentMode } from '@/types'
 import { ArrowLeft, Camera, Plus, Loader2, MapPin, X } from 'lucide-react'
 import Link from 'next/link'
+import LiveClock from '@/components/ui/LiveClock'
 
 type SiteOpt = {
   id: string
@@ -156,7 +157,7 @@ export default function MobileAddExpenseClient({
         <div className="min-w-0 flex-1">
           <h1 className="text-[19px] font-black tracking-tight text-[#1e293b] m-0 leading-tight">Add Expense</h1>
           <p className="text-[11.5px] font-bold text-[#647387] m-0 truncate mt-0.5">
-            {currentSiteLabel} &middot; 24 Jun 2026
+            {currentSiteLabel} &middot; <LiveClock showTime={false} showDate={true} compact={true} />
           </p>
         </div>
       </div>
