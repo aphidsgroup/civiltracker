@@ -29,6 +29,10 @@ interface Props {
   mode: 'pending' | 'approved'
 }
 
+function getPhotoDeleteLabel(photo: Photo) {
+  return photo.caption || photo.task?.name || photo.category || photo.id
+}
+
 export function PhotoApprovalCard({ photo, mode }: Props) {
   const [loading, setLoading] = useState<'approve' | 'reject' | 'delete' | null>(null)
   const [done, setDone] = useState<'approved' | 'rejected' | 'deleted' | null>(null)
@@ -54,10 +58,12 @@ export function PhotoApprovalCard({ photo, mode }: Props) {
   }
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this photo permanently?')) return
+    const expected = getPhotoDeleteLabel(photo)
+    const typed = window.prompt(`Type "${expected}" to permanently delete this photo.`)
+    if (typed === null) return
     setLoading('delete')
     try {
-      await deleteSitePhotoAction(photo.id)
+      await deleteSitePhotoAction(photo.id, typed)
       setDone('deleted')
     } finally {
       setLoading(null)

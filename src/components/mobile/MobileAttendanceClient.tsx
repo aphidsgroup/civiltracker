@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { addMobileWorkerAction, updateWorkerAction, saveMobileAttendanceAction, addExistingWorkerToRoster, saveContractorAttendance, removeLabourAttendanceAction, removeContractorAttendanceAction } from '@/actions/mobile-labour'
-import { Users, Plus, CheckCircle2, X, HardHat, Building2, ShieldCheck, Check, Edit3, IndianRupee, Wallet, Search, Briefcase, Trash2 } from 'lucide-react'
+import { Users, Plus, CheckCircle2, X, HardHat, ShieldCheck, Check, Edit3, IndianRupee, Wallet, Search, Briefcase, Trash2 } from 'lucide-react'
 
 type LabourItem = {
   id: string
@@ -174,8 +174,8 @@ export default function MobileAttendanceClient({
         setAvailableWorkers(prev => prev.filter(w => w.id !== worker.id))
         setShowAddForm(false)
       }
-    } catch (err: any) {
-      alert(err.message || 'Failed to add worker')
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to add worker')
     } finally {
       setAdding(false)
     }
@@ -223,8 +223,8 @@ export default function MobileAttendanceClient({
         setNewCustomTrade('')
         setShowAddForm(false)
       }
-    } catch (err: any) {
-      alert(err.message || 'Failed to add worker')
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to add worker')
     } finally {
       setAdding(false)
     }
@@ -265,8 +265,8 @@ export default function MobileAttendanceClient({
         setConCustomType('')
         setShowContractorForm(false)
       }
-    } catch (err: any) {
-      alert(err.message || 'Failed to add contractor')
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to add contractor')
     } finally {
       setAddingContractor(false)
     }
@@ -310,8 +310,8 @@ export default function MobileAttendanceClient({
         setStartTimes(prev => ({ ...prev, [editingId]: editStartTime }))
         setEditingId(null)
       }
-    } catch (err: any) {
-      alert(err.message || 'Failed to update worker')
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to update worker')
     } finally {
       setUpdating(false)
     }
@@ -333,33 +333,40 @@ export default function MobileAttendanceClient({
         setSavedMessage(`✓ Saved internal attendance`)
         setTimeout(() => setSavedMessage(''), 3500)
       }
-    } catch (err: any) {
-      alert(err.message || 'Error saving muster roll')
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Error saving muster roll')
     } finally {
       setSaving(false)
     }
   }
 
   const handleRemoveLabour = async (workerId: string) => {
-    if (!window.confirm("Remove from today's roster?")) return
+    const worker = labourList.find(w => w.id === workerId)
+    if (!worker) return
+    const typed = window.prompt(`Type "${worker.name}" to remove this worker from today's roster.`)
+    if (typed === null) return
     try {
-      const res = await removeLabourAttendanceAction(workerId)
+      const res = await removeLabourAttendanceAction(workerId, typed)
       if (res.success) {
         setLabourList(prev => prev.filter(w => w.id !== workerId))
       }
-    } catch (e) {
+    } catch {
       alert('Failed to remove')
     }
   }
 
   const handleRemoveContractor = async (attendanceId: string) => {
-    if (!window.confirm("Delete contractor log for today?")) return
+    const contractor = contractorList.find(c => c.id === attendanceId)
+    if (!contractor) return
+    const expected = contractor.name || `${contractor.trade} ${contractor.labourCount}`
+    const typed = window.prompt(`Type "${expected}" to delete this contractor log for today.`)
+    if (typed === null) return
     try {
-      const res = await removeContractorAttendanceAction(attendanceId)
+      const res = await removeContractorAttendanceAction(attendanceId, typed)
       if (res.success) {
         setContractorList(prev => prev.filter(c => c.id !== attendanceId))
       }
-    } catch (e) {
+    } catch {
       alert('Failed to delete')
     }
   }
@@ -381,7 +388,7 @@ export default function MobileAttendanceClient({
     return (
       <div className="space-y-6 select-none pb-24 mt-8 px-4">
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight">Today's Roster</h2>
+          <h2 className="text-2xl font-black text-slate-800 tracking-tight">Today&apos;s Roster</h2>
           <p className="text-sm font-bold text-slate-400 mt-2">Add your workforce or contractors to begin.</p>
         </div>
 
@@ -413,7 +420,7 @@ export default function MobileAttendanceClient({
             className="w-full py-4 mt-8 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg transition-all border-none cursor-pointer flex items-center justify-center gap-2"
           >
             <Users size={18} />
-            View Today's Roster ({totalOnsite} Onsite)
+            View Today&apos;s Roster ({totalOnsite} Onsite)
           </button>
         )}
       </div>
@@ -691,7 +698,7 @@ export default function MobileAttendanceClient({
                       </select>
                     </div>
                     <div>
-                      <label className="text-[11px] font-black text-amber-300 block mb-1">Today's Advance (₹)</label>
+                      <label className="text-[11px] font-black text-amber-300 block mb-1">Today&apos;s Advance (₹)</label>
                       <input type="number" placeholder="0" value={editAdvance} onChange={e => setEditAdvance(e.target.value)} className="w-full px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-300 font-black text-xs focus:ring-2 focus:ring-amber-400 box-border" />
                     </div>
                     <div>
@@ -738,7 +745,7 @@ export default function MobileAttendanceClient({
           <form onSubmit={handleAddContractor} className="bg-gradient-to-br from-blue-900 to-[#ea580c] p-5 rounded-3xl text-white shadow-xl space-y-4 border border-blue-500/30 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="text-xs font-black uppercase tracking-wider text-blue-300">Log Daily Contractor</div>
-              <span className="text-[10px] text-blue-200/50">Today's Headcount</span>
+              <span className="text-[10px] text-blue-200/50">Today&apos;s Headcount</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
@@ -763,7 +770,7 @@ export default function MobileAttendanceClient({
                 </div>
               )}
               <div className="col-span-1">
-                <label className="text-[11px] font-black text-amber-300 block mb-1">Today's Advance Given (₹)</label>
+                <label className="text-[11px] font-black text-amber-300 block mb-1">Today&apos;s Advance Given (₹)</label>
                 <input type="number" placeholder="0" value={conAdvance} onChange={e => setConAdvance(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-black focus:ring-2 focus:ring-amber-400 box-border" />
               </div>
               <div className="col-span-1">
