@@ -1,12 +1,14 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { requireSuperAdmin } from '@/lib/auth/require-super-admin'
 
 // One-time cleanup: purge all UNTICK entries and old TICK entries from auditLog
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.companyId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    await requireSuperAdmin()
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: message.startsWith('FORBIDDEN:') ? 403 : 500 })
   }
 
   // Delete all UNTICK entries (should never exist going forward)
@@ -25,7 +27,7 @@ export async function GET() {
   })
 
   const legacyIds = allTickEntries
-    .filter(e => !(e.after as any)?.taskId)
+    .filter((e) => !hasTaskId(e.after))
     .map(e => e.id)
 
   let legacyResult = { count: 0 }
@@ -43,4 +45,14 @@ export async function GET() {
     },
     message: 'Activity log cleaned. Only fresh TICK entries (with taskId) remain. These will auto-delete on untick.'
   })
+}
+
+function hasTaskId(value: unknown): value is { taskId: string } {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    'taskId' in value &&
+    typeof (value as { taskId?: unknown }).taskId === 'string' &&
+    (value as { taskId: string }).taskId.trim().length > 0,
+  )
 }

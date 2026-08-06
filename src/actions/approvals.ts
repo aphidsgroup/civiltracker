@@ -17,13 +17,28 @@ export async function createApprovalAction(data: {
   approvalType?: string
 }) {
   const user = await requireUser()
-  const companyId = user.companyId || (user.role === 'SUPER_ADMIN' ? 'cm7companyadmin00000000001' : null)
+  const site = data.siteId
+    ? await prisma.site.findFirst({
+        where: {
+          id: data.siteId,
+          ...(user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }),
+          deletedAt: null,
+        },
+        select: { id: true, companyId: true },
+      })
+    : null
+
+  if (data.siteId && !site) {
+    throw new Error('Forbidden: Site not found or access denied')
+  }
+
+  const companyId = site?.companyId ?? user.companyId ?? null
   if (!companyId) throw new Error('Unauthorized: No active company context')
 
   const approval = await prisma.approval.create({
     data: {
       companyId,
-      siteId: data.siteId || null,
+      siteId: site?.id ?? null,
       entityType: data.entityType,
       entityId: data.entityId,
       title: data.title,

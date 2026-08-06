@@ -1,16 +1,19 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { ensureCompanyContext, requireApiPermission } from '@/lib/auth/require-api-permission'
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const authResult = await requireApiPermission('approvals.view', 'APPROVALS')
+  if (authResult instanceof NextResponse) return authResult
 
-  const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : { companyId: session.user.companyId }
+  const companyContextError = ensureCompanyContext(authResult)
+  if (companyContextError) return companyContextError
+
+  const companyFilter = authResult.role === 'SUPER_ADMIN' ? {} : { companyId: authResult.companyId }
 
   const approval = await prisma.approval.findFirst({
     where: { id, ...companyFilter, deletedAt: null },

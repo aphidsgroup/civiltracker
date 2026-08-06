@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireSuperAdmin } from '@/lib/auth/require-super-admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +9,13 @@ export const dynamic = 'force-dynamic'
  * Remove after root cause is identified.
  */
 export async function GET() {
+  try {
+    await requireSuperAdmin()
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: message.startsWith('FORBIDDEN:') ? 403 : 500 })
+  }
+
   const results: Record<string, unknown> = {}
 
   // Test 1: plain count (works in layout)

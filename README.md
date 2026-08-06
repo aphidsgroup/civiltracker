@@ -4,13 +4,9 @@
 
 ## Demo Accounts
 
-| Role | Email | Password |
-|------|-------|----------|
-| Super Admin | admin@civiltracker.in | Admin@123456 |
-| Company Admin | arun@madras-crafters.in | Admin@123456 |
-| Site Engineer | murugan@madras-crafters.in | Admin@123456 |
-| Accountant | priya@madras-crafters.in | Admin@123456 |
-| Client | client@annanagar.in | Admin@123456 |
+Demo users are seeded only for local/dev validation.
+Do not reuse seeded passwords in any shared, preview, or production environment.
+See `prisma/seed.ts` for the current dev seed identities.
 
 ## Tech Stack
 
