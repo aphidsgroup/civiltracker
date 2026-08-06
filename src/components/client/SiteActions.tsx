@@ -4,17 +4,18 @@ import { useState } from 'react'
 import { softDeleteSite, restoreSite } from '@/actions/site'
 import { Trash2, RefreshCw, Loader2 } from 'lucide-react'
 
-export function SiteCardActions({ siteId, isDeleted }: { siteId: string, isDeleted: boolean }) {
+export function SiteCardActions({ siteId, siteName, isDeleted }: { siteId: string, siteName: string, isDeleted: boolean }) {
   const [loading, setLoading] = useState(false)
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (!confirm('Are you sure you want to delete this site? It will be permanently removed in 15 days.')) return
+    const typed = window.prompt(`Type "${siteName}" to schedule this site for deletion. It will be permanently removed in 15 days.`)
+    if (typed === null) return
     
     setLoading(true)
     try {
-      await softDeleteSite(siteId)
+      await softDeleteSite(siteId, typed)
     } finally {
       setLoading(false)
     }

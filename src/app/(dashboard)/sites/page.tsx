@@ -13,7 +13,8 @@ export default async function SitesPage() {
   if (!session?.user?.companyId) redirect('/login')
   const { companyId } = session.user
 
-  const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000)
+  const now = new Date()
+  const fifteenDaysAgo = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000)
 
   // Fetch all sites - active + soft-deleted within 15 days
   const sites = await prisma.site.findMany({
@@ -69,7 +70,7 @@ export default async function SitesPage() {
           let daysRemaining = 0
           if (isDeleted && site.deletedAt) {
             const expiryTime = new Date(site.deletedAt).getTime() + (15 * 24 * 60 * 60 * 1000)
-            daysRemaining = Math.max(0, Math.ceil((expiryTime - Date.now()) / (1000 * 60 * 60 * 24)))
+            daysRemaining = Math.max(0, Math.ceil((expiryTime - now.getTime()) / (1000 * 60 * 60 * 24)))
           }
 
           const innerContent = (
@@ -93,7 +94,7 @@ export default async function SitesPage() {
                       {site.status.replace(/_/g, ' ')}
                     </span>
                   )}
-                  <SiteCardActions siteId={site.id} isDeleted={isDeleted} />
+                  <SiteCardActions siteId={site.id} siteName={site.name} isDeleted={isDeleted} />
                 </div>
               </div>
 

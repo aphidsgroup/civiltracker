@@ -3,6 +3,8 @@
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { logActivity } from '@/lib/audit'
+import { SiteStatus } from '@prisma/client'
 
 export async function updateSiteDetails(formData: FormData) {
   const session = await auth()
@@ -21,7 +23,7 @@ export async function updateSiteDetails(formData: FormData) {
   const startDate = formData.get('startDate') as string
   const targetEndDate = formData.get('targetEndDate') as string
   const budget = parseFloat(formData.get('budget') as string) || 0
-  const status = formData.get('status') as any
+  const status = formData.get('status') as SiteStatus
 
   await prisma.site.updateMany({
     where: { id, companyId: session.user.companyId },
@@ -45,13 +47,34 @@ export async function updateSiteDetails(formData: FormData) {
   return { success: true }
 }
 
-export async function softDeleteSite(id: string) {
+export async function softDeleteSite(id: string, dangerConfirmText?: string) {
   const session = await auth()
   if (!session?.user?.companyId) throw new Error('Unauthorized')
 
+  const site = await prisma.site.findFirst({
+    where: { id, companyId: session.user.companyId },
+    select: { id: true, name: true, location: true, status: true, deletedAt: true, budget: true },
+  })
+  if (!site) throw new Error('Site not found.')
+  if ((dangerConfirmText ?? '').trim() !== site.name.trim()) {
+    throw new Error('Delete confirmation text did not match the site name.')
+  }
+
+  const deletedAt = new Date()
   await prisma.site.updateMany({
     where: { id, companyId: session.user.companyId },
-    data: { deletedAt: new Date() }
+    data: { deletedAt }
+  })
+
+  await logActivity({
+    userId: session.user.id,
+    companyId: session.user.companyId,
+    action: 'DELETE',
+    module: 'SITE',
+    recordId: site.id,
+    description: `${session.user.name ?? session.user.email} scheduled site "${site.name}" for deletion`,
+    before: { deletedAt: site.deletedAt, location: site.location, status: site.status, budget: Number(site.budget), name: site.name },
+    after: { deletedAt: deletedAt.toISOString(), location: site.location, status: site.status, budget: Number(site.budget), name: site.name },
   })
 
   revalidatePath('/sites')
@@ -62,9 +85,26 @@ export async function restoreSite(id: string) {
   const session = await auth()
   if (!session?.user?.companyId) throw new Error('Unauthorized')
 
+  const site = await prisma.site.findFirst({
+    where: { id, companyId: session.user.companyId },
+    select: { id: true, name: true, location: true, status: true, deletedAt: true, budget: true },
+  })
+  if (!site) throw new Error('Site not found.')
+
   await prisma.site.updateMany({
     where: { id, companyId: session.user.companyId },
     data: { deletedAt: null }
+  })
+
+  await logActivity({
+    userId: session.user.id,
+    companyId: session.user.companyId,
+    action: 'UPDATE',
+    module: 'SITE',
+    recordId: site.id,
+    description: `${session.user.name ?? session.user.email} restored site "${site.name}"`,
+    before: { deletedAt: site.deletedAt ? site.deletedAt.toISOString() : null, location: site.location, status: site.status, budget: Number(site.budget), name: site.name },
+    after: { deletedAt: null, location: site.location, status: site.status, budget: Number(site.budget), name: site.name },
   })
 
   revalidatePath('/sites')
