@@ -3,6 +3,9 @@
 import React, { useState, useTransition } from 'react'
 import { approveApprovalAction, rejectApprovalAction, markApprovalPaidAction, addApprovalCommentAction } from '@/actions/approvals'
 
+const APPROVE_CONFIRM_TEXT = 'APPROVE'
+const PAID_CONFIRM_TEXT = 'PAID'
+
 export default function ApprovalDetailActions({
   approvalId,
   status,
@@ -24,11 +27,12 @@ export default function ApprovalDetailActions({
   const isApproved = status === 'APPROVED'
 
   const handleApprove = () => {
-    if (!confirm('Are you sure you want to officially approve this request?')) return
+    const typed = window.prompt(`Type "${APPROVE_CONFIRM_TEXT}" to officially approve this request.`)
+    if (typed === null) return
     setErrorMsg('')
     startTransition(async () => {
       try {
-        await approveApprovalAction(approvalId)
+        await approveApprovalAction(approvalId, undefined, typed)
       } catch (err: unknown) {
         setErrorMsg((err as Error)?.message || 'Failed to approve')
       }
@@ -53,11 +57,12 @@ export default function ApprovalDetailActions({
   }
 
   const handleMarkPaid = () => {
-    if (!confirm('Confirm disbursement of funds for this request?')) return
+    const typed = window.prompt(`Type "${PAID_CONFIRM_TEXT}" to confirm disbursement of funds for this request.`)
+    if (typed === null) return
     setErrorMsg('')
     startTransition(async () => {
       try {
-        await markApprovalPaidAction(approvalId)
+        await markApprovalPaidAction(approvalId, undefined, typed)
       } catch (err: unknown) {
         setErrorMsg((err as Error)?.message || 'Failed to mark paid')
       }

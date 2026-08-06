@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { ensureCompanyContext, requireApiPermission } from '@/lib/auth/require-api-permission'
+import { logActivity } from '@/lib/audit'
 
 // PATCH /api/expenses/[id] — Edit a PENDING expense (creator or company admin)
 export async function PATCH(
@@ -77,9 +78,44 @@ export async function DELETE(
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
   }
 
+  const body = await request.json().catch(() => ({}))
+  const dangerConfirmText = typeof body?.dangerConfirmText === 'string' ? body.dangerConfirmText.trim() : ''
+  const expectedConfirmText = (expense.description || expense.paidTo || expense.billNumber || expense.id).trim()
+  if (dangerConfirmText !== expectedConfirmText) {
+    return NextResponse.json({ error: 'Delete confirmation text did not match the expense label' }, { status: 400 })
+  }
+
+  const deletedAt = new Date()
   await prisma.expense.update({
     where: { id },
-    data: { deletedAt: new Date() },
+    data: { deletedAt },
+  })
+
+  await logActivity({
+    userId: authResult.id,
+    companyId: expense.companyId,
+    action: 'DELETE',
+    module: 'EXPENSE',
+    recordId: expense.id,
+    description: `${authResult.name ?? authResult.email} deleted pending expense "${expense.description || expense.paidTo || expense.billNumber || expense.id}"`,
+    before: {
+      deletedAt: expense.deletedAt,
+      amount: Number(expense.amount),
+      category: expense.category,
+      approvalStatus: expense.approvalStatus,
+      paidTo: expense.paidTo,
+      description: expense.description,
+      billNumber: expense.billNumber,
+    },
+    after: {
+      deletedAt: deletedAt.toISOString(),
+      amount: Number(expense.amount),
+      category: expense.category,
+      approvalStatus: expense.approvalStatus,
+      paidTo: expense.paidTo,
+      description: expense.description,
+      billNumber: expense.billNumber,
+    },
   })
 
   return NextResponse.json({ success: true })
