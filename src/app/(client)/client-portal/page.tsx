@@ -96,6 +96,10 @@ export default async function ClientPortal() {
   const totalPaid = invoices.filter(i => i.status === 'PAID').reduce((s, i) => s + Number(i.amount), 0)
   const nextDueInvoice = invoices.find(i => i.status === 'DUE' || i.status === 'OVERDUE')
   const totalDue = invoices.filter(i => i.status !== 'PAID').reduce((s, i) => s + Number(i.amount), 0)
+  const now = new Date()
+  const dayOfProject = site.startDate
+    ? Math.max(0, Math.floor((now.getTime() - new Date(site.startDate).getTime()) / (1000 * 3600 * 24)))
+    : 0
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6 pb-24 min-h-screen bg-gray-50">
@@ -127,7 +131,7 @@ export default async function ClientPortal() {
             <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/10 max-w-md">
               <div className="bg-white/5 p-3 rounded-2xl backdrop-blur-sm border border-white/5">
                 <div className="text-lg md:text-xl font-bold text-white">
-                  Day {Math.max(0, Math.floor((Date.now() - new Date(site.startDate || Date.now()).getTime()) / (1000 * 3600 * 24)))}
+                  Day {dayOfProject}
                 </div>
                 <div className="text-xs text-slate-400 font-medium">of project</div>
               </div>

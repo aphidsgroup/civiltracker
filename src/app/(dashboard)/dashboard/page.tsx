@@ -7,6 +7,14 @@ import {
   Plus, Upload, Receipt, CheckSquare, FileText, BarChart3, TrendingUp, AlertCircle, Truck, Package
 } from 'lucide-react'
 
+function formatTimeAgo(d: Date, now: Date) {
+  const diff = now.getTime() - new Date(d).getTime()
+  const hrs = Math.floor(diff / 3600000)
+  if (hrs < 1) return `${Math.floor(diff / 60000)}m ago`
+  if (hrs < 24) return `${hrs}h ago`
+  return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+}
+
 function siteStatusChip(progress: number) {
   if (progress >= 75) return { label: 'On track', cls: 'bg-[#e2f3ea] text-[#0f7a45]' }
   if (progress >= 40) return { label: 'In progress', cls: 'bg-[#e7f0fb] text-[#fc6e20]' }
@@ -56,6 +64,7 @@ export default async function CompanyDashboard() {
     salaryDueAgg, invoicesDueAgg, vendorCount, subCount, materialCount, allAttendance,
     vendorAgg, subAgg
   ] = await getCachedDashboardData(companyId)
+  const now = new Date()
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
   const pendingCount = pendingExpenses._count
@@ -88,14 +97,6 @@ export default async function CompanyDashboard() {
   function statusLabel(s: string) {
     const map: Record<string, string> = { APPROVED: 'Approved', PENDING: 'Pending', REJECTED: 'Rejected', PAID: 'Paid' }
     return map[s] ?? s
-  }
-
-  function timeAgo(d: Date) {
-    const diff = Date.now() - new Date(d).getTime()
-    const hrs = Math.floor(diff / 3600000)
-    if (hrs < 1) return `${Math.floor(diff / 60000)}m ago`
-    if (hrs < 24) return `${hrs}h ago`
-    return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
   }
 
   const quickActions = [
@@ -280,7 +281,7 @@ export default async function CompanyDashboard() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-bold text-[#16273a] truncate">{e.paidTo ?? e.description}</div>
-                    <div className="text-[11px] text-[#647387] font-semibold mt-0.5 truncate">{e.category} · {timeAgo(e.createdAt)}</div>
+                    <div className="text-[11px] text-[#647387] font-semibold mt-0.5 truncate">{e.category} · {formatTimeAgo(e.createdAt, now)}</div>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="text-[13px] font-bold text-[#16273a] tabular">{fmtAmt(Number(e.amount))}</div>

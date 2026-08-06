@@ -119,6 +119,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
   const totalAdvances = Number(clientAdvancesAgg._sum.amount ?? 0)
+  const now = new Date()
 
   const budget = Number(activeSiteRecord?.budget ?? 0)
   const spent = Number(activeSiteRecord?.spent ?? 0)
@@ -127,7 +128,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
   const startDate = activeSiteRecord?.startDate
   const targetDate = activeSiteRecord?.targetEndDate
   const dayOfProject = startDate
-    ? Math.floor((Date.now() - new Date(startDate).getTime()) / 86400000) + 1
+    ? Math.floor((now.getTime() - new Date(startDate).getTime()) / 86400000) + 1
     : null
   const totalDays = startDate && targetDate
     ? Math.floor((new Date(targetDate).getTime() - new Date(startDate).getTime()) / 86400000)
@@ -200,7 +201,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
               {todaySpend >= 1000 ? `₹${(todaySpend / 1000).toFixed(1)}k` : `₹${todaySpend}`}
             </div>
             <div className="text-[11px] font-medium text-slate-400">
-              Today's expense
+              Today&apos;s expense
             </div>
           </div>
           
