@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Role } from '@prisma/client'
 import bcrypt from 'bcryptjs'
-import { Shield, Eye } from 'lucide-react'
+import { Shield } from 'lucide-react'
 import ModuleAccessSelector from '@/components/ui/ModuleAccessSelector'
 
 async function createUser(formData: FormData) {
@@ -22,7 +22,7 @@ async function createUser(formData: FormData) {
   const moduleControlsStr = formData.get('moduleControls') as string | null
   let moduleControls = null
   if (moduleControlsStr) {
-    try { moduleControls = JSON.parse(moduleControlsStr) } catch (e) {}
+    try { moduleControls = JSON.parse(moduleControlsStr) } catch {}
   }
 
   if (!name || !email || !password || !role) return
@@ -114,11 +114,6 @@ export default async function InviteUserPage() {
     orderBy: { name: 'asc' },
   })
 
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-    select: { userLimit: true },
-  })
-
   return (
     <div className="min-h-screen bg-slate-50/50">
       <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200">
@@ -158,18 +153,17 @@ export default async function InviteUserPage() {
               </div>
             </div>
 
-            {/* Password — shown in plain text */}
+            {/* Password */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                <Eye size={12} className="inline mr-1" />
                 Login Password *
               </label>
               <input
-                name="password" type="text" required minLength={6} placeholder="Set a password the employee will use to log in"
+                name="password" type="password" required minLength={6} placeholder="Set an employee login password"
                 className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all font-mono"
               />
               <p className="mt-1 text-xs text-slate-400">
-                Password is shown in plain text so you can copy and share it. You can reset it anytime from the Manage page.
+                Share the password with the employee through a secure channel. You can reset it anytime from the Manage page.
               </p>
             </div>
 
