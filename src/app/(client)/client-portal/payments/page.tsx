@@ -1,10 +1,8 @@
-import React from 'react'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import { formatCurrency, formatDate } from '@/lib/utils'
-import { CreditCard, Download, Receipt, ArrowUpRight, CheckCircle2, Clock, AlertCircle, Wallet, ShieldCheck, Filter, IndianRupee, FileText, Sparkles, Building2, ChevronRight, Check } from 'lucide-react'
-import Link from 'next/link'
+import { formatCurrency } from '@/lib/utils'
+import { Download, Receipt, CheckCircle2, Clock, AlertCircle, Wallet, ShieldCheck, FileText, Sparkles } from 'lucide-react'
 
 export const metadata = {
   title: 'Financial Ledger & Invoices | Civil Tracker',
@@ -154,7 +152,7 @@ export default async function ClientPortalPaymentsPage() {
                   <td colSpan={7} className="py-8 text-center text-slate-500 font-medium">No invoices found.</td>
                 </tr>
               ) : (
-                displayInvoices.map((inv: any) => (
+                displayInvoices.map((inv) => (
                   <tr key={inv.id} className="hover:bg-slate-50/75 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="py-4 px-6 font-mono font-bold text-[#fc6e20] dark:text-blue-400 whitespace-nowrap">
                       {inv.invoiceNumber}

@@ -1,9 +1,8 @@
-import React from 'react'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Building2, MapPin, Calendar, Clock, CheckCircle2, ArrowRight, TrendingUp, Sparkles, AlertCircle, ShieldCheck, HardHat, Layers, Check, CircleDot } from 'lucide-react'
+import { MapPin, ArrowRight, TrendingUp, Sparkles, HardHat, Layers, Check, CircleDot } from 'lucide-react'
 import Link from 'next/link'
 
 export const metadata = {
@@ -78,7 +77,7 @@ export default async function ClientPortalProjectsPage() {
         </h2>
 
         <div className="grid grid-cols-1 gap-8">
-          {projects.map((proj: any) => {
+          {projects.map((proj) => {
             const prog = proj.progress || 0
             const budget = Number(proj.budget) || 0
             const spent = Number(proj.spent) || 0
