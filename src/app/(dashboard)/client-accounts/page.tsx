@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { Plus, Building2, Eye } from 'lucide-react'
 import bcrypt from 'bcryptjs'
-import RemoveButton from '@/components/ui/RemoveButton'
+import DangerConfirmSubmit from '@/components/ui/DangerConfirmSubmit'
+import { logActivity } from '@/lib/audit'
 
 export const metadata = { title: 'Client Accounts | Civil Tracker' }
 export const dynamic = 'force-dynamic'
@@ -54,10 +55,35 @@ async function removeClientAccount(formData: FormData) {
   const session = await auth()
   if (!session?.user?.companyId) return
   const memberId = formData.get('memberId') as string
+  const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
+
+  const member = await prisma.companyMember.findUnique({
+    where: { id: memberId, companyId: session.user.companyId },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  })
+  if (!member) throw new Error('Client account not found.')
+
+  const expected = (member.user.name ?? member.user.email).trim()
+  if (typed !== expected) {
+    throw new Error('Remove confirmation text did not match the client name/email.')
+  }
+
   await prisma.companyMember.update({
     where: { id: memberId, companyId: session.user.companyId },
     data: { isActive: false },
   })
+
+  await logActivity({
+    userId: session.user.id,
+    companyId: session.user.companyId,
+    action: 'UPDATE',
+    module: 'USER',
+    recordId: member.userId,
+    description: `${session.user.name ?? session.user.email} deactivated client login "${member.user.name ?? member.user.email}"`,
+    before: { isActive: member.isActive, role: member.role, name: member.user.name, email: member.user.email },
+    after: { isActive: false, role: member.role, name: member.user.name, email: member.user.email },
+  })
+
   revalidatePath('/client-accounts')
 }
 
@@ -222,9 +248,11 @@ export default async function ClientAccountsPage({ searchParams }: { searchParam
                       </Link>
                       <form action={removeClientAccount}>
                         <input type="hidden" name="memberId" value={m.id} />
-                        <RemoveButton
-                          name={m.user.name}
-                          message={`Remove ${m.user.name}'s login access? Their data is kept.`}
+                        <DangerConfirmSubmit
+                          entityLabel={m.user.name ?? m.user.email}
+                          confirmText={m.user.name ?? m.user.email}
+                          buttonText="Deactivate Client"
+                          helperText="Type the exact client name or email to remove login access while keeping all project data."
                         />
                       </form>
                     </div>
