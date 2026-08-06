@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
-import { Shield, UserMinus, Eye } from 'lucide-react'
+import { UserMinus, Eye } from 'lucide-react'
 import { resetUserPassword } from '@/actions/users'
 import RemoveButton from '@/components/ui/RemoveButton'
 import ModuleAccessSelector from '@/components/ui/ModuleAccessSelector'
@@ -23,7 +23,7 @@ async function updateUser(formData: FormData) {
   const moduleControlsStr = formData.get('moduleControls') as string | null
   let moduleControls = undefined
   if (moduleControlsStr) {
-    try { moduleControls = JSON.parse(moduleControlsStr) } catch (e) {}
+    try { moduleControls = JSON.parse(moduleControlsStr) } catch {}
   }
 
   await prisma.companyMember.update({
@@ -187,27 +187,27 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
             </div>
             <div>
               <div className="text-sm font-extrabold text-slate-800">Set / View Password</div>
-              <div className="text-xs text-slate-500 font-medium">Password is shown in plain text — copy and share with the user</div>
+              <div className="text-xs text-slate-500 font-medium">Enter a new password for this user. It is masked by default.</div>
             </div>
           </div>
 
           <form action={handlePasswordReset} className="p-6 space-y-4">
             <input type="hidden" name="userId" value={member.userId} />
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">New Password (visible)</label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">New Password</label>
               <input
-                type="text"
+                type="password"
                 name="newPassword"
                 required
                 minLength={6}
-                placeholder="Type new password — you can see &amp; copy it"
+                placeholder="Type new password"
                 className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all font-mono"
               />
             </div>
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Confirm Password</label>
               <input
-                type="text"
+                type="password"
                 name="confirmPassword"
                 required
                 minLength={6}
@@ -215,7 +215,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
                 className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all font-mono"
               />
             </div>
-            <p className="text-xs text-slate-400">After setting, copy this password and share it with the user directly.</p>
+            <p className="text-xs text-slate-400">After setting, share the new password with the user through a secure channel.</p>
             <div className="pt-1 flex gap-3">
               <button
                 type="submit"

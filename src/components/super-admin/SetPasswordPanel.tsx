@@ -13,6 +13,8 @@ export default function SetPasswordPanel({ userId, userName }: Props) {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [showPass, setShowPass] = useState(false)
+  const [showEntryPassword, setShowEntryPassword] = useState(false)
+  const [showEntryConfirm, setShowEntryConfirm] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [setPassword_result, setSetPasswordResult] = useState<string | null>(null)
@@ -51,11 +53,11 @@ export default function SetPasswordPanel({ userId, userName }: Props) {
         </div>
         <div>
           <div className="text-sm font-extrabold text-slate-800">Set Password</div>
-          <div className="text-xs text-slate-500 font-medium">
-            Set a new password for <span className="font-bold text-slate-700">{userName}</span> — you can copy and share it
-          </div>
+        <div className="text-xs text-slate-500 font-medium">
+          Set a new password for <span className="font-bold text-slate-700">{userName}</span> — masked by default, reveal only when needed
         </div>
-      </div>
+        </div>
+        </div>
 
       {/* Success banner with copyable password */}
       {setPassword_result && (
@@ -96,29 +98,49 @@ export default function SetPasswordPanel({ userId, userName }: Props) {
           <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
             New Password
           </label>
-          <input
-            type="text"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            required
-            minLength={6}
-            placeholder="Enter new password (min 6 chars)"
-            className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
-          />
+          <div className="relative">
+            <input
+              type={showEntryPassword ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              minLength={6}
+              placeholder="Enter new password (min 6 chars)"
+              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 pr-11 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
+            />
+            <button
+              type="button"
+              onClick={() => setShowEntryPassword(v => !v)}
+              aria-label={showEntryPassword ? 'Hide new password' : 'Show new password'}
+              className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600"
+            >
+              {showEntryPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          </div>
         </div>
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
             Confirm Password
           </label>
-          <input
-            type="text"
-            value={confirm}
-            onChange={e => setConfirm(e.target.value)}
-            required
-            minLength={6}
-            placeholder="Re-enter new password"
-            className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
-          />
+          <div className="relative">
+            <input
+              type={showEntryConfirm ? 'text' : 'password'}
+              value={confirm}
+              onChange={e => setConfirm(e.target.value)}
+              required
+              minLength={6}
+              placeholder="Re-enter new password"
+              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 pr-11 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
+            />
+            <button
+              type="button"
+              onClick={() => setShowEntryConfirm(v => !v)}
+              aria-label={showEntryConfirm ? 'Hide confirm password' : 'Show confirm password'}
+              className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600"
+            >
+              {showEntryConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          </div>
         </div>
         <button
           type="submit"
