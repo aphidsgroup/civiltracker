@@ -112,7 +112,7 @@ export async function toggleTaskStatus(siteId: string, taskId: string, status: '
         if (e.action === 'UNTICK') return true
         // Delete TICK entries that belong to this specific task
         if (e.action === 'TICK') {
-          const data = e.after as any
+          const data = e.after as { taskId?: string } | null
           return data?.taskId === taskId
         }
         return false
