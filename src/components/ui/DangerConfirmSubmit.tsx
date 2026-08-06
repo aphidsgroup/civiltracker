@@ -41,9 +41,11 @@ export default function DangerConfirmSubmit({
             Type <span className="font-mono normal-case bg-white/80 px-1.5 py-0.5 rounded border border-rose-200">{confirmText}</span> to confirm
           </label>
           <input
+            name="dangerConfirmText"
             value={typed}
             onChange={e => setTyped(e.target.value)}
             placeholder={confirmText}
+            autoComplete="off"
             className="w-full border border-rose-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-400"
           />
           <p className="mt-1.5 text-[11px] text-rose-700">
@@ -68,9 +70,11 @@ export default function DangerConfirmSubmit({
         Type <span className="font-mono bg-rose-50 border border-rose-200 rounded px-1.5 py-0.5">{confirmText}</span> to unlock delete
       </label>
       <input
+        name="dangerConfirmText"
         value={typed}
         onChange={e => setTyped(e.target.value)}
         placeholder={confirmText}
+        autoComplete="off"
         className="w-full border border-rose-300 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-400"
       />
       <button

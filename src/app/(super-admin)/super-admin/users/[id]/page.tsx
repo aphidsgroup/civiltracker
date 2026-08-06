@@ -24,10 +24,16 @@ export default async function SAUserDetailPage({ params }: { params: Promise<{ i
   })
   if (!user) return notFound()
 
+  const expectedDeleteText = user.name ?? user.email
   const member = user.companyMembers[0]
 
-  async function handleDelete() {
+  async function handleDelete(formData: FormData) {
     'use server'
+    const expected = expectedDeleteText.trim()
+    const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
+    if (typed !== expected) {
+      throw new Error('Delete confirmation text did not match the user name/email.')
+    }
     await deleteUser(userId)
   }
 
