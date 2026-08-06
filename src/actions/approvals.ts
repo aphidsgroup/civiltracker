@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/auth/require-user'
 import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { logActivity } from '@/lib/audit'
 import type { ApprovalEntityType, ApprovalPriority, ApprovalStatus } from '@prisma/client'
 
 export async function createApprovalAction(data: {
@@ -184,11 +185,14 @@ function verifyCanApproveEntity(role: string, entityType: string) {
   }
 }
 
-export async function approveApprovalAction(id: string, note?: string) {
+export async function approveApprovalAction(id: string, note?: string, confirmationText?: string) {
   const user = await requireUser()
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
   const approval = await prisma.approval.findFirst({ where: { id, ...companyFilter } })
   if (!approval) throw new Error('Approval not found')
+  if ((confirmationText ?? '').trim() !== 'APPROVE') {
+    throw new Error('Approval confirmation text must exactly match APPROVE')
+  }
   if (approval.currentStatus === 'APPROVED' || approval.currentStatus === 'REJECTED') {
     throw new Error(`Approval already processed (${approval.currentStatus})`)
   }
@@ -218,16 +222,15 @@ export async function approveApprovalAction(id: string, note?: string) {
     },
   })
 
-  await prisma.auditLog.create({
-    data: {
-      companyId: approval.companyId,
-      userId: user.id,
-      action: 'APPROVE',
-      module: approval.entityType,
-      recordId: approval.entityId,
-      before: { status: approval.currentStatus },
-      after: { status: 'APPROVED', note },
-    },
+  await logActivity({
+    userId: user.id,
+    companyId: approval.companyId,
+    action: 'APPROVE',
+    module: approval.entityType,
+    recordId: approval.entityId,
+    description: `${user.name ?? user.email} approved ${approval.entityType.toLowerCase().replace(/_/g, ' ')} request "${approval.title}"`,
+    before: { status: approval.currentStatus },
+    after: { status: 'APPROVED', note },
   })
 
   if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
@@ -292,16 +295,15 @@ export async function rejectApprovalAction(id: string, reason: string) {
     },
   })
 
-  await prisma.auditLog.create({
-    data: {
-      companyId: approval.companyId,
-      userId: user.id,
-      action: 'REJECT',
-      module: approval.entityType,
-      recordId: approval.entityId,
-      before: { status: approval.currentStatus },
-      after: { status: 'REJECTED', reason },
-    },
+  await logActivity({
+    userId: user.id,
+    companyId: approval.companyId,
+    action: 'REJECT',
+    module: approval.entityType,
+    recordId: approval.entityId,
+    description: `${user.name ?? user.email} rejected ${approval.entityType.toLowerCase().replace(/_/g, ' ')} request "${approval.title}"`,
+    before: { status: approval.currentStatus },
+    after: { status: 'REJECTED', reason },
   })
 
   if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
@@ -318,7 +320,7 @@ export async function rejectApprovalAction(id: string, reason: string) {
   return updated
 }
 
-export async function markApprovalPaidAction(id: string, paymentData?: { mode?: string; ref?: string; note?: string }) {
+export async function markApprovalPaidAction(id: string, paymentData?: { mode?: string; ref?: string; note?: string }, confirmationText?: string) {
   const user = await requireUser()
   const canManagePay = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'ACCOUNTANT'].includes(user.role) || hasPermission(user.role as never, 'salary.markPaid') || hasPermission(user.role as never, 'payments.manage')
   if (!canManagePay) {
@@ -327,6 +329,9 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
 
   const approval = await prisma.approval.findUnique({ where: { id } })
   if (!approval) throw new Error('Approval not found')
+  if ((confirmationText ?? '').trim() !== 'PAID') {
+    throw new Error('Disbursement confirmation text must exactly match PAID')
+  }
 
   const updated = await prisma.approval.update({
     where: { id },
@@ -347,6 +352,17 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
       note: paymentData?.note || `Disbursed via ${paymentData?.mode || 'Bank Transfer'} (Ref: ${paymentData?.ref || 'N/A'})`,
       metadataJson: paymentData || {},
     },
+  })
+
+  await logActivity({
+    userId: user.id,
+    companyId: approval.companyId,
+    action: 'PAID',
+    module: approval.entityType,
+    recordId: approval.entityId,
+    description: `${user.name ?? user.email} marked ${approval.entityType.toLowerCase().replace(/_/g, ' ')} request "${approval.title}" as paid/disbursed`,
+    before: { status: approval.currentStatus },
+    after: { status: 'PAID', paymentData: paymentData ?? null },
   })
 
   if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {

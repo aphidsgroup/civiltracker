@@ -3,7 +3,11 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Pencil, Trash2, X, Check, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Pencil, Trash2, X, Check, Loader2 } from 'lucide-react'
+
+function getExpenseDeleteLabel(expense: Expense) {
+  return expense.description || expense.paidTo || expense.billNumber || expense.id
+}
 
 type Expense = {
   id: string
@@ -110,26 +114,32 @@ export default function ExpenseTableClient({
       } : e))
       setEditingId(null)
       router.refresh()
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to save')
     }
     setSaving(false)
   }
 
-  async function deleteExpense(id: string) {
-    if (!confirm('Delete this expense? This cannot be undone.')) return
-    setDeleting(id)
+  async function deleteExpense(expense: Expense) {
+    const label = getExpenseDeleteLabel(expense)
+    const typed = window.prompt(`Type "${label}" to delete this expense. This cannot be undone.`)
+    if (typed === null) return
+    setDeleting(expense.id)
     setError(null)
     try {
-      const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/expenses/${expense.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dangerConfirmText: typed }),
+      })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
         throw new Error(d.error || 'Failed to delete')
       }
-      setList(prev => prev.filter(e => e.id !== id))
+      setList(prev => prev.filter(e => e.id !== expense.id))
       router.refresh()
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to delete')
     }
     setDeleting(null)
   }
@@ -280,7 +290,7 @@ export default function ExpenseTableClient({
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
                               <button
-                                onClick={() => deleteExpense(e.id)}
+                                onClick={() => deleteExpense(e)}
                                 disabled={deleting === e.id}
                                 className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-600 text-xs font-bold rounded-lg transition-colors disabled:opacity-50"
                                 title="Delete expense"
@@ -386,7 +396,7 @@ export default function ExpenseTableClient({
                       <Pencil className="w-3.5 h-3.5" /> Edit
                     </button>
                     <button
-                      onClick={() => deleteExpense(e.id)}
+                      onClick={() => deleteExpense(e)}
                       disabled={deleting === e.id}
                       className="flex-1 py-1.5 bg-slate-100 hover:bg-red-50 text-slate-700 hover:text-red-700 text-xs font-bold rounded-lg flex items-center justify-center gap-1 transition-colors disabled:opacity-50"
                     >
