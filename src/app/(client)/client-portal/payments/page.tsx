@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import { Download, Receipt, CheckCircle2, Clock, AlertCircle, Wallet, ShieldCheck, FileText, Sparkles } from 'lucide-react'
 
 export const metadata = {
@@ -167,7 +167,7 @@ export default async function ClientPortalPaymentsPage() {
                       {formatDate(inv.dueDate)}
                     </td>
                     <td className="py-4 px-6 text-right font-black text-slate-900 dark:text-slate-100 text-base whitespace-nowrap">
-                      {formatCurrency(inv.amount)}
+                      {formatCurrency(Number(inv.amount))}
                     </td>
                     <td className="py-4 px-6 text-center whitespace-nowrap">
                       {getStatusChip(inv.status)}

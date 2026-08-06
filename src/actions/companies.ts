@@ -15,8 +15,8 @@ type CreateCompanyInput = {
   city?: string | null
   state?: string | null
   pincode?: string | null
-  status?: CompanyStatus
-  plan?: CompanyPlan
+  status?: CompanyStatus | string
+  plan?: CompanyPlan | string
   userLimit?: number | string | null
   siteLimit?: number | string | null
   storageLimitMb?: number | string | null
@@ -46,8 +46,8 @@ export async function createCompany(data: CreateCompanyInput) {
       city: data.city,
       state: data.state,
       pincode: data.pincode,
-      status: data.status || CompanyStatus.ACTIVE,
-      plan: data.plan || CompanyPlan.TRIAL,
+      status: (data.status as CompanyStatus) || CompanyStatus.ACTIVE,
+      plan: (data.plan as CompanyPlan) || CompanyPlan.TRIAL,
       userLimit: Number(data.userLimit) || 15,
       siteLimit: Number(data.siteLimit) || 15,
       storageLimitMb: Number(data.storageLimitMb) || 1024,
