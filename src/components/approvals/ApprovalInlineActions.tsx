@@ -4,6 +4,9 @@ import React, { useTransition } from 'react'
 import { approveApprovalAction, rejectApprovalAction, markApprovalPaidAction } from '@/actions/approvals'
 import { CheckCircle2, XCircle, Banknote } from 'lucide-react'
 
+const APPROVE_CONFIRM_TEXT = 'APPROVE'
+const PAID_CONFIRM_TEXT = 'PAID'
+
 export default function ApprovalInlineActions({
   approvalId,
   status,
@@ -21,10 +24,11 @@ export default function ApprovalInlineActions({
   const isApproved = status === 'APPROVED'
 
   const handleApprove = () => {
-    if (!confirm('Quick Approve: Are you sure you want to approve this request?')) return
+    const typed = window.prompt(`Type "${APPROVE_CONFIRM_TEXT}" to approve this request.`)
+    if (typed === null) return
     startTransition(async () => {
       try {
-        await approveApprovalAction(approvalId)
+        await approveApprovalAction(approvalId, undefined, typed)
       } catch (err: unknown) {
         alert((err as Error)?.message || 'Failed to approve')
       }
@@ -48,10 +52,11 @@ export default function ApprovalInlineActions({
   }
 
   const handleMarkPaid = () => {
-    if (!confirm('Quick Pay: Confirm disbursement of funds?')) return
+    const typed = window.prompt(`Type "${PAID_CONFIRM_TEXT}" to confirm disbursement of funds.`)
+    if (typed === null) return
     startTransition(async () => {
       try {
-        await markApprovalPaidAction(approvalId)
+        await markApprovalPaidAction(approvalId, undefined, typed)
       } catch (err: unknown) {
         alert((err as Error)?.message || 'Failed to mark paid')
       }

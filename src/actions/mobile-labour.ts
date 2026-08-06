@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/audit'
+import { AttendanceStatus, LabourTrade } from '@prisma/client'
 
 export async function addMobileWorkerAction(formData: {
   name: string
@@ -20,7 +21,7 @@ export async function addMobileWorkerAction(formData: {
     throw new Error('Name and site are required')
   }
 
-  let tradeVal = (formData.trade as any) || 'HELPER'
+  let tradeVal = (formData.trade as LabourTrade) || 'HELPER'
   let phoneVal: string | null = null
 
   if (formData.trade === 'OTHERS' && formData.customTrade?.trim()) {
@@ -67,7 +68,7 @@ export async function updateWorkerAction(formData: {
   const user = await requireUser()
   if (!user.companyId) throw new Error('No active company context')
 
-  let tradeVal = (formData.trade as any) || 'HELPER'
+  let tradeVal = (formData.trade as LabourTrade) || 'HELPER'
   let phoneVal: string | null = null
 
   if (formData.trade === 'OTHERS' && formData.customTrade?.trim()) {
@@ -147,13 +148,13 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
         labourId: item.labourId,
         siteId: item.siteId,
         date: targetDate,
-        status: item.status as any,
+        status: item.status as AttendanceStatus,
         advance: Number(item.advance) || 0,
         startTime: item.startTime,
         markedById: user.id
       },
       update: {
-        status: item.status as any,
+        status: item.status as AttendanceStatus,
         advance: item.advance !== undefined ? Number(item.advance) : undefined,
         startTime: item.startTime !== undefined ? item.startTime : undefined,
         markedById: user.id
@@ -293,7 +294,7 @@ export async function saveContractorAttendance(data: {
   return { success: true, attendance }
 }
 
-export async function removeLabourAttendanceAction(labourId: string) {
+export async function removeLabourAttendanceAction(labourId: string, confirmationText?: string) {
   const user = await requireUser()
   if (!user.companyId) throw new Error('No active company context')
 
@@ -302,11 +303,14 @@ export async function removeLabourAttendanceAction(labourId: string) {
 
   const labour = await prisma.labour.findUnique({
     where: { id: labourId },
-    select: { companyId: true }
+    select: { id: true, name: true, companyId: true, siteId: true, trade: true }
   })
 
   if (!labour || labour.companyId !== user.companyId) {
     throw new Error('Unauthorized or not found')
+  }
+  if ((confirmationText ?? '').trim() !== labour.name.trim()) {
+    throw new Error('Roster removal confirmation text did not match the worker name')
   }
 
   // Delete today's attendance record
@@ -317,35 +321,74 @@ export async function removeLabourAttendanceAction(labourId: string) {
     }
   })
 
+  await logActivity({
+    userId: user.id,
+    companyId: user.companyId,
+    action: 'DELETE',
+    module: 'ATTENDANCE',
+    recordId: labour.id,
+    description: `${user.name ?? user.email} removed worker "${labour.name}" from today's roster`,
+    before: { labourId: labour.id, name: labour.name, trade: labour.trade, siteId: labour.siteId, date: today.toISOString() },
+    after: { removedFromRoster: true, date: today.toISOString() },
+  })
+
   revalidatePath('/mobile/attendance')
   revalidatePath('/labour/attendance')
   return { success: true }
 }
 
-export async function removeContractorAttendanceAction(attendanceId: string) {
+export async function removeContractorAttendanceAction(attendanceId: string, confirmationText?: string) {
   const user = await requireUser()
   if (!user.companyId) throw new Error('No active company context')
 
   // Find the record to reverse the advance amount if any
   const record = await prisma.contractorAttendance.findUnique({
-    where: { id: attendanceId, companyId: user.companyId }
+    where: { id: attendanceId, companyId: user.companyId },
+    include: { subcontractor: { select: { name: true, trade: true } } }
   })
 
-  if (record) {
-    if (Number(record.dailyAdvance) > 0) {
-      await prisma.subcontractor.update({
-        where: { id: record.subcontractorId },
-        data: {
-          advance: {
-            decrement: record.dailyAdvance
-          }
+  if (!record) {
+    throw new Error('Unauthorized or not found')
+  }
+
+  const expected = (record.subcontractor?.name || `${record.contractorType} ${record.labourCount}`).trim()
+  if ((confirmationText ?? '').trim() !== expected) {
+    throw new Error('Contractor log confirmation text did not match the contractor label')
+  }
+
+  if (Number(record.dailyAdvance) > 0) {
+    await prisma.subcontractor.update({
+      where: { id: record.subcontractorId },
+      data: {
+        advance: {
+          decrement: record.dailyAdvance
         }
-      })
-    }
-    await prisma.contractorAttendance.delete({
-      where: { id: attendanceId }
+      }
     })
   }
+  await prisma.contractorAttendance.delete({
+    where: { id: attendanceId }
+  })
+
+  await logActivity({
+    userId: user.id,
+    companyId: user.companyId,
+    action: 'DELETE',
+    module: 'ATTENDANCE',
+    recordId: attendanceId,
+    description: `${user.name ?? user.email} deleted contractor log "${expected}" from today's roster`,
+    before: {
+      contractorType: record.contractorType,
+      labourCount: record.labourCount,
+      dailyAdvance: Number(record.dailyAdvance),
+      subcontractorId: record.subcontractorId,
+      subcontractorName: record.subcontractor?.name,
+      date: record.date.toISOString(),
+      startTime: record.startTime,
+      siteId: record.siteId,
+    },
+    after: { deleted: true },
+  })
 
   revalidatePath('/mobile/attendance')
   revalidatePath('/sites/[id]', 'page')

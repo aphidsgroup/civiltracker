@@ -12,6 +12,7 @@ const MODULE_META: Record<string, { label: string; icon: string; color: string }
   CLIENT_ADVANCE:   { label: 'Client Advance',   icon: '💰', color: 'bg-amber-100 text-amber-800' },
   ATTENDANCE:       { label: 'Attendance',       icon: '✅', color: 'bg-teal-100 text-teal-800' },
   LABOUR:           { label: 'Labour',           icon: '👷', color: 'bg-indigo-100 text-indigo-800' },
+  SITE_PHOTO:       { label: 'Site Photo',       icon: '📸', color: 'bg-pink-100 text-pink-800' },
   APPROVAL:         { label: 'Approval',         icon: '📋', color: 'bg-sky-100 text-sky-800' },
   REPORT:           { label: 'Report',           icon: '📊', color: 'bg-slate-100 text-slate-800' },
   COMPANY:          { label: 'Company',          icon: '🏢', color: 'bg-fuchsia-100 text-fuchsia-800' },

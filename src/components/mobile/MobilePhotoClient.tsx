@@ -22,6 +22,10 @@ type SiteOption = {
   name: string
 }
 
+function getPhotoDeleteLabel(photo: PhotoCard) {
+  return photo.title || photo.tag || photo.id
+}
+
 export default function MobilePhotoClient({
   sites,
   defaultSiteId,
@@ -127,22 +131,27 @@ export default function MobilePhotoClient({
       setPreviewUrl(null)
       setSelectedFile(null)
       setCaption('')
-    } catch (err: any) {
-      setUploadError(err?.message || 'Upload failed. Try again.')
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed. Try again.')
     } finally {
       setSaving(false)
     }
   }
 
   const handleDelete = async (photoId: string, dbId?: string) => {
+    const photo = photos.find(p => p.id === photoId)
+    if (!photo) return
     if (!dbId) {
       // local-only card, just remove from UI
       setPhotos(prev => prev.filter(p => p.id !== photoId))
       return
     }
+    const expected = getPhotoDeleteLabel(photo)
+    const typed = window.prompt(`Type "${expected}" to permanently delete this photo.`)
+    if (typed === null) return
     setDeletingId(photoId)
     try {
-      await deleteSitePhotoAction(dbId)
+      await deleteSitePhotoAction(dbId, typed)
       setPhotos(prev => prev.filter(p => p.id !== photoId))
     } catch {
       // ignore
@@ -170,7 +179,7 @@ export default function MobilePhotoClient({
       const { url: cloudinaryUrl } = await res.json()
 
       // delete old, create new
-      if (photo.dbId) await deleteSitePhotoAction(photo.dbId)
+      if (photo.dbId) await deleteSitePhotoAction(photo.dbId, getPhotoDeleteLabel(photo))
       await uploadMobileSitePhotoAction({
         siteId: photo.siteId,
         imageUrl: cloudinaryUrl,
