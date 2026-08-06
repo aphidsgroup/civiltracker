@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { Users, UserCheck, UserMinus, HardHat, Plus, AlertCircle } from 'lucide-react'
 import { revalidatePath } from 'next/cache'
 import { LabourCardList } from './LabourCardList'
+import { logActivity } from '@/lib/audit'
+import { LabourTrade } from '@prisma/client'
 
 export const metadata = { title: 'Labour | Civil Tracker' }
 export const dynamic = 'force-dynamic'
@@ -24,7 +26,7 @@ async function updateLabour(formData: FormData) {
   const status = formData.get('status') as string
   await prisma.labour.updateMany({
     where: { id, companyId: session.user.companyId },
-    data: { name, phone: phone || null, trade: trade as any, dailyWage, overtimeRate, openingAdvance, siteId, isActive: status === 'active' }
+    data: { name, phone: phone || null, trade: trade as LabourTrade, dailyWage, overtimeRate, openingAdvance, siteId, isActive: status === 'active' }
   })
   revalidatePath('/labour')
 }
@@ -59,10 +61,33 @@ async function deactivateLabour(formData: FormData) {
   const session = await auth()
   if (!session?.user?.companyId) return
   const id = formData.get('id') as string
+  const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
+
+  const worker = await prisma.labour.findUnique({
+    where: { id, companyId: session.user.companyId },
+    select: { id: true, name: true, trade: true, siteId: true, isActive: true },
+  })
+  if (!worker) throw new Error('Worker not found.')
+  if (typed !== worker.name.trim()) {
+    throw new Error('Remove confirmation text did not match the worker name.')
+  }
+
   await prisma.labour.update({
     where: { id, companyId: session.user.companyId },
     data: { isActive: false },
   })
+
+  await logActivity({
+    userId: session.user.id,
+    companyId: session.user.companyId,
+    action: 'UPDATE',
+    module: 'LABOUR',
+    recordId: worker.id,
+    description: `${session.user.name ?? session.user.email} deactivated worker "${worker.name}"`,
+    before: { isActive: worker.isActive, trade: worker.trade, siteId: worker.siteId, name: worker.name },
+    after: { isActive: false, trade: worker.trade, siteId: worker.siteId, name: worker.name },
+  })
+
   revalidatePath('/labour')
 }
 

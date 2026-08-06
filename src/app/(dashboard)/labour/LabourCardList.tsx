@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { ChevronDown, ChevronRight, CheckCircle2, AlertCircle, Loader2, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, CheckCircle2, Loader2 } from 'lucide-react'
 
 type Site = { id: string; name: string }
 
@@ -98,10 +98,12 @@ function WorkerCard({ worker, sites, updateAction, markPaidAction, deactivateAct
   }
 
   const handleDeactivate = () => {
-    if (!confirm(`Remove "${worker.name}" from active labour? All records are kept.`)) return
+    const typed = window.prompt(`Type "${worker.name}" to remove this worker from active labour. All records are kept.`)
+    if (typed === null) return
     startTransition(async () => {
       const fd = new FormData()
       fd.append('id', worker.id)
+      fd.append('dangerConfirmText', typed)
       await deactivateAction(fd)
     })
   }

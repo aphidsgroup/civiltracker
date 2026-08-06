@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { ChevronDown, ChevronRight, CheckCircle2, AlertCircle, Loader2, Truck } from 'lucide-react'
+import { ChevronDown, ChevronRight, CheckCircle2, Loader2 } from 'lucide-react'
 
 type VendorRow = {
   id: string
@@ -79,10 +79,12 @@ function VendorCard({ vendor, updateAction, markPaidAction, deactivateAction }: 
   }
 
   const handleDeactivate = () => {
-    if (!confirm(`Remove "${vendor.name}"? All PO data is kept.`)) return
+    const typed = window.prompt(`Type "${vendor.name}" to deactivate this vendor. All PO data is kept.`)
+    if (typed === null) return
     startTransition(async () => {
       const fd = new FormData()
       fd.append('id', vendor.id)
+      fd.append('dangerConfirmText', typed)
       await deactivateAction(fd)
     })
   }

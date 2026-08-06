@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Plus, Truck, AlertCircle, CheckCircle2, DollarSign } from 'lucide-react'
 import { revalidatePath } from 'next/cache'
 import { VendorCardList } from './VendorCardList'
+import { logActivity } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,7 +36,6 @@ async function markVendorPaid(formData: FormData) {
   const session = await auth()
   if (!session?.user?.companyId) return
   const id = formData.get('id') as string
-  const amount = parseFloat(formData.get('amount') as string)
   await prisma.vendor.updateMany({
     where: { id, companyId: session.user.companyId },
     data: { amountPayable: 0 }
@@ -48,7 +48,30 @@ async function deactivateVendor(formData: FormData) {
   const session = await auth()
   if (!session?.user?.companyId) return
   const id = formData.get('id') as string
+  const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
+
+  const vendor = await prisma.vendor.findUnique({
+    where: { id, companyId: session.user.companyId },
+    select: { id: true, name: true, category: true, amountPayable: true, isActive: true },
+  })
+  if (!vendor) throw new Error('Vendor not found.')
+  if (typed !== vendor.name.trim()) {
+    throw new Error('Remove confirmation text did not match the vendor name.')
+  }
+
   await prisma.vendor.update({ where: { id, companyId: session.user.companyId }, data: { isActive: false } })
+
+  await logActivity({
+    userId: session.user.id,
+    companyId: session.user.companyId,
+    action: 'UPDATE',
+    module: 'VENDOR',
+    recordId: vendor.id,
+    description: `${session.user.name ?? session.user.email} deactivated vendor "${vendor.name}"`,
+    before: { isActive: vendor.isActive, category: vendor.category, amountPayable: Number(vendor.amountPayable), name: vendor.name },
+    after: { isActive: false, category: vendor.category, amountPayable: Number(vendor.amountPayable), name: vendor.name },
+  })
+
   revalidatePath('/vendors')
 }
 
