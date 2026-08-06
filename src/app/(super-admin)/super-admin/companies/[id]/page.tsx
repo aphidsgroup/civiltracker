@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { deleteCompany } from '@/actions/super-admin'
-import RemoveButton from '@/components/ui/RemoveButton'
+import DangerConfirmSubmit from '@/components/ui/DangerConfirmSubmit'
 
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -62,9 +62,11 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
         </div>
         {/* Delete Company */}
         <form action={handleDelete}>
-          <RemoveButton
-            name={company.name}
-            message={`Permanently delete "${company.name}" and ALL its data? This cannot be undone.`}
+          <DangerConfirmSubmit
+            entityLabel={company.name}
+            confirmText={company.name}
+            buttonText="Delete Company"
+            helperText="Type the exact company name to unlock permanent deletion of this company and all of its data."
           />
         </form>
       </div>
