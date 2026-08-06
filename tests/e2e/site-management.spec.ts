@@ -6,11 +6,11 @@ test.describe('Phase 9 Site Management & Assignment', () => {
     await page.goto('/login')
     await page.fill('input[name="email"]', 'arun@madras-crafters.in')
     await page.fill('input[name="password"]', 'Admin@123456')
-    await page.waitForSelector('button[data-hydrated="true"]'); await page.click('button:has-text("Sign in")')
+    await page.locator('button:has-text("Sign in"), button[type="submit"]').first().click()
     await page.waitForURL('**/dashboard')
 
     await page.waitForURL(/\/dashboard/)
-    
+
     // Check if the create site page shows PM assignment dropdown
     await page.goto('/sites/new')
     await expect(page.locator('text=Create New Site')).toBeVisible()
