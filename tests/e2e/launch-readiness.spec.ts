@@ -11,6 +11,53 @@
 
 import { test, expect } from '@playwright/test'
 
+const BASE_URL = process.env.BASE_URL || ''
+const IS_LIVE_PRODUCTION = BASE_URL.includes('civiltracker.buildogram.in')
+
+type RoleCreds = {
+  email: string
+  password: string
+}
+
+function envCreds(prefix: 'SUPER_ADMIN' | 'COMPANY_ADMIN' | 'SITE_ENGINEER' | 'CLIENT', fallback: RoleCreds): RoleCreds {
+  return {
+    email: process.env[`E2E_${prefix}_EMAIL`] || fallback.email,
+    password: process.env[`E2E_${prefix}_PASSWORD`] || fallback.password,
+  }
+}
+
+const superAdminCreds = envCreds('SUPER_ADMIN', {
+  email: 'admin@civiltracker.in',
+  password: 'Admin@123456',
+})
+
+const companyAdminCreds = envCreds('COMPANY_ADMIN', {
+  email: 'arun@madras-crafters.in',
+  password: 'Admin@123456',
+})
+
+const siteEngineerCreds = envCreds('SITE_ENGINEER', {
+  email: 'murugan@madras-crafters.in',
+  password: 'Admin@123456',
+})
+
+const clientCreds = envCreds('CLIENT', {
+  email: 'client@annanagar.in',
+  password: 'Admin@123456',
+})
+
+const hasExplicitCompanyAdminCreds = Boolean(process.env.E2E_COMPANY_ADMIN_EMAIL && process.env.E2E_COMPANY_ADMIN_PASSWORD)
+const hasExplicitSiteEngineerCreds = Boolean(process.env.E2E_SITE_ENGINEER_EMAIL && process.env.E2E_SITE_ENGINEER_PASSWORD)
+const hasExplicitClientCreds = Boolean(process.env.E2E_CLIENT_EMAIL && process.env.E2E_CLIENT_PASSWORD)
+
+const runCompanyRoleSuites = !IS_LIVE_PRODUCTION || hasExplicitCompanyAdminCreds
+const runMobileRoleSuites = !IS_LIVE_PRODUCTION || hasExplicitSiteEngineerCreds
+const runClientRoleSuites = !IS_LIVE_PRODUCTION || hasExplicitClientCreds
+
+const describeCompanyRoleSuites = runCompanyRoleSuites ? test.describe : test.describe.skip
+const describeMobileRoleSuites = runMobileRoleSuites ? test.describe : test.describe.skip
+const describeClientRoleSuites = runClientRoleSuites ? test.describe : test.describe.skip
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -78,7 +125,7 @@ test.describe('Auth Flows', () => {
 
 test.describe('Super Admin Routes', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'admin@civiltracker.in', 'Admin@123456')
+    await loginAs(page, superAdminCreds.email, superAdminCreds.password)
     await page.waitForURL(/\/super-admin\/dashboard/, { timeout: 10000 })
   })
 
@@ -98,8 +145,9 @@ test.describe('Super Admin Routes', () => {
   test('/super-admin/companies/new has required form fields', async ({ page }) => {
     await page.goto('/super-admin/companies/new')
     await expect(page.locator('input[name="name"]')).toBeVisible()
-    await expect(page.locator('input[name="userLimit"]')).toBeVisible()
-    await expect(page.locator('input[name="siteLimit"]')).toBeVisible()
+    await expect(page.locator('input[name="ownerName"]')).toBeVisible()
+    await expect(page.locator('input[name="ownerEmail"]')).toBeVisible()
+    await expect(page.locator('input[name="ownerPassword"]')).toBeVisible()
   })
 
   test('/super-admin/users loads', async ({ page }) => {
@@ -143,9 +191,9 @@ test.describe('Super Admin Routes', () => {
 // Company Admin Dashboard Routes
 // ---------------------------------------------------------------------------
 
-test.describe('Company Admin Dashboard Routes', () => {
+describeCompanyRoleSuites('Company Admin Dashboard Routes', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'arun@madras-crafters.in', 'Admin@123456')
+    await loginAs(page, companyAdminCreds.email, companyAdminCreds.password)
     await page.waitForURL(/\/dashboard/, { timeout: 10000 })
   })
 
@@ -192,11 +240,11 @@ test.describe('Company Admin Dashboard Routes', () => {
 // Mobile PWA Routes
 // ---------------------------------------------------------------------------
 
-test.describe('Mobile PWA Routes', () => {
+describeMobileRoleSuites('Mobile PWA Routes', () => {
   test.use({ viewport: { width: 390, height: 844 } })
 
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'murugan@madras-crafters.in', 'Admin@123456')
+    await loginAs(page, siteEngineerCreds.email, siteEngineerCreds.password)
     await page.waitForLoadState('networkidle')
   })
 
@@ -236,9 +284,9 @@ test.describe('Mobile PWA Routes', () => {
 // Client Portal Privacy
 // ---------------------------------------------------------------------------
 
-test.describe('Client Portal Privacy', () => {
+describeClientRoleSuites('Client Portal Privacy', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'client@annanagar.in', 'Admin@123456')
+    await loginAs(page, clientCreds.email, clientCreds.password)
     await page.waitForLoadState('networkidle')
   })
 
@@ -295,7 +343,9 @@ test.describe('API Auth Enforcement', () => {
 
 test.describe('Tenant Isolation', () => {
   test('API /api/sites only returns sites for authenticated company', async ({ page, request }) => {
-    await loginAs(page, 'arun@madras-crafters.in', 'Admin@123456')
+    test.skip(!runCompanyRoleSuites, 'Live production tenant creds are environment-specific; set E2E_COMPANY_ADMIN_EMAIL and E2E_COMPANY_ADMIN_PASSWORD to enable this test.')
+
+    await loginAs(page, companyAdminCreds.email, companyAdminCreds.password)
     // Get cookies from the logged-in page context
     const cookies = await page.context().cookies()
     const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ')
@@ -318,7 +368,9 @@ test.describe('Tenant Isolation', () => {
 
 test.describe('Report Export', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, 'arun@madras-crafters.in', 'Admin@123456')
+    test.skip(!runCompanyRoleSuites, 'Live production tenant creds are environment-specific; set E2E_COMPANY_ADMIN_EMAIL and E2E_COMPANY_ADMIN_PASSWORD to enable this suite.')
+
+    await loginAs(page, companyAdminCreds.email, companyAdminCreds.password)
     await page.waitForURL(/\/dashboard/, { timeout: 10000 })
   })
 
