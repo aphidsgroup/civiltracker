@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { ChevronDown, ChevronRight, CheckCircle2, Loader2, HardHat } from 'lucide-react'
+import { ChevronDown, ChevronRight, CheckCircle2, Loader2 } from 'lucide-react'
 
 type SubRow = {
   id: string
@@ -88,10 +88,12 @@ function SubCard({ sub, updateAction, markPaidAction, deactivateAction }: {
   }
 
   const handleDeactivate = () => {
-    if (!confirm(`Remove "${sub.name}"? All data is kept.`)) return
+    const typed = window.prompt(`Type "${sub.name}" to deactivate this subcontractor. All data is kept.`)
+    if (typed === null) return
     startTransition(async () => {
       const fd = new FormData()
       fd.append('id', sub.id)
+      fd.append('dangerConfirmText', typed)
       await deactivateAction(fd)
     })
   }

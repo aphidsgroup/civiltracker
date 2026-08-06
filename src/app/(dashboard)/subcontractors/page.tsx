@@ -5,6 +5,7 @@ import { Users, FileText, CheckCircle2, AlertCircle, HardHat, Plus } from 'lucid
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { SubCardList } from './SubCardList'
+import { logActivity } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,7 +53,30 @@ async function deactivateSubcontractor(formData: FormData) {
   const session = await auth()
   if (!session?.user?.companyId) return
   const id = formData.get('id') as string
+  const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
+
+  const sub = await prisma.subcontractor.findUnique({
+    where: { id, companyId: session.user.companyId },
+    select: { id: true, name: true, trade: true, status: true, isActive: true, raBilled: true, advance: true, retention: true },
+  })
+  if (!sub) throw new Error('Subcontractor not found.')
+  if (typed !== sub.name.trim()) {
+    throw new Error('Remove confirmation text did not match the subcontractor name.')
+  }
+
   await prisma.subcontractor.update({ where: { id, companyId: session.user.companyId }, data: { isActive: false } })
+
+  await logActivity({
+    userId: session.user.id,
+    companyId: session.user.companyId,
+    action: 'UPDATE',
+    module: 'SUBCONTRACTOR',
+    recordId: sub.id,
+    description: `${session.user.name ?? session.user.email} deactivated subcontractor "${sub.name}"`,
+    before: { isActive: sub.isActive, trade: sub.trade, status: sub.status, raBilled: Number(sub.raBilled), advance: Number(sub.advance), retention: Number(sub.retention), name: sub.name },
+    after: { isActive: false, trade: sub.trade, status: sub.status, raBilled: Number(sub.raBilled), advance: Number(sub.advance), retention: Number(sub.retention), name: sub.name },
+  })
+
   revalidatePath('/subcontractors')
 }
 
@@ -97,8 +121,6 @@ export default async function SubcontractorsPage() {
     raBilled: acc.raBilled + s.raBilled,
     pending: acc.pending + s.pending,
   }), { workOrder: 0, raBilled: 0, pending: 0 })
-
-  const pendingCount = subs.filter(s => s.pending > 0).length
 
   return (
     <div className="flex flex-col gap-6">

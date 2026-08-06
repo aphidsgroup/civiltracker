@@ -16,6 +16,7 @@ const MODULE_META: Record<string, { label: string; icon: string; color: string }
   REPORT:           { label: 'Report',           icon: '📊', color: 'bg-slate-100 text-slate-800' },
   COMPANY:          { label: 'Company',          icon: '🏢', color: 'bg-fuchsia-100 text-fuchsia-800' },
   VENDOR:           { label: 'Vendor',           icon: '🚚', color: 'bg-cyan-100 text-cyan-800' },
+  SUBCONTRACTOR:    { label: 'Subcontractor',    icon: '🧱', color: 'bg-violet-100 text-violet-800' },
 }
 
 function actionBadge(action: string) {
