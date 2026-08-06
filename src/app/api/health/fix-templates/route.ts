@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,7 +9,12 @@ export const dynamic = 'force-dynamic'
 // Protected by CRON_SECRET to prevent abuse.
 export async function POST(request: Request) {
   const secret = request.headers.get('x-secret') ?? ''
-  if (secret !== (process.env.CRON_SECRET ?? 'civil-fix-2025')) {
+  const session = await auth()
+  const isSuperAdmin = session?.user?.role === 'SUPER_ADMIN'
+  const cronSecret = process.env.CRON_SECRET
+  const hasValidSecret = Boolean(cronSecret) && secret === cronSecret
+
+  if (!isSuperAdmin && !hasValidSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -68,8 +74,13 @@ export async function POST(request: Request) {
   return NextResponse.json(results)
 }
 
-// GET — just report current template state (no auth needed for diagnostics)
+// GET — report current template state for authenticated super admins only
 export async function GET() {
+  const session = await auth()
+  if (session?.user?.role !== 'SUPER_ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const templates = await prisma.checklistTemplate.findMany({
     include: { _count: { select: { stages: true } } }
   })

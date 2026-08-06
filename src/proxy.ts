@@ -3,12 +3,13 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { Role } from '@prisma/client'
 
-const publicPaths = ['/login', '/api/auth', '/api/health', '/offline']
+const publicExactPaths = new Set(['/login', '/api/health', '/offline'])
+const publicPrefixPaths = ['/api/auth']
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (publicPaths.some((p) => pathname.startsWith(p))) {
+  if (publicExactPaths.has(pathname) || publicPrefixPaths.some((p) => pathname.startsWith(p))) {
     return NextResponse.next()
   }
 
@@ -68,5 +69,5 @@ export async function proxy(request: NextRequest) {
 export { proxy as middleware }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon\\.ico|api/health)(?:.*))'],
+  matcher: ['/((?!_next/static|_next/image|favicon\\.ico).*)'],
 }

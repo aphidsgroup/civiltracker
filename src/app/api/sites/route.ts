@@ -1,15 +1,15 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { ensureCompanyContext, requireApiPermission } from '@/lib/auth/require-api-permission'
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!session.user.companyId && session.user.role !== 'SUPER_ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized: No active company context' }, { status: 401 })
-  }
+  const authResult = await requireApiPermission('sites.view', 'SITES')
+  if (authResult instanceof NextResponse) return authResult
 
-  const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : { companyId: session.user.companyId }
+  const companyContextError = ensureCompanyContext(authResult)
+  if (companyContextError) return companyContextError
+
+  const companyFilter = authResult.role === 'SUPER_ADMIN' ? {} : { companyId: authResult.companyId }
 
   const sites = await prisma.site.findMany({
     where: { ...companyFilter, deletedAt: null, status: 'ACTIVE' },

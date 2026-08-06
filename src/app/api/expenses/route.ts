@@ -1,7 +1,7 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { ensureCompanyContext, requireApiPermission } from '@/lib/auth/require-api-permission'
 
 const schema = z.object({
   siteId: z.string(),
@@ -16,17 +16,16 @@ const schema = z.object({
 })
 
 export async function GET(request: Request) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.user.role === 'CLIENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  if (!session.user.companyId && session.user.role !== 'SUPER_ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized: No active company context' }, { status: 401 })
-  }
+  const authResult = await requireApiPermission('expenses.view', 'EXPENSES')
+  if (authResult instanceof NextResponse) return authResult
+
+  const companyContextError = ensureCompanyContext(authResult)
+  if (companyContextError) return companyContextError
 
   const { searchParams } = new URL(request.url)
   const siteId = searchParams.get('siteId')
 
-  const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : { companyId: session.user.companyId }
+  const companyFilter = authResult.role === 'SUPER_ADMIN' ? {} : { companyId: authResult.companyId }
 
   const expenses = await prisma.expense.findMany({
     where: { ...companyFilter, ...(siteId ? { siteId } : {}), deletedAt: null },
@@ -39,12 +38,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.user.role === 'CLIENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  if (!session.user.companyId && session.user.role !== 'SUPER_ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized: No active company context' }, { status: 401 })
-  }
+  const authResult = await requireApiPermission('expenses.create', 'EXPENSES')
+  if (authResult instanceof NextResponse) return authResult
+
+  const companyContextError = ensureCompanyContext(authResult)
+  if (companyContextError) return companyContextError
 
   const body = await request.json()
   const parsed = schema.safeParse(body)
@@ -52,10 +50,10 @@ export async function POST(request: Request) {
 
   const data = parsed.data
 
-  const companyId = session.user.companyId!
+  const companyId = authResult.companyId!
 
   const site = await prisma.site.findFirst({
-    where: { id: data.siteId, ...(session.user.role === 'SUPER_ADMIN' ? {} : { companyId }) }
+    where: { id: data.siteId, ...(authResult.role === 'SUPER_ADMIN' ? {} : { companyId }) }
   })
   if (!site) return NextResponse.json({ error: 'Forbidden: Site not found or access denied' }, { status: 404 })
 
@@ -74,7 +72,7 @@ export async function POST(request: Request) {
       billDate: data.billDate ? new Date(data.billDate) : null,
       notes: data.notes,
       approvalStatus: 'PENDING',
-      createdById: session.user.id,
+      createdById: authResult.id,
     },
   })
 
@@ -87,7 +85,7 @@ export async function POST(request: Request) {
       title: `Expense for ${data.category}`,
       amount: data.amount,
       description: data.notes || null,
-      requestedById: session.user.id,
+      requestedById: authResult.id,
       currentStatus: 'PENDING',
       submittedAt: new Date(),
     },
