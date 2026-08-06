@@ -138,10 +138,10 @@ export default async function ClientAccountsPage({ searchParams }: { searchParam
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Login Password *</label>
                 <input
-                  name="password" type="text" required minLength={6} placeholder="Set a password to share with client"
+                  name="password" type="password" required minLength={6} placeholder="Set a password for the client"
                   className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all font-mono"
                 />
-                <p className="mt-1 text-xs text-slate-400">Shown in plain text — copy and share it with the client.</p>
+                <p className="mt-1 text-xs text-slate-400">After creation, share the password with the client through a secure channel.</p>
               </div>
               
               {sites.length > 0 && (
