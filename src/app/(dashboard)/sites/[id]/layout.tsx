@@ -21,6 +21,7 @@ export default async function SiteLayout({
   const site = await prisma.site.findUnique({
     where: { id, companyId: session.user.companyId, deletedAt: null },
   })
+  const now = new Date()
 
   if (!site) redirect('/sites')
 
@@ -40,7 +41,7 @@ export default async function SiteLayout({
           {site.targetEndDate && (
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
               {(() => {
-                const diff = Math.ceil((new Date(site.targetEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                const diff = Math.ceil((new Date(site.targetEndDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                 return diff < 0 ? `Overdue by ${-diff} days` : `${diff} days left`
               })()}
             </div>

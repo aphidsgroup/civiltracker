@@ -39,9 +39,10 @@ export default async function NewPurchaseOrderPage() {
     where: { companyId: session.user.companyId, isActive: true },
     select: { id: true, name: true, category: true }
   })
+  const now = new Date()
 
-  // Generate a random PO Number default
-  const randPO = `PO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`
+  // Generate a deterministic PO Number default for this render
+  const randPO = `PO-${now.getFullYear()}-${String((now.getTime() % 9000) + 1000).slice(-4)}`
 
   return (
     <div className="min-h-screen bg-gray-50/50">
