@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import { Activity, ScrollText, ShieldAlert, Users, Building2, Wallet, IndianRupee, FileText, UserCheck, Key } from 'lucide-react'
+import { Activity, ScrollText, ShieldAlert } from 'lucide-react'
 
 const MODULE_META: Record<string, { label: string; icon: string; color: string }> = {
   EXPENSE:          { label: 'Expense',         icon: '💸', color: 'bg-emerald-100 text-emerald-800' },
@@ -14,6 +14,7 @@ const MODULE_META: Record<string, { label: string; icon: string; color: string }
   LABOUR:           { label: 'Labour',           icon: '👷', color: 'bg-indigo-100 text-indigo-800' },
   APPROVAL:         { label: 'Approval',         icon: '📋', color: 'bg-sky-100 text-sky-800' },
   REPORT:           { label: 'Report',           icon: '📊', color: 'bg-slate-100 text-slate-800' },
+  COMPANY:          { label: 'Company',          icon: '🏢', color: 'bg-fuchsia-100 text-fuchsia-800' },
 }
 
 function actionBadge(action: string) {
