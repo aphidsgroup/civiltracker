@@ -5,8 +5,9 @@ import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { UserMinus, Eye } from 'lucide-react'
 import { resetUserPassword } from '@/actions/users'
-import RemoveButton from '@/components/ui/RemoveButton'
+import DangerConfirmSubmit from '@/components/ui/DangerConfirmSubmit'
 import ModuleAccessSelector from '@/components/ui/ModuleAccessSelector'
+import { logActivity } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,11 +42,35 @@ async function removeFromCompany(formData: FormData) {
   const session = await auth()
   if (!session?.user?.companyId) return
   const memberId = formData.get('memberId') as string
-  // Only deactivate the membership — never delete the User or any of their inputs
+  const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
+
+  const member = await prisma.companyMember.findUnique({
+    where: { id: memberId, companyId: session.user.companyId },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  })
+  if (!member) throw new Error('Team member not found.')
+
+  const expected = (member.user.name ?? member.user.email).trim()
+  if (typed !== expected) {
+    throw new Error('Remove confirmation text did not match the team member name/email.')
+  }
+
   await prisma.companyMember.update({
     where: { id: memberId, companyId: session.user.companyId },
     data: { isActive: false },
   })
+
+  await logActivity({
+    userId: session.user.id,
+    companyId: session.user.companyId,
+    action: 'UPDATE',
+    module: 'USER',
+    recordId: member.userId,
+    description: `${session.user.name ?? session.user.email} removed "${member.user.name ?? member.user.email}" from the company login roster`,
+    before: { isActive: member.isActive, role: member.role, name: member.user.name, email: member.user.email },
+    after: { isActive: false, role: member.role, name: member.user.name, email: member.user.email },
+  })
+
   revalidatePath('/settings/users')
   redirect('/settings/users')
 }
@@ -245,9 +270,12 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
               </div>
               <form action={removeFromCompany} className="mt-4">
                 <input type="hidden" name="memberId" value={member.id} />
-                <RemoveButton
-                  name={member.user.name}
-                  message={`Remove ${member.user.name} from your company? Their data is kept but they won't be able to log in.`}
+                <DangerConfirmSubmit
+                  entityLabel={member.user.name ?? member.user.email}
+                  confirmText={member.user.name ?? member.user.email}
+                  buttonText="Remove from Company"
+                  helperText="Type the exact team member name or email to deactivate their company access while keeping all historical data."
+                  variant="card"
                 />
               </form>
             </div>
