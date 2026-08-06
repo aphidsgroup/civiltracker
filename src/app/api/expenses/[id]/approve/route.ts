@@ -1,22 +1,25 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { hasPermission } from '@/lib/permissions'
 import { Role } from '@prisma/client'
+import { ensureCompanyContext, requireApiPermission } from '@/lib/auth/require-api-permission'
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const authResult = await requireApiPermission('expenses.approve', 'EXPENSES')
+  if (authResult instanceof NextResponse) return authResult
 
-  if (!hasPermission(session.user.role as Role, 'expenses.approve')) {
+  const companyContextError = ensureCompanyContext(authResult)
+  if (companyContextError) return companyContextError
+
+  if (!hasPermission(authResult.role as Role, 'expenses.approve')) {
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
   }
 
-  const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : { companyId: session.user.companyId }
+  const companyFilter = authResult.role === 'SUPER_ADMIN' ? {} : { companyId: authResult.companyId }
 
   const expense = await prisma.expense.findFirst({
     where: { id, ...companyFilter },
@@ -31,7 +34,7 @@ export async function POST(
     where: { id },
     data: {
       approvalStatus: 'APPROVED',
-      approvedById: session.user.id,
+      approvedById: authResult.id,
       approvedAt: now,
     },
   })
@@ -41,7 +44,7 @@ export async function POST(
     await prisma.$executeRaw`
       UPDATE "Approval"
       SET "currentStatus" = 'APPROVED',
-          "approvedById" = ${session.user.id},
+          "approvedById" = ${authResult.id},
           "approvedAt" = ${now}
       WHERE "entityId" = ${id}
         AND "entityType" IN ('EXPENSE', 'BILL')

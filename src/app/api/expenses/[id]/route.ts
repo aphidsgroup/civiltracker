@@ -1,7 +1,6 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { Role } from '@prisma/client'
+import { ensureCompanyContext, requireApiPermission } from '@/lib/auth/require-api-permission'
 
 // PATCH /api/expenses/[id] — Edit a PENDING expense (creator or company admin)
 export async function PATCH(
@@ -9,10 +8,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const authResult = await requireApiPermission('expenses.view', 'EXPENSES')
+  if (authResult instanceof NextResponse) return authResult
 
-  const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : { companyId: session.user.companyId }
+  const companyContextError = ensureCompanyContext(authResult)
+  if (companyContextError) return companyContextError
+
+  const companyFilter = authResult.role === 'SUPER_ADMIN' ? {} : { companyId: authResult.companyId }
   const expense = await prisma.expense.findFirst({ where: { id, ...companyFilter, deletedAt: null } })
   if (!expense) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -22,8 +24,8 @@ export async function PATCH(
   }
 
   // Only the creator or admin/company_admin can edit
-  const isAdmin = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'ACCOUNTANT'].includes(session.user.role as string)
-  const isCreator = expense.createdById === session.user.id
+  const isAdmin = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'ACCOUNTANT'].includes(authResult.role)
+  const isCreator = expense.createdById === authResult.id
   if (!isAdmin && !isCreator) {
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
   }
@@ -53,10 +55,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const authResult = await requireApiPermission('expenses.view', 'EXPENSES')
+  if (authResult instanceof NextResponse) return authResult
 
-  const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : { companyId: session.user.companyId }
+  const companyContextError = ensureCompanyContext(authResult)
+  if (companyContextError) return companyContextError
+
+  const companyFilter = authResult.role === 'SUPER_ADMIN' ? {} : { companyId: authResult.companyId }
   const expense = await prisma.expense.findFirst({ where: { id, ...companyFilter, deletedAt: null } })
   if (!expense) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -66,8 +71,8 @@ export async function DELETE(
   }
 
   // Only the creator or admin can delete
-  const isAdmin = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'ACCOUNTANT'].includes(session.user.role as string)
-  const isCreator = expense.createdById === session.user.id
+  const isAdmin = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'ACCOUNTANT'].includes(authResult.role)
+  const isCreator = expense.createdById === authResult.id
   if (!isAdmin && !isCreator) {
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
   }
