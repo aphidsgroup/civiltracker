@@ -6,7 +6,7 @@ test.describe('Reports & Financials Phase 8', () => {
     await page.goto('/login')
     await page.fill('input[name="email"]', 'arun@madras-crafters.in')
     await page.fill('input[name="password"]', 'Admin@123456')
-    await page.waitForSelector('button[data-hydrated="true"]'); await page.click('button:has-text("Sign in")')
+    await page.locator('button:has-text("Sign in"), button[type="submit"]').first().click()
     await page.waitForURL('**/dashboard')
 
     await expect(page).toHaveURL('/dashboard')
@@ -25,7 +25,7 @@ test.describe('Reports & Financials Phase 8', () => {
     await page.goto('/login')
     await page.fill('input[name="email"]', 'priya@madras-crafters.in')
     await page.fill('input[name="password"]', 'Admin@123456')
-    await page.waitForSelector('button[data-hydrated="true"]'); await page.click('button:has-text("Sign in")')
+    await page.locator('button:has-text("Sign in"), button[type="submit"]').first().click()
     await page.waitForURL('**/dashboard')
 
 
@@ -43,7 +43,7 @@ test.describe('Reports & Financials Phase 8', () => {
     await page.goto('/login')
     await page.fill('input[name="email"]', 'arun@madras-crafters.in')
     await page.fill('input[name="password"]', 'Admin@123456')
-    await page.waitForSelector('button[data-hydrated="true"]'); await page.click('button:has-text("Sign in")')
+    await page.locator('button:has-text("Sign in"), button[type="submit"]').first().click()
     await page.waitForURL('**/dashboard')
 
 
@@ -56,7 +56,7 @@ test.describe('Reports & Financials Phase 8', () => {
     await page.goto('/login')
     await page.fill('input[name="email"]', 'arun@madras-crafters.in')
     await page.fill('input[name="password"]', 'Admin@123456')
-    await page.waitForSelector('button[data-hydrated="true"]'); await page.click('button:has-text("Sign in")')
+    await page.locator('button:has-text("Sign in"), button[type="submit"]').first().click()
     await page.waitForURL('**/dashboard')
 
 

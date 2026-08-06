@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { Eye, EyeOff, Mail, ArrowRight } from 'lucide-react'
 
@@ -18,9 +18,6 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPass, setShowPass] = useState(false)
-  const [hydrated, setHydrated] = useState(false)
-
-  useEffect(() => { setHydrated(true) }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -101,9 +98,9 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div>
-              <label className="block text-[12.5px] font-bold text-[#4a5a6a] mb-1.5">Email address</label>
+              <label htmlFor="email" className="block text-[12.5px] font-bold text-[#4a5a6a] mb-1.5">Email address</label>
               <div className="relative">
-                <input type="email" placeholder="you@company.com" value={email}
+                <input id="email" name="email" type="email" placeholder="you@company.com" value={email}
                   onChange={e => setEmail(e.target.value)} required autoFocus autoComplete="email"
                   className="w-full bg-white border-[1.5px] border-[#dde5ee] rounded-[12px] py-[13px] pl-4 pr-11 text-[15px] font-medium text-[#16273a] outline-none transition-all focus:border-[#fc6e20] focus:shadow-[0_0_0_3px_rgba(252,110,32,0.12)]"
                 />
@@ -111,9 +108,9 @@ export default function LoginPage() {
               </div>
             </div>
             <div>
-              <label className="block text-[12.5px] font-bold text-[#4a5a6a] mb-1.5">Password</label>
+              <label htmlFor="password" className="block text-[12.5px] font-bold text-[#4a5a6a] mb-1.5">Password</label>
               <div className="relative">
-                <input type={showPass ? 'text' : 'password'} placeholder="••••••••" value={password}
+                <input id="password" name="password" type={showPass ? 'text' : 'password'} placeholder="••••••••" value={password}
                   onChange={e => setPassword(e.target.value)} required autoComplete="current-password"
                   className="w-full bg-white border-[1.5px] border-[#dde5ee] rounded-[12px] py-[13px] pl-4 pr-11 text-[15px] font-medium text-[#16273a] outline-none transition-all focus:border-[#fc6e20] focus:shadow-[0_0_0_3px_rgba(252,110,32,0.12)]"
                 />
@@ -123,7 +120,7 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-            <button type="submit" disabled={loading || !hydrated}
+            <button type="submit" disabled={loading}
               className="w-full bg-gradient-to-r from-[#fc6e20] to-[#e85b0d] text-white text-[15px] font-bold py-[15px] rounded-[13px] flex items-center justify-center gap-2 shadow-[0_10px_28px_-10px_rgba(252,110,32,0.55)] hover:-translate-y-px hover:shadow-[0_14px_32px_-10px_rgba(252,110,32,0.65)] transition-all disabled:opacity-60 disabled:cursor-not-allowed mt-2">
               {loading ? 'Signing in…' : (<>Sign in <ArrowRight size={16} /></>)}
             </button>
