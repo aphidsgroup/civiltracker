@@ -29,16 +29,12 @@ export default function LiveClock({
   compact?: boolean
   className?: string
 }) {
-  const [now, setNow] = useState<Date | null>(null)
+  const [now, setNow] = useState<Date>(() => getNow())
 
   useEffect(() => {
-    setNow(getNow())
     const id = setInterval(() => setNow(getNow()), 1000)
     return () => clearInterval(id)
   }, [])
-
-  // Avoid hydration mismatch — render nothing until client mounts
-  if (!now) return null
 
   const dateStr = now.toLocaleDateString('en-IN', {
     timeZone: IST,
@@ -58,7 +54,7 @@ export default function LiveClock({
 
   if (compact) {
     return (
-      <span className={className}>
+      <span className={className} suppressHydrationWarning>
         {showDate && dateStr}
         {showDate && showTime && ' · '}
         {showTime && timeStr}
@@ -67,7 +63,7 @@ export default function LiveClock({
   }
 
   return (
-    <span className={className}>
+    <span className={className} suppressHydrationWarning>
       {showDate && dateStr}
       {showDate && showTime && ' · '}
       {showTime && <span className="font-mono tracking-tight">{timeStr}</span>}

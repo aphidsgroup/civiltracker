@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { Prisma, ApprovalStatus } from '@prisma/client'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import BillApprovalList from '@/components/bills/BillApprovalList'
@@ -15,9 +16,9 @@ export default async function SiteBillsPage({ params, searchParams }: { params: 
   const { tab } = await searchParams
   const activeTab = tab || 'PENDING'
 
-  const whereClause: any = { companyId, siteId, deletedAt: null }
+  const whereClause: Prisma.ExpenseWhereInput = { companyId, siteId, deletedAt: null }
   if (activeTab !== 'ALL') {
-    whereClause.approvalStatus = activeTab
+    whereClause.approvalStatus = activeTab as ApprovalStatus
   }
 
   const bills = await prisma.expense.findMany({

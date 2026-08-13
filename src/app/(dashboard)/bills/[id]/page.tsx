@@ -1,14 +1,68 @@
 import React from 'react'
 import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { redirect } from 'next/navigation'
-import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 import Link from 'next/link'
-import { ArrowLeft, FileText, CheckCircle2, Clock, AlertCircle, Building2, Calendar, CreditCard, ShieldCheck, Download, Printer, Share2, History, IndianRupee, Tag, User, Receipt, Sparkles, Check, ChevronRight } from 'lucide-react'
+import { ArrowLeft, FileText, CheckCircle2, Clock, AlertCircle, Building2, CreditCard, ShieldCheck, Download, Printer, History, Tag, User, Receipt, Check, ChevronRight } from 'lucide-react'
 
 export const metadata = {
   title: 'Bill & Invoice Audit Details | Civil Tracker',
   description: 'Detailed financial audit, GST reconciliation, payment history, and approval timeline.',
+}
+
+type ExpenseWithRelations = Prisma.ExpenseGetPayload<{
+  include: {
+    site: true
+    createdBy: true
+    billAttachments: true
+  }
+}>
+
+type BillPaymentHistoryEntry = {
+  id: string
+  date: Date
+  amount: number
+  mode: string
+  reference: string
+  status: string
+}
+
+type BillTimelineEntry = {
+  id: string
+  action: string
+  actor: string
+  date: Date
+  status: string
+  note: string
+}
+
+type BillVendorInfo = {
+  name: string
+  gst: string
+  phone: string
+  email: string
+  address: string
+}
+
+type BillRecord = {
+  id: string
+  description: string
+  amount: number
+  baseAmount: number
+  gstAmount: number
+  category: string
+  paymentMode: string
+  approvalStatus: string
+  notes: string | null
+  invoiceNumber: string
+  invoiceDate: Date
+  gstNumber: string
+  site: ExpenseWithRelations['site']
+  vendor: BillVendorInfo
+  paymentHistory: BillPaymentHistoryEntry[]
+  timeline: BillTimelineEntry[]
 }
 
 export default async function BillDetailPage({
@@ -19,57 +73,81 @@ export default async function BillDetailPage({
   const user = await requireUser()
   if (!user.companyId) redirect('/login')
 
-  const params = await paramsPromise;
+  const params = await paramsPromise
 
-  let billRecord: any = null;
-  try {
-    // @ts-ignore - Exact prompt query requirement
-    billRecord = await prisma.bill.findUnique({ where: { id: params.id }, include: { site: true, vendor: true } });
-  } catch (err) {
-    const expense = await prisma.expense.findUnique({
-      where: { id: params.id },
-      include: { site: true, createdBy: true, billAttachments: true }
-    });
-    if (expense) {
-      const amt = Number(expense.amount) || 0
-      const baseAmt = Math.round(amt / 1.18)
-      const gstAmt = amt - baseAmt
+  const expense = await prisma.expense.findUnique({
+    where: { id: params.id },
+    include: { site: true, createdBy: true, billAttachments: true },
+  })
 
-      billRecord = {
-        id: expense.id,
-        description: expense.description,
-        amount: amt,
-        baseAmount: baseAmt,
-        gstAmount: gstAmt,
-        category: expense.category,
-        paymentMode: expense.paymentMode,
-        approvalStatus: expense.approvalStatus,
-        notes: expense.notes,
-        invoiceNumber: expense.billNumber || `INV-${expense.id.slice(-6).toUpperCase()}`,
-        invoiceDate: expense.billDate || expense.createdAt,
-        gstNumber: '27AABCU9603R1ZM',
-        site: expense.site,
-        vendor: {
-          name: expense.paidTo || 'Ultratech Cement & Building Supplies Pvt Ltd',
-          gst: '27AABCU9603R1ZM',
-          phone: '+91 98230 14520',
-          email: 'accounts@ultratechsupplies.in',
-          address: 'Plot 42, MIDC Industrial Area, Chinchwad, Pune - 411019'
-        },
-        paymentHistory: [
-          { id: 'pay-1', date: expense.createdAt, amount: amt, mode: expense.paymentMode, reference: `NEFT-IBKL${expense.id.slice(-6).toUpperCase()}`, status: expense.approvalStatus === 'PAID' ? 'COMPLETED' : 'PROCESSING' }
-        ],
-        timeline: [
-          { id: 'tl-1', action: 'Invoice Uploaded & Created', actor: expense.createdBy?.name || user.name, date: expense.createdAt, status: 'SUBMITTED', note: 'Original vendor tax invoice attached.' },
-          { id: 'tl-2', action: 'Store Delivery Verification', actor: 'Rajesh Kumar (Site Storekeeper)', date: new Date(expense.createdAt.getTime() + 3600000), status: 'VERIFIED', note: 'Goods received in good condition. Stock register updated.' },
-          { id: 'tl-3', action: 'Accounts GST Audit & Sign-off', actor: 'Sunil Sharma (Accounts Head)', date: expense.approvedAt || new Date(expense.createdAt.getTime() + 7200000), status: expense.approvalStatus, note: expense.approvalStatus === 'APPROVED' || expense.approvalStatus === 'PAID' ? '2B match verified on GST portal. ITC eligible.' : 'Awaiting PM sign-off.' }
-        ]
-      }
-    }
+  if (!expense) {
+    redirect('/bills')
   }
 
-  if (!billRecord) {
-    redirect('/bills')
+  const amt = Number(expense.amount) || 0
+  const baseAmt = Math.round(amt / 1.18)
+  const gstAmt = amt - baseAmt
+
+  const billRecord: BillRecord = {
+    id: expense.id,
+    description: expense.description,
+    amount: amt,
+    baseAmount: baseAmt,
+    gstAmount: gstAmt,
+    category: expense.category,
+    paymentMode: expense.paymentMode,
+    approvalStatus: expense.approvalStatus,
+    notes: expense.notes,
+    invoiceNumber: expense.billNumber || `INV-${expense.id.slice(-6).toUpperCase()}`,
+    invoiceDate: expense.billDate || expense.createdAt,
+    gstNumber: '27AABCU9603R1ZM',
+    site: expense.site,
+    vendor: {
+      name: expense.paidTo || 'Ultratech Cement & Building Supplies Pvt Ltd',
+      gst: '27AABCU9603R1ZM',
+      phone: '+91 98230 14520',
+      email: 'accounts@ultratechsupplies.in',
+      address: 'Plot 42, MIDC Industrial Area, Chinchwad, Pune - 411019',
+    },
+    paymentHistory: [
+      {
+        id: 'pay-1',
+        date: expense.createdAt,
+        amount: amt,
+        mode: expense.paymentMode,
+        reference: `NEFT-IBKL${expense.id.slice(-6).toUpperCase()}`,
+        status: expense.approvalStatus === 'PAID' ? 'COMPLETED' : 'PROCESSING',
+      },
+    ],
+    timeline: [
+      {
+        id: 'tl-1',
+        action: 'Invoice Uploaded & Created',
+        actor: expense.createdBy?.name || user.name,
+        date: expense.createdAt,
+        status: 'SUBMITTED',
+        note: 'Original vendor tax invoice attached.',
+      },
+      {
+        id: 'tl-2',
+        action: 'Store Delivery Verification',
+        actor: 'Rajesh Kumar (Site Storekeeper)',
+        date: new Date(expense.createdAt.getTime() + 3600000),
+        status: 'VERIFIED',
+        note: 'Goods received in good condition. Stock register updated.',
+      },
+      {
+        id: 'tl-3',
+        action: 'Accounts GST Audit & Sign-off',
+        actor: 'Sunil Sharma (Accounts Head)',
+        date: expense.approvedAt || new Date(expense.createdAt.getTime() + 7200000),
+        status: expense.approvalStatus,
+        note:
+          expense.approvalStatus === 'APPROVED' || expense.approvalStatus === 'PAID'
+            ? '2B match verified on GST portal. ITC eligible.'
+            : 'Awaiting PM sign-off.',
+      },
+    ],
   }
 
   const getStatusBadge = (status: string) => {
@@ -213,7 +291,7 @@ export default async function BillDetailPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                  {billRecord.paymentHistory.map((txn: any) => (
+                  {billRecord.paymentHistory.map((txn) => (
                     <tr key={txn.id}>
                       <td className="py-3.5 font-mono font-bold text-xs text-slate-800 dark:text-slate-200">{txn.reference}</td>
                       <td className="py-3.5 text-xs font-semibold text-slate-600 dark:text-slate-300">{txn.mode}</td>
@@ -286,7 +364,7 @@ export default async function BillDetailPage({
             </div>
 
             <div className="relative pl-6 space-y-6 before:content-[''] before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
-              {billRecord.timeline.map((step: any, idx: number) => {
+              {billRecord.timeline.map((step, idx) => {
                 const isLast = idx === billRecord.timeline.length - 1
                 return (
                   <div key={step.id} className="relative group">

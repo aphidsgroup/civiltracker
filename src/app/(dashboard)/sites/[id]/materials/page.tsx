@@ -71,7 +71,7 @@ export default async function SiteMaterialsPage({ params }: { params: Promise<{ 
             <div className="text-center py-12 bg-slate-50 rounded-b-xl">
               <Boxes size={40} className="text-slate-300 mx-auto mb-3" />
               <div className="font-bold text-slate-700">No Materials Tracked</div>
-              <div className="text-sm text-slate-500 mt-1 mb-4">You haven't added any materials to this site yet.</div>
+              <div className="text-sm text-slate-500 mt-1 mb-4">You haven&apos;t added any materials to this site yet.</div>
               <Link href={`/materials/new?siteId=${siteId}`} className="inline-flex font-bold text-sm text-[#fc6e20] hover:text-[#e85b0d]">
                 + Add material inventory
               </Link>

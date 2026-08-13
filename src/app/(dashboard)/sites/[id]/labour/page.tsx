@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { LabourTrade } from '@prisma/client'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Users, UserCheck, UserMinus, HardHat, Plus, AlertCircle } from 'lucide-react'
@@ -29,7 +30,7 @@ export default async function SiteLabourPage({ params }: { params: Promise<{ id:
     const status = formData.get('status') as string
     await prisma.labour.updateMany({
       where: { id, companyId: session.user.companyId },
-      data: { name, phone: phone || null, trade: trade as any, dailyWage, overtimeRate, openingAdvance, siteId, isActive: status === 'active' }
+      data: { name, phone: phone || null, trade: trade as LabourTrade, dailyWage, overtimeRate, openingAdvance, siteId, isActive: status === 'active' }
     })
     revalidatePath(`/sites/${siteId}/labour`)
   }
@@ -164,7 +165,7 @@ export default async function SiteLabourPage({ params }: { params: Promise<{ id:
           <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
             <HardHat size={40} className="text-slate-300 mx-auto mb-3" />
             <div className="font-bold text-slate-700">No Labour Assigned</div>
-            <div className="text-sm text-slate-500 mt-1 mb-4">You haven't assigned any workers to this site yet.</div>
+            <div className="text-sm text-slate-500 mt-1 mb-4">You haven&apos;t assigned any workers to this site yet.</div>
             <Link href="/labour/new" className="inline-flex font-bold text-sm text-[#fc6e20] hover:text-[#e85b0d]">
               + Add a worker now
             </Link>

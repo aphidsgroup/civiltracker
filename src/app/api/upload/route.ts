@@ -76,9 +76,10 @@ export async function POST(request: Request) {
         else resolve(res as typeof result)
       })
     })
-  } catch (cloudErr: any) {
-    console.error('[Upload] Cloudinary error:', cloudErr?.message ?? cloudErr)
-    return NextResponse.json({ error: `Upload failed: ${cloudErr?.message ?? 'Cloudinary error'}` }, { status: 500 })
+  } catch (cloudErr: unknown) {
+    const message = cloudErr instanceof Error ? cloudErr.message : 'Cloudinary error'
+    console.error('[Upload] Cloudinary error:', message)
+    return NextResponse.json({ error: `Upload failed: ${message}` }, { status: 500 })
   }
 
   // Only create mediaAsset if we have a valid companyId
@@ -101,8 +102,9 @@ export async function POST(request: Request) {
         },
       })
     }
-  } catch (dbErr: any) {
-    console.error('[Upload] DB mediaAsset error:', dbErr?.message ?? dbErr)
+  } catch (dbErr: unknown) {
+    const message = dbErr instanceof Error ? dbErr.message : dbErr
+    console.error('[Upload] DB mediaAsset error:', message)
     // Don't fail — image already uploaded to Cloudinary
   }
 

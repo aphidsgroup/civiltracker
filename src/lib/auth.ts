@@ -2,7 +2,18 @@ import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
-import { Role } from '@prisma/client'
+import { Prisma, Role } from '@prisma/client'
+
+type ModuleControlsValue = Prisma.JsonValue | null
+
+type AuthUserPayload = {
+  id: string
+  role: Role
+  companyId?: string | null
+  companySlug?: string | null
+  companyName?: string | null
+  moduleControls?: ModuleControlsValue
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -68,11 +79,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        token.role = (user as { role: Role }).role
-        token.companyId = (user as { companyId?: string }).companyId
-        token.companySlug = (user as { companySlug?: string }).companySlug
-        token.companyName = (user as { companyName?: string }).companyName
-        token.moduleControls = (user as { moduleControls?: any }).moduleControls
+        token.role = (user as AuthUserPayload).role
+        token.companyId = (user as AuthUserPayload).companyId ?? undefined
+        token.companySlug = (user as AuthUserPayload).companySlug ?? undefined
+        token.companyName = (user as AuthUserPayload).companyName ?? undefined
+        token.moduleControls = (user as AuthUserPayload).moduleControls ?? undefined
       }
       return token
     },
@@ -83,7 +94,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.companyId = token.companyId as string | undefined
         session.user.companySlug = token.companySlug as string | undefined
         session.user.companyName = token.companyName as string | undefined
-        session.user.moduleControls = token.moduleControls as any
+        session.user.moduleControls = token.moduleControls as ModuleControlsValue | undefined
       }
       return session
     },
@@ -101,7 +112,7 @@ declare module 'next-auth' {
     companyId?: string | null
     companySlug?: string | null
     companyName?: string | null
-    moduleControls?: any
+    moduleControls?: ModuleControlsValue
   }
   interface Session {
     user: {
@@ -112,7 +123,7 @@ declare module 'next-auth' {
       companyId?: string
       companySlug?: string
       companyName?: string
-      moduleControls?: any
+      moduleControls?: ModuleControlsValue
       image?: string | null
     }
   }
@@ -122,6 +133,6 @@ declare module 'next-auth' {
     companyId?: string
     companySlug?: string
     companyName?: string
-    moduleControls?: any
+    moduleControls?: ModuleControlsValue
   }
 }

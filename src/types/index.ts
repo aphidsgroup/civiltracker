@@ -1,4 +1,4 @@
-import type { Role, ApprovalStatus, ApprovalEntityType, ApprovalPriority, SiteStatus, ExpenseCategory, PaymentMode } from '@prisma/client'
+import type { Role, ApprovalStatus, ApprovalEntityType, ApprovalPriority, SiteStatus, ExpenseCategory, PaymentMode, Prisma } from '@prisma/client'
 
 export type { Role, ApprovalStatus, ApprovalEntityType, ApprovalPriority, SiteStatus, ExpenseCategory, PaymentMode }
 
@@ -10,7 +10,7 @@ export interface SessionUser {
   companyId?: string
   companySlug?: string
   companyName?: string
-  moduleControls?: any
+  moduleControls?: Prisma.JsonValue | null
 }
 
 export interface DashboardKpi {

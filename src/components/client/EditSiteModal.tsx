@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition } from 'react'
 import { updateSiteDetails } from '@/actions/site'
 import { Loader2, X, Building2 } from 'lucide-react'
 
@@ -19,37 +19,74 @@ type SiteData = {
   status: string
 }
 
+type SiteFormState = {
+  name: string
+  location: string
+  address: string
+  projectType: string
+  clientName: string
+  clientPhone: string
+  areaSqft: string
+  budget: string
+  startDate: string
+  targetEndDate: string
+  status: string
+}
+
+function toSiteFormState(site: SiteData): SiteFormState {
+  return {
+    name: site.name,
+    location: site.location,
+    address: site.address || '',
+    projectType: site.projectType || '',
+    clientName: site.clientName || '',
+    clientPhone: site.clientPhone || '',
+    areaSqft: site.areaSqft ? String(site.areaSqft) : '',
+    budget: String(site.budget),
+    startDate: site.startDate ? new Date(site.startDate).toISOString().split('T')[0] : '',
+    targetEndDate: site.targetEndDate ? new Date(site.targetEndDate).toISOString().split('T')[0] : '',
+    status: site.status,
+  }
+}
+
 export function EditSiteModal({ site }: { site: SiteData }) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   
-  const [name, setName] = useState(site.name)
-  const [location, setLocation] = useState(site.location)
-  const [address, setAddress] = useState(site.address || '')
-  const [projectType, setProjectType] = useState(site.projectType || '')
+  const initialState = toSiteFormState(site)
+  const [name, setName] = useState(initialState.name)
+  const [location, setLocation] = useState(initialState.location)
+  const [address, setAddress] = useState(initialState.address)
+  const [projectType, setProjectType] = useState(initialState.projectType)
   
-  const [clientName, setClientName] = useState(site.clientName || '')
-  const [clientPhone, setClientPhone] = useState(site.clientPhone || '')
-  const [areaSqft, setAreaSqft] = useState(site.areaSqft ? String(site.areaSqft) : '')
+  const [clientName, setClientName] = useState(initialState.clientName)
+  const [clientPhone, setClientPhone] = useState(initialState.clientPhone)
+  const [areaSqft, setAreaSqft] = useState(initialState.areaSqft)
   
-  const [budget, setBudget] = useState(String(site.budget))
-  const [startDate, setStartDate] = useState(site.startDate ? new Date(site.startDate).toISOString().split('T')[0] : '')
-  const [targetEndDate, setTargetEndDate] = useState(site.targetEndDate ? new Date(site.targetEndDate).toISOString().split('T')[0] : '')
-  const [status, setStatus] = useState(site.status)
+  const [budget, setBudget] = useState(initialState.budget)
+  const [startDate, setStartDate] = useState(initialState.startDate)
+  const [targetEndDate, setTargetEndDate] = useState(initialState.targetEndDate)
+  const [status, setStatus] = useState(initialState.status)
 
-  useEffect(() => {
-    setName(site.name)
-    setLocation(site.location)
-    setAddress(site.address || '')
-    setProjectType(site.projectType || '')
-    setClientName(site.clientName || '')
-    setClientPhone(site.clientPhone || '')
-    setAreaSqft(site.areaSqft ? String(site.areaSqft) : '')
-    setBudget(String(site.budget))
-    setStartDate(site.startDate ? new Date(site.startDate).toISOString().split('T')[0] : '')
-    setTargetEndDate(site.targetEndDate ? new Date(site.targetEndDate).toISOString().split('T')[0] : '')
-    setStatus(site.status)
-  }, [site])
+  const resetForm = () => {
+    const nextState = toSiteFormState(site)
+    setName(nextState.name)
+    setLocation(nextState.location)
+    setAddress(nextState.address)
+    setProjectType(nextState.projectType)
+    setClientName(nextState.clientName)
+    setClientPhone(nextState.clientPhone)
+    setAreaSqft(nextState.areaSqft)
+    setBudget(nextState.budget)
+    setStartDate(nextState.startDate)
+    setTargetEndDate(nextState.targetEndDate)
+    setStatus(nextState.status)
+  }
+
+  const handleOpen = () => {
+    resetForm()
+    setOpen(true)
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -78,7 +115,7 @@ export function EditSiteModal({ site }: { site: SiteData }) {
   return (
     <>
       <button 
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
         className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer shadow-sm transition-colors"
       >
         Edit Site

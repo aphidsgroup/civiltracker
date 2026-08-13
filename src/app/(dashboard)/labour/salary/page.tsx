@@ -1,30 +1,33 @@
-import React from 'react'
 import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
+import { SalaryRun } from '@prisma/client'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
-import { Banknote, CheckCircle2, Clock, AlertCircle, Plus, Filter, Calendar, Building2, ArrowUpRight, Wallet, ShieldAlert, Coins, Sparkles, Layers, ArrowRight } from 'lucide-react'
+import { Banknote, CheckCircle2, Clock, Plus, Filter, Calendar, Building2, Wallet, ShieldAlert, Coins, Sparkles, Layers, ArrowRight } from 'lucide-react'
 
 export const metadata = {
   title: 'Salary Runs & Wages | Civil Tracker',
   description: 'Manage weekly and monthly labour wage disbursements and advance deductions.',
 }
 
+type SalaryRunWithSitePlaceholder = SalaryRun & {
+  site: { name: string } | null
+}
+
 export default async function LabourSalaryPage() {
   const user = await requireUser()
   if (!user.companyId) redirect('/login')
 
-  let salaryRuns: any[] = [];
-  try {
-    // @ts-ignore - Exact prompt query requirement
-    salaryRuns = await prisma.salaryRun.findMany({ where: { companyId: user.companyId }, include: { site: true }, orderBy: { createdAt: 'desc' } });
-  } catch (err) {
-    const rawRuns = await prisma.salaryRun.findMany({ where: { companyId: user.companyId }, orderBy: { createdAt: 'desc' } });
-    salaryRuns = rawRuns.map(run => ({ ...run, site: null }));
-  }
+  const rawRuns = await prisma.salaryRun.findMany({
+    where: { companyId: user.companyId },
+    orderBy: { createdAt: 'desc' },
+  })
 
-  const displayRuns = salaryRuns
+  const displayRuns: SalaryRunWithSitePlaceholder[] = rawRuns.map(run => ({
+    ...run,
+    site: null,
+  }))
 
   const totalGrossSum = displayRuns.reduce((acc, r) => acc + Number(r.totalGross), 0)
   const totalAdvanceSum = displayRuns.reduce((acc, r) => acc + Number(r.totalAdvance), 0)
@@ -155,10 +158,10 @@ export default async function LabourSalaryPage() {
               <Banknote className="w-8 h-8 text-slate-400" />
             </div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2 m-0">No salary runs found</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm m-0">You haven't generated any salary runs yet. Create a new salary run to process wages.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm m-0">You haven&apos;t generated any salary runs yet. Create a new salary run to process wages.</p>
           </div>
         ) : (
-          displayRuns.map((run: any) => (
+          displayRuns.map((run) => (
             <div key={run.id} className="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-1 h-full bg-[#fc6e20] group-hover:bg-[#fc6e20] transition-colors" />
 

@@ -28,8 +28,8 @@ export default function SuperAdminPasswordForm() {
       
       // Reset success message after 3 seconds
       setTimeout(() => setSuccess(false), 3000)
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update password')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update password')
     } finally {
       setLoading(false)
     }

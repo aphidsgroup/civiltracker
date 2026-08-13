@@ -93,7 +93,7 @@ export default async function MobileNotificationsPage() {
             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCheck className="text-slate-300" size={32} />
             </div>
-            <h3 className="text-slate-900 font-bold mb-1">You're all caught up!</h3>
+            <h3 className="text-slate-900 font-bold mb-1">You&apos;re all caught up!</h3>
             <p className="text-slate-500 text-sm">No new notifications or alerts at this time.</p>
           </div>
         ) : (

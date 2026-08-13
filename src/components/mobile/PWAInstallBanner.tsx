@@ -13,23 +13,22 @@ export default function PWAInstallBanner() {
   const [dismissed, setDismissed] = useState(false)
   const [installed, setInstalled] = useState(false)
 
-  useEffect(() => {
-    // Hide if already installed as PWA
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      setInstalled(true)
-      return
-    }
+  const isStandalone = typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches
 
+  useEffect(() => {
     const handler = (e: Event) => {
       e.preventDefault()
       setDeferredPrompt(e as BeforeInstallPromptEvent)
     }
 
+    const installHandler = () => setInstalled(true)
+
     window.addEventListener('beforeinstallprompt', handler)
-    window.addEventListener('appinstalled', () => setInstalled(true))
+    window.addEventListener('appinstalled', installHandler)
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handler)
+      window.removeEventListener('appinstalled', installHandler)
     }
   }, [])
 
@@ -45,7 +44,7 @@ export default function PWAInstallBanner() {
     }
   }
 
-  if (installed || dismissed) return null
+  if (installed || dismissed || isStandalone) return null
 
   return (
     <div className="bg-[#fc6e20] text-white rounded-[16px] p-3.5 flex items-center justify-between shadow-md">

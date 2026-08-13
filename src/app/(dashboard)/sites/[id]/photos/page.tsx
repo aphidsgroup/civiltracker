@@ -1,11 +1,25 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { redirect } from 'next/navigation'
-import Image from 'next/image'
-import { Camera, AlertCircle, CheckCircle2, Clock, XCircle } from 'lucide-react'
+import { Camera, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { PhotoApprovalCard } from '@/components/admin/PhotoApprovalCard'
 
 export const dynamic = 'force-dynamic'
+
+type PhotoApprovalItem = Prisma.SitePhotoGetPayload<{
+  include: {
+    task: {
+      include: {
+        category: {
+          include: {
+            stage: true
+          }
+        }
+      }
+    }
+  }
+}>
 
 export default async function SitePhotosPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -24,16 +38,16 @@ export default async function SitePhotosPage({ params }: { params: Promise<{ id:
   })
 
   // All photos for this site — pending admin approval
-  const pendingApprovalPhotos = await prisma.sitePhoto.findMany({
+  const pendingApprovalPhotos: PhotoApprovalItem[] = await prisma.sitePhoto.findMany({
     where: { siteId, approvedForClient: false },
     include: { task: { include: { category: { include: { stage: true } } } } },
     orderBy: { createdAt: 'desc' }
   })
 
   // Admin-approved photos
-  const approvedPhotos = await prisma.sitePhoto.findMany({
+  const approvedPhotos: PhotoApprovalItem[] = await prisma.sitePhoto.findMany({
     where: { siteId, approvedForClient: true },
-    include: { task: true },
+    include: { task: { include: { category: { include: { stage: true } } } } },
     orderBy: { approvedAt: 'desc' }
   })
 
@@ -84,7 +98,7 @@ export default async function SitePhotosPage({ params }: { params: Promise<{ id:
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {pendingApprovalPhotos.map(photo => (
-              <PhotoApprovalCard key={photo.id} photo={photo as any} mode="pending" />
+              <PhotoApprovalCard key={photo.id} photo={photo} mode="pending" />
             ))}
           </div>
         </div>
@@ -101,7 +115,7 @@ export default async function SitePhotosPage({ params }: { params: Promise<{ id:
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {approvedPhotos.map(photo => (
-              <PhotoApprovalCard key={photo.id} photo={photo as any} mode="approved" />
+              <PhotoApprovalCard key={photo.id} photo={photo} mode="approved" />
             ))}
           </div>
         </div>

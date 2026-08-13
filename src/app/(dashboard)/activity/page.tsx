@@ -33,6 +33,10 @@ type Activity = {
   siteName: string
 }
 
+type ChecklistLogPayload = {
+  taskName?: string
+}
+
 function ActivityIcon({ type }: { type: ActivityType }) {
   const cls = 'w-[18px] h-[18px]'
   if (type === 'EXPENSE') return <IndianRupee className={cls} strokeWidth={2.5} />
@@ -70,8 +74,6 @@ export default async function DashboardActivityPage({
   })
   
   const siteIds = sites.map(s => s.id)
-  const now = new Date()
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
   const activities: Activity[] = []
 
@@ -178,7 +180,7 @@ export default async function DashboardActivityPage({
     })
 
     checklistLogs.forEach(log => {
-      const data = log.after as any
+      const data = (log.after ?? null) as ChecklistLogPayload | null
       activities.push({
         id: `chk-${log.id}`,
         type: 'CHECKLIST',

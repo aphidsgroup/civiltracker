@@ -6,7 +6,7 @@ import { Check, X, Clock, AlertCircle, Sparkles, Building2, Tag, ShieldCheck, Fi
 interface PurchaseRequestItem {
   id: string
   description: string
-  quantity: any
+  quantity: number | string
   unit: string | null
   urgency: string
   status: string

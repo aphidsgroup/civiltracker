@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { redirect } from 'next/navigation'
 import MobileAttendanceClient from '@/components/mobile/MobileAttendanceClient'
 import { Users, Sparkles } from 'lucide-react'
@@ -7,6 +8,26 @@ import { Users, Sparkles } from 'lucide-react'
 export const metadata = {
   title: 'Field Labour Muster Roll | Civil Tracker Mobile',
   description: 'Mark worker daily attendance, log contractor headcount, and manage advance payments.',
+}
+
+type LabourWithAttendanceToday = Prisma.LabourGetPayload<{
+  include: {
+    attendance: true
+    site: { select: { name: true } }
+  }
+}>
+
+type MappedLabour = {
+  id: string
+  name: string
+  trade: LabourWithAttendanceToday['trade']
+  phone: string | null
+  dailyRate: number
+  siteId: string
+  siteName: string
+  status: LabourWithAttendanceToday['attendance'][number]['status'] | 'UNMARKED'
+  advance: number
+  startTime: string | null
 }
 
 export default async function MobileAttendancePage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
@@ -43,7 +64,7 @@ export default async function MobileAttendancePage({ searchParams }: { searchPar
 
 
 
-  const mapLabour = (l: any) => ({
+  const mapLabour = (l: LabourWithAttendanceToday): MappedLabour => ({
     id: l.id,
     name: l.name,
     trade: l.trade,

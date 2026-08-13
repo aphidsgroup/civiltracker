@@ -39,7 +39,12 @@ export function ChecklistClient({ siteId, checklist }: { siteId: string, checkli
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [editTaskName, setEditTaskName] = useState('')
 
-  const handleToggleTask = (taskId: string, currentStatus: string, field: 'status' | 'clientDone' | 'neglected', currentValue: any) => {
+  const handleToggleTask = (
+    taskId: string,
+    currentStatus: string,
+    field: 'status' | 'clientDone' | 'neglected',
+    currentValue?: boolean,
+  ) => {
     startTransition(async () => {
       if (field === 'status') {
         const next = currentStatus === 'COMPLETED' ? 'PENDING' : 'COMPLETED'
@@ -166,7 +171,7 @@ export function ChecklistClient({ siteId, checklist }: { siteId: string, checkli
                       <input 
                         type="checkbox"
                         checked={task.status === 'COMPLETED'}
-                        onChange={() => handleToggleTask(task.id, task.status, 'status', task.status)}
+                        onChange={() => handleToggleTask(task.id, task.status, 'status')}
                         disabled={task.isNeglected || task.isClientDone || isPending}
                         className="mt-1 w-5 h-5 rounded border-slate-300 text-green-500 focus:ring-green-500"
                       />

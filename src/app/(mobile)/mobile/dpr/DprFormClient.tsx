@@ -21,13 +21,23 @@ export default function DprFormClient({
   const [workDone, setWorkDone] = useState('')
 
   useEffect(() => {
-    if (siteId) {
-      getPendingTasks(siteId).then(data => {
-        setTasks(data)
+    if (!siteId) {
+      const resetTimer = setTimeout(() => {
+        setTasks([])
         setSelectedTasks(new Set())
-      })
-    } else {
-      setTasks([])
+      }, 0)
+      return () => clearTimeout(resetTimer)
+    }
+
+    let cancelled = false
+    getPendingTasks(siteId).then(data => {
+      if (cancelled) return
+      setTasks(data)
+      setSelectedTasks(new Set())
+    })
+
+    return () => {
+      cancelled = true
     }
   }, [siteId])
 

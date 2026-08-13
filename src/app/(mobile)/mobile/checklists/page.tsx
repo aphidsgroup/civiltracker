@@ -73,7 +73,7 @@ export default async function MobileChecklistsPage({ searchParams }: { searchPar
             </div>
             <h2 className="text-lg font-bold text-slate-800">No Checklist Found</h2>
             <p className="text-sm text-slate-500 mt-2 max-w-[250px] mx-auto">
-              This site doesn't have an active checklist. A company admin must enable it first.
+              This site doesn&apos;t have an active checklist. A company admin must enable it first.
             </p>
           </div>
         ) : (

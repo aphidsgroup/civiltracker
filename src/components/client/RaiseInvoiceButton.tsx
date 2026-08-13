@@ -24,8 +24,8 @@ export function RaiseInvoiceButton({ client }: Props) {
       if (client.siteId) fd.set('siteId', client.siteId)
       const result = await raiseInvoice(fd)
       setSuccess(result.invoiceNumber)
-    } catch (err: any) {
-      setError(err?.message ?? 'Failed to raise invoice')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to raise invoice')
     } finally {
       setLoading(false)
     }

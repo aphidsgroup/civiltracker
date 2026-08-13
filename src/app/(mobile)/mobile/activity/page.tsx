@@ -29,6 +29,10 @@ type Activity = {
   time: Date
 }
 
+type ChecklistLogPayload = {
+  taskName?: string
+}
+
 function ActivityIcon({ type }: { type: ActivityType }) {
   const cls = 'w-[18px] h-[18px]'
   if (type === 'EXPENSE') return <IndianRupee className={cls} strokeWidth={2.5} />
@@ -67,8 +71,6 @@ export default async function MobileActivityPage({
     : await prisma.site.findFirst({ where: { companyId }, orderBy: { createdAt: 'desc' } })
 
   const siteId = activeSite?.id
-  const now = new Date()
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
   const activities: Activity[] = []
 
@@ -168,7 +170,7 @@ export default async function MobileActivityPage({
     })
 
     checklistLogs.forEach(log => {
-      const data = log.after as any
+      const data = (log.after ?? null) as ChecklistLogPayload | null
       activities.push({
         id: `chk-${log.id}`,
         type: 'CHECKLIST',

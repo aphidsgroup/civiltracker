@@ -163,8 +163,8 @@ export default function AttendanceRegisterClient({
         setNewName('')
         setNewCustomTrade('')
       }
-    } catch (err: any) {
-      alert(err.message || 'Failed to add worker')
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to add worker')
     } finally {
       setAdding(false)
     }
@@ -207,8 +207,8 @@ export default function AttendanceRegisterClient({
         setAdvances(prev => ({ ...prev, [editingWorker.id]: Number(editAdv) || 0 }))
         setEditingWorker(null)
       }
-    } catch (err: any) {
-      alert(err.message || 'Failed to update worker')
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to update worker')
     } finally {
       setUpdating(false)
     }
@@ -228,8 +228,8 @@ export default function AttendanceRegisterClient({
         setSavedSuccess(true)
         setTimeout(() => setSavedSuccess(false), 4000)
       }
-    } catch (err: any) {
-      alert(err.message || 'Failed to save register')
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to save register')
     } finally {
       setIsSaving(false)
     }

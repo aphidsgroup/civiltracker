@@ -5,8 +5,17 @@ import { getPendingChecklistPhotos, uploadChecklistPhotoAction } from '@/actions
 import { compressImage } from '@/lib/compress-image'
 import { Camera, AlertTriangle, Loader2, X, Upload, CheckCircle2 } from 'lucide-react'
 
+type PendingChecklistPhotoTask = {
+  taskId: string
+  taskName: string
+  categoryName: string
+  stageName: string
+  siteId: string
+  siteName: string
+}
+
 export function ChecklistPhotoNag() {
-  const [pendingTasks, setPendingTasks] = useState<any[]>([])
+  const [pendingTasks, setPendingTasks] = useState<PendingChecklistPhotoTask[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [dismissed, setDismissed] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -29,9 +38,16 @@ export function ChecklistPhotoNag() {
   }, [])
 
   useEffect(() => {
-    fetchPending()
-    const interval = setInterval(fetchPending, 10000)
-    return () => clearInterval(interval)
+    const initialTimer = setTimeout(() => {
+      void fetchPending()
+    }, 0)
+    const interval = setInterval(() => {
+      void fetchPending()
+    }, 10000)
+    return () => {
+      clearTimeout(initialTimer)
+      clearInterval(interval)
+    }
   }, [fetchPending])
 
   // Re-show after 10s even if dismissed
@@ -98,8 +114,8 @@ export function ChecklistPhotoNag() {
         setIsOpen(false)
         fetchPending()
       }, 1800)
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Upload failed. Please try again.')
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Upload failed. Please try again.')
       setStatus('idle')
     }
   }
