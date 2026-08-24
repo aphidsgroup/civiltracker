@@ -98,12 +98,11 @@ function WorkerCard({ worker, sites, updateAction, markPaidAction, deactivateAct
   }
 
   const handleDeactivate = () => {
-    const typed = window.prompt(`Type "${worker.name}" to remove this worker from active labour. All records are kept.`)
-    if (typed === null) return
+    if (!window.confirm(`Remove "${worker.name}" from active labour? All records are kept.`)) return
     startTransition(async () => {
       const fd = new FormData()
       fd.append('id', worker.id)
-      fd.append('dangerConfirmText', typed)
+      fd.append('dangerConfirmed', 'true')
       await deactivateAction(fd)
     })
   }

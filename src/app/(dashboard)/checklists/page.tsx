@@ -9,9 +9,11 @@ export const dynamic = 'force-dynamic'
 
 export default async function ChecklistsIndexPage() {
   const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  if (!session?.user) redirect('/login')
 
+  const isSuperAdmin = session.user.role === 'SUPER_ADMIN'
   const companyId = session.user.companyId
+  if (!isSuperAdmin && !companyId) redirect('/login')
 
   const [globalTemplates, companyTemplates] = await Promise.all([
     prisma.checklistTemplate.findMany({
@@ -24,16 +26,18 @@ export default async function ChecklistsIndexPage() {
       },
       orderBy: { createdAt: 'asc' }
     }),
-    prisma.checklistTemplate.findMany({
-      where: { companyId, isGlobal: false },
-      include: {
-        stages: {
-          include: { categories: { include: { tasks: true } } }
-        },
-        _count: { select: { stages: true, projects: true } }
-      },
-      orderBy: { createdAt: 'desc' }
-    })
+    companyId
+      ? prisma.checklistTemplate.findMany({
+          where: { companyId, isGlobal: false },
+          include: {
+            stages: {
+              include: { categories: { include: { tasks: true } } }
+            },
+            _count: { select: { stages: true, projects: true } }
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+      : Promise.resolve([] as never[])
   ])
 
   const totalTasks = (t: typeof globalTemplates[0]) =>
@@ -56,7 +60,9 @@ export default async function ChecklistsIndexPage() {
         <div className="flex items-center gap-2 mb-4">
           <div className="w-2 h-2 rounded-full bg-amber-400" />
           <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Global Master Templates</h2>
-          <span className="text-xs text-slate-400 ml-1">(read-only — clone to customise)</span>
+          <span className="text-xs text-slate-400 ml-1">
+            {isSuperAdmin ? '(editable — applies to every company)' : '(read-only — clone to customise)'}
+          </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -104,13 +110,23 @@ export default async function ChecklistsIndexPage() {
                 <span>{t._count.projects} Sites</span>
               </div>
 
-              <CloneTemplateBtn templateId={t.id} />
+              {isSuperAdmin ? (
+                <Link
+                  href={`/checklists/${t.id}`}
+                  className="block w-full text-center py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-bold transition-colors"
+                >
+                  ✏️ Edit Master Template
+                </Link>
+              ) : (
+                <CloneTemplateBtn templateId={t.id} />
+              )}
             </div>
           ))}
         </div>
       </section>
 
       {/* Company Templates (editable) */}
+      {companyId && (
       <section>
         <div className="flex items-center gap-2 mb-4">
           <div className="w-2 h-2 rounded-full bg-sky-400" />
@@ -154,6 +170,7 @@ export default async function ChecklistsIndexPage() {
           </div>
         )}
       </section>
+      )}
 
       <p className="text-xs text-slate-400 text-center pb-4">
         When you create a new site, the template is applied automatically. You can tick/untick stages and tasks per-site during site creation.

@@ -79,12 +79,11 @@ function VendorCard({ vendor, updateAction, markPaidAction, deactivateAction }: 
   }
 
   const handleDeactivate = () => {
-    const typed = window.prompt(`Type "${vendor.name}" to deactivate this vendor. All PO data is kept.`)
-    if (typed === null) return
+    if (!window.confirm(`Deactivate vendor "${vendor.name}"? All PO data is kept.`)) return
     startTransition(async () => {
       const fd = new FormData()
       fd.append('id', vendor.id)
-      fd.append('dangerConfirmText', typed)
+      fd.append('dangerConfirmed', 'true')
       await deactivateAction(fd)
     })
   }
