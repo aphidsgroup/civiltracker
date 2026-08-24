@@ -55,7 +55,7 @@ async function removeClientAccount(formData: FormData) {
   const session = await auth()
   if (!session?.user?.companyId) return
   const memberId = formData.get('memberId') as string
-  const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
+  const confirmed = formData.get('dangerConfirmed') === 'true'
 
   const member = await prisma.companyMember.findUnique({
     where: { id: memberId, companyId: session.user.companyId },
@@ -63,9 +63,8 @@ async function removeClientAccount(formData: FormData) {
   })
   if (!member) throw new Error('Client account not found.')
 
-  const expected = (member.user.name ?? member.user.email).trim()
-  if (typed !== expected) {
-    throw new Error('Remove confirmation text did not match the client name/email.')
+  if (!confirmed) {
+    throw new Error('Removal must be explicitly confirmed.')
   }
 
   await prisma.companyMember.update({
@@ -249,10 +248,11 @@ export default async function ClientAccountsPage({ searchParams }: { searchParam
                       <form action={removeClientAccount}>
                         <input type="hidden" name="memberId" value={m.id} />
                         <DangerConfirmSubmit
+                          mode="confirm"
                           entityLabel={m.user.name ?? m.user.email}
                           confirmText={m.user.name ?? m.user.email}
                           buttonText="Deactivate Client"
-                          helperText="Type the exact client name or email to remove login access while keeping all project data."
+                          helperText="This removes login access while keeping all project data."
                         />
                       </form>
                     </div>

@@ -42,7 +42,7 @@ async function removeFromCompany(formData: FormData) {
   const session = await auth()
   if (!session?.user?.companyId) return
   const memberId = formData.get('memberId') as string
-  const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
+  const confirmed = formData.get('dangerConfirmed') === 'true'
 
   const member = await prisma.companyMember.findUnique({
     where: { id: memberId, companyId: session.user.companyId },
@@ -50,9 +50,8 @@ async function removeFromCompany(formData: FormData) {
   })
   if (!member) throw new Error('Team member not found.')
 
-  const expected = (member.user.name ?? member.user.email).trim()
-  if (typed !== expected) {
-    throw new Error('Remove confirmation text did not match the team member name/email.')
+  if (!confirmed) {
+    throw new Error('Removal must be explicitly confirmed.')
   }
 
   await prisma.companyMember.update({
@@ -271,10 +270,11 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
               <form action={removeFromCompany} className="mt-4">
                 <input type="hidden" name="memberId" value={member.id} />
                 <DangerConfirmSubmit
+                  mode="confirm"
                   entityLabel={member.user.name ?? member.user.email}
                   confirmText={member.user.name ?? member.user.email}
                   buttonText="Remove from Company"
-                  helperText="Type the exact team member name or email to deactivate their company access while keeping all historical data."
+                  helperText="This deactivates their company access while keeping all historical data."
                   variant="card"
                 />
               </form>

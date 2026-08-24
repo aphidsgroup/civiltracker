@@ -185,13 +185,13 @@ function verifyCanApproveEntity(role: string, entityType: string) {
   }
 }
 
-export async function approveApprovalAction(id: string, note?: string, confirmationText?: string) {
+export async function approveApprovalAction(id: string, note?: string, confirmed?: boolean) {
   const user = await requireUser()
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
   const approval = await prisma.approval.findFirst({ where: { id, ...companyFilter } })
   if (!approval) throw new Error('Approval not found')
-  if ((confirmationText ?? '').trim() !== 'APPROVE') {
-    throw new Error('Approval confirmation text must exactly match APPROVE')
+  if (confirmed !== true) {
+    throw new Error('Approval must be explicitly confirmed')
   }
   if (approval.currentStatus === 'APPROVED' || approval.currentStatus === 'REJECTED') {
     throw new Error(`Approval already processed (${approval.currentStatus})`)
@@ -320,7 +320,7 @@ export async function rejectApprovalAction(id: string, reason: string) {
   return updated
 }
 
-export async function markApprovalPaidAction(id: string, paymentData?: { mode?: string; ref?: string; note?: string }, confirmationText?: string) {
+export async function markApprovalPaidAction(id: string, paymentData?: { mode?: string; ref?: string; note?: string }, confirmed?: boolean) {
   const user = await requireUser()
   const canManagePay = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'ACCOUNTANT'].includes(user.role) || hasPermission(user.role as never, 'salary.markPaid') || hasPermission(user.role as never, 'payments.manage')
   if (!canManagePay) {
@@ -329,8 +329,8 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
 
   const approval = await prisma.approval.findUnique({ where: { id } })
   if (!approval) throw new Error('Approval not found')
-  if ((confirmationText ?? '').trim() !== 'PAID') {
-    throw new Error('Disbursement confirmation text must exactly match PAID')
+  if (confirmed !== true) {
+    throw new Error('Disbursement must be explicitly confirmed')
   }
 
   const updated = await prisma.approval.update({

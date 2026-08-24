@@ -48,15 +48,15 @@ async function deactivateVendor(formData: FormData) {
   const session = await auth()
   if (!session?.user?.companyId) return
   const id = formData.get('id') as string
-  const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
+  const confirmed = formData.get('dangerConfirmed') === 'true'
 
   const vendor = await prisma.vendor.findUnique({
     where: { id, companyId: session.user.companyId },
     select: { id: true, name: true, category: true, amountPayable: true, isActive: true },
   })
   if (!vendor) throw new Error('Vendor not found.')
-  if (typed !== vendor.name.trim()) {
-    throw new Error('Remove confirmation text did not match the vendor name.')
+  if (!confirmed) {
+    throw new Error('Deactivation must be explicitly confirmed.')
   }
 
   await prisma.vendor.update({ where: { id, companyId: session.user.companyId }, data: { isActive: false } })
