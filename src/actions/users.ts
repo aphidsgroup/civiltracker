@@ -7,157 +7,329 @@ import { Role } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { logActivity } from '@/lib/audit'
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 
-const EMPLOYEE_LIMIT = 15
-const CLIENT_LIMIT = 15
+import { canAssignRole, canManageMemberWithRole, isInvitableEmployeeRole } from '@/lib/permissions'
+import { inviteEmployeeSchema, updateEmployeeSchema } from '@/lib/validation/users'
 
-const CLIENT_ROLES: Role[] = ['CLIENT' as Role]
-const EMPLOYEE_ROLES: Role[] = [
-  'COMPANY_ADMIN',
-  'PROJECT_MANAGER',
-  'SITE_ENGINEER',
-  'SUPERVISOR',
-  'ACCOUNTANT',
-  'PURCHASE_MANAGER',
-] as Role[]
+const BCRYPT_ROUNDS = 12
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function createUser(data: any) {
-  const currentUser = await requirePermission('company.manage')
-  const companyId = currentUser.companyId
+/**
+ * Collapse a Zod failure into a single user-facing sentence. Every branch of the
+ * invitation flow throws a plain Error so the form boundary renders one message.
+ */
+function validationMessage(error: { issues: { message: string }[] }): string {
+  return error.issues.map(issue => issue.message).join(' ')
+}
 
-  if (!companyId) {
-    throw new Error('User does not belong to a company')
+function readString(formData: FormData, key: string): string | undefined {
+  const value = formData.get(key)
+  return typeof value === 'string' ? value : undefined
+}
+
+function readStringList(formData: FormData, key: string): string[] {
+  return formData.getAll(key).filter((value): value is string => typeof value === 'string')
+}
+
+/** The module selector posts a JSON array; anything unparseable is treated as "not supplied". */
+function readModuleControls(formData: FormData, key: string): string[] | null {
+  const raw = readString(formData, key)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.map(String) : null
+  } catch {
+    return null
   }
+}
+
+/**
+ * Tenant guard for submitted site ids. A form post is fully attacker-controlled, so
+ * site visibility can never be granted for a site the caller company does not own.
+ */
+async function assertSitesBelongToCompany(siteIds: string[], companyId: string) {
+  const unique = [...new Set(siteIds)]
+  if (unique.length === 0) return
+
+  const owned = await prisma.site.findMany({
+    where: { companyId, id: { in: unique }, deletedAt: null },
+    select: { id: true },
+  })
+
+  if (owned.length !== unique.length) {
+    throw new Error('One or more selected sites do not belong to your company.')
+  }
+}
+
+/**
+ * Create an employee login for the caller's own company.
+ *
+ * Every invariant lives here rather than in the page, because a server action is a
+ * public endpoint: the browser form is only one of its callers.
+ */
+export async function inviteEmployee(formData: FormData): Promise<void> {
+  const actor = await requirePermission('company.manage')
+  const companyId = actor.companyId
+  if (!companyId) {
+    throw new Error('Your account is not linked to a company.')
+  }
+
+  const parsed = inviteEmployeeSchema.safeParse({
+    name: readString(formData, 'name'),
+    email: readString(formData, 'email'),
+    phone: readString(formData, 'phone') || undefined,
+    password: readString(formData, 'password'),
+    role: readString(formData, 'role'),
+    siteIds: readStringList(formData, 'siteIds'),
+    moduleControls: readModuleControls(formData, 'moduleControls'),
+  })
+  if (!parsed.success) {
+    throw new Error(validationMessage(parsed.error))
+  }
+  const input = parsed.data
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
+    include: { _count: { select: { members: { where: { isActive: true } } } } },
+  })
+  if (!company || company.deletedAt) {
+    throw new Error('Company not found.')
+  }
+  if (company.status === 'SUSPENDED' || company.status === 'CANCELLED') {
+    throw new Error('Company is suspended or cancelled. Please contact support.')
+  }
+  if (company._count.members >= company.userLimit) {
+    throw new Error('User limit reached for your plan. Upgrade the plan to add more logins.')
+  }
+
+  // The schema already rules out SUPER_ADMIN and the external portal roles; this
+  // additionally stops an admin from minting a peer or a superior.
+  if (!canAssignRole(actor.role, input.role as Role)) {
+    throw new Error('You cannot grant a role equal to or above your own role.')
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email: input.email } })
+  if (existing) {
+    throw new Error('A user with this email address already exists.')
+  }
+
+  await assertSitesBelongToCompany(input.siteIds, companyId)
+
+  const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS)
+
+  await prisma.$transaction(async tx => {
+    const user = await tx.user.create({
+      data: {
+        name: input.name,
+        email: input.email,
+        phone: input.phone ?? null,
+        passwordHash,
+        role: input.role as Role,
+      },
+    })
+
+    await tx.companyMember.create({
+      data: {
+        userId: user.id,
+        companyId,
+        role: input.role as Role,
+        siteIds: input.siteIds,
+        moduleControls: input.moduleControls ?? undefined,
+        isActive: true,
+      },
+    })
+
+    // Written with the transaction client so a failed audit rolls the invite back
+    // instead of leaving an unlogged account behind.
+    await tx.auditLog.create({
+      data: {
+        companyId,
+        userId: actor.id,
+        action: 'CREATE',
+        module: 'USER',
+        recordId: user.id,
+        after: {
+          name: input.name,
+          email: input.email,
+          role: input.role,
+          siteIds: input.siteIds,
+          _description: `${actor.name ?? actor.email} invited "${input.name}" as ${input.role.replace(/_/g, ' ')}`,
+        },
+      },
+    })
   })
 
-  if (!company) throw new Error('Company not found')
+  revalidatePath('/settings/users')
+  revalidatePath('/employees')
+  redirect('/employees')
+}
 
+/**
+ * Update an existing member's role, status and access scope.
+ *
+ * Guards both directions of the hierarchy: the caller may neither touch someone who
+ * already outranks them, nor hand out a role at or above their own.
+ */
+export async function updateEmployee(formData: FormData): Promise<void> {
+  const actor = await requirePermission('company.manage')
+  const companyId = actor.companyId
+  if (!companyId) {
+    throw new Error('Your account is not linked to a company.')
+  }
+
+  const parsed = updateEmployeeSchema.safeParse({
+    memberId: readString(formData, 'memberId'),
+    role: readString(formData, 'role'),
+    isActive: readString(formData, 'isActive') === 'true',
+    siteIds: readStringList(formData, 'siteIds'),
+    moduleControls: readModuleControls(formData, 'moduleControls'),
+  })
+  if (!parsed.success) {
+    throw new Error(validationMessage(parsed.error))
+  }
+  const input = parsed.data
+  if (!isInvitableEmployeeRole(input.role)) {
+    throw new Error('Employee roles cannot be changed to an external portal role.')
+  }
+
+  const company = await prisma.company.findUnique({ where: { id: companyId } })
+  if (!company || company.deletedAt) {
+    throw new Error('Company not found.')
+  }
   if (company.status === 'SUSPENDED' || company.status === 'CANCELLED') {
     throw new Error('Company is suspended or cancelled. Please contact support.')
   }
 
-  if (data.role === Role.SUPER_ADMIN && currentUser.role !== Role.SUPER_ADMIN) {
-    throw new Error('You cannot create a SUPER_ADMIN user.')
-  }
-
-  // Enforce strict role-based limits
-  const isClientRole = CLIENT_ROLES.includes(data.role as Role)
-  const isEmployeeRole = EMPLOYEE_ROLES.includes(data.role as Role)
-
-  if (isClientRole) {
-    const clientCount = await prisma.companyMember.count({
-      where: { companyId, role: { in: CLIENT_ROLES } },
-    })
-    if (clientCount >= CLIENT_LIMIT) {
-      throw new Error(`Client account limit reached (Max ${CLIENT_LIMIT}). Cannot create more client logins.`)
-    }
-  } else if (isEmployeeRole) {
-    const employeeCount = await prisma.companyMember.count({
-      where: { companyId, role: { in: EMPLOYEE_ROLES } },
-    })
-    if (employeeCount >= EMPLOYEE_LIMIT) {
-      throw new Error(`Employee account limit reached (Max ${EMPLOYEE_LIMIT}). Cannot create more employee logins.`)
-    }
-  }
-
-  const existing = await prisma.user.findUnique({ where: { email: data.email } })
-  if (existing) {
-    throw new Error('A user with this email already exists.')
-  }
-
-  const hash = await bcrypt.hash(data.password, 10)
-
-  const newUser = await prisma.user.create({
-    data: {
-      email: data.email,
-      name: data.name,
-      phone: data.phone,
-      passwordHash: hash,
-      role: data.role,
-    },
+  const member = await prisma.companyMember.findUnique({
+    where: { id: input.memberId },
+    include: { user: { select: { id: true, name: true, email: true } } },
   })
+  if (!member || member.companyId !== companyId) {
+    throw new Error('Team member not found in your company.')
+  }
 
-  await prisma.companyMember.create({
-    data: {
-      userId: newUser.id,
-      companyId: companyId,
-      role: data.role,
-      siteIds: data.siteIds || [],
-      moduleControls: data.moduleControls || null,
-    },
-  })
+  if (member.userId === actor.id) {
+    throw new Error('You cannot change your own role or access from this screen.')
+  }
+  if (!canManageMemberWithRole(actor.role, member.role)) {
+    throw new Error('You do not have permission to manage a member at or above your own role.')
+  }
+  if (!canAssignRole(actor.role, input.role as Role)) {
+    throw new Error('You cannot grant a role equal to or above your own role.')
+  }
 
-  await logActivity({
-    userId: currentUser.id,
-    companyId,
-    action: 'CREATE',
-    module: 'USER',
-    recordId: newUser.id,
-    description: `${currentUser.name ?? currentUser.email} created new user "${data.name}" (${data.role.replace(/_/g, ' ')}) in the company`,
-    after: { name: data.name, role: data.role, email: data.email },
+  await assertSitesBelongToCompany(input.siteIds, companyId)
+
+  await prisma.$transaction(async tx => {
+    await tx.companyMember.update({
+      where: { id: member.id, companyId },
+      data: {
+        role: input.role as Role,
+        isActive: input.isActive,
+        siteIds: input.siteIds,
+        ...(input.moduleControls != null && { moduleControls: input.moduleControls }),
+      },
+    })
+
+    // The session role is read from User.role, so it must move with the membership
+    // role — otherwise a demoted member keeps their old permissions until re-login.
+    await tx.user.update({
+      where: { id: member.userId },
+      data: { role: input.role as Role, isActive: input.isActive },
+    })
+
+    await tx.auditLog.create({
+      data: {
+        companyId,
+        userId: actor.id,
+        action: 'UPDATE',
+        module: 'USER',
+        recordId: member.userId,
+        before: { role: member.role, isActive: member.isActive, siteIds: member.siteIds },
+        after: {
+          role: input.role,
+          isActive: input.isActive,
+          siteIds: input.siteIds,
+          _description: `${actor.name ?? actor.email} updated "${member.user.name ?? member.user.email}" to ${input.role.replace(/_/g, ' ')}`,
+        },
+      },
+    })
   })
 
   revalidatePath('/settings/users')
-  return { success: true, userId: newUser.id }
+  redirect('/settings/users')
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function updateUser(userId: string, data: any) {
-  const currentUser = await requirePermission('company.manage')
-  const companyId = currentUser.companyId
-
+/**
+ * Remove a member's access while retaining the User and all operational history.
+ * This is a privileged access-revocation flow, so confirmation, hierarchy, tenant scope,
+ * company state, and auditability are enforced at the server boundary.
+ */
+export async function removeEmployeeFromCompany(formData: FormData): Promise<void> {
+  const actor = await requirePermission('company.manage')
+  const companyId = actor.companyId
   if (!companyId) {
-    throw new Error('User does not belong to a company')
+    throw new Error('Your account is not linked to a company.')
   }
 
+  const company = await prisma.company.findUnique({ where: { id: companyId } })
+  if (!company || company.deletedAt) {
+    throw new Error('Company not found.')
+  }
+  if (company.status === 'SUSPENDED' || company.status === 'CANCELLED') {
+    throw new Error('Company is suspended or cancelled. Please contact support.')
+  }
+
+  const memberId = readString(formData, 'memberId')
+  if (!memberId) {
+    throw new Error('Team member is required.')
+  }
   const member = await prisma.companyMember.findUnique({
-    where: { userId_companyId: { userId, companyId } },
+    where: { id: memberId },
+    include: { user: { select: { id: true, name: true, email: true } } },
   })
-
-  if (!member) {
-    throw new Error('User not found in this company.')
+  if (!member || member.companyId !== companyId) {
+    throw new Error('Team member not found in your company.')
+  }
+  if (member.userId === actor.id) {
+    throw new Error('You cannot remove your own access from this screen.')
+  }
+  if (!canManageMemberWithRole(actor.role, member.role)) {
+    throw new Error('You do not have permission to remove a member at or above your own role.')
   }
 
-  if (data.role === Role.SUPER_ADMIN && currentUser.role !== Role.SUPER_ADMIN) {
-    throw new Error('You cannot assign the SUPER_ADMIN role.')
+  const confirmation = readString(formData, 'dangerConfirmText')?.trim()
+  const expected = (member.user.name ?? member.user.email).trim()
+  if (confirmation !== expected) {
+    throw new Error('Remove confirmation text did not match the team member name/email.')
   }
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      name: data.name,
-      phone: data.phone,
-      role: data.role,
-      isActive: data.isActive,
-    },
-  })
-
-  await prisma.companyMember.update({
-    where: { id: member.id },
-    data: {
-      role: data.role,
-      isActive: data.isActive,
-      siteIds: data.siteIds || undefined,
-      moduleControls: data.moduleControls !== undefined ? data.moduleControls : undefined,
-    },
-  })
-
-  await logActivity({
-    userId: currentUser.id,
-    companyId,
-    action: 'UPDATE',
-    module: 'USER',
-    recordId: userId,
-    description: `${currentUser.name ?? currentUser.email} updated user settings (role: ${data.role}, active: ${data.isActive})`,
-    after: { role: data.role, isActive: data.isActive },
+  await prisma.$transaction(async tx => {
+    await tx.companyMember.update({
+      where: { id: member.id, companyId },
+      data: { isActive: false },
+    })
+    await tx.auditLog.create({
+      data: {
+        companyId,
+        userId: actor.id,
+        action: 'UPDATE',
+        module: 'USER',
+        recordId: member.userId,
+        before: { isActive: member.isActive, role: member.role, name: member.user.name, email: member.user.email },
+        after: {
+          isActive: false,
+          role: member.role,
+          name: member.user.name,
+          email: member.user.email,
+          _description: `${actor.name ?? actor.email} removed "${member.user.name ?? member.user.email}" from the company login roster`,
+        },
+      },
+    })
   })
 
   revalidatePath('/settings/users')
-  return { success: true }
+  redirect('/settings/users')
 }
 
 /**

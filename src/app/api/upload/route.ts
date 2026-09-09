@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+import { requireUser } from '@/lib/auth/require-user'
 import cloudinary from '@/lib/cloudinary'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
@@ -7,8 +7,12 @@ import { getCloudinaryFolder } from '@/lib/cloudinary'
 const VALID_MODULES = ['BILL', 'SITE_PHOTO', 'DOCUMENT', 'SALARY_PROOF', 'DELIVERY_CHALLAN', 'QUALITY_PHOTO', 'SAFETY_PHOTO', 'PAYMENT_PROOF', 'GENERAL']
 
 export async function POST(request: Request) {
-  const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  let user
+  try {
+    user = await requireUser()
+  } catch {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   const formData = await request.formData()
   const file = formData.get('file') as File
@@ -24,30 +28,20 @@ export async function POST(request: Request) {
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
-  // Resolve companyId — prefer session, fall back to site lookup, then CompanyMember
-  let companyId = session.user.companyId ?? null
-
-  if (!companyId && session.user.role !== 'SUPER_ADMIN') {
-    if (siteId) {
-      // Site engineer may not have companyId on token — look it up from the site
-      const site = await prisma.site.findUnique({ where: { id: siteId }, select: { companyId: true } })
-      if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 })
-      companyId = site.companyId
-    } else {
-      // Last resort: resolve from CompanyMember
-      const member = await prisma.companyMember.findFirst({ where: { userId: session.user.id, isActive: true } })
-      if (!member) return NextResponse.json({ error: 'Forbidden: No active company context' }, { status: 403 })
-      companyId = member.companyId
-    }
+  // Uploads must have a live, server-verified tenant context. Do not derive it
+  // from client-controlled site IDs or an arbitrary membership fallback.
+  const companyId = user.companyId
+  if (!companyId) {
+    return NextResponse.json({ error: 'Forbidden: A company context is required for uploads' }, { status: 403 })
   }
 
-  // If siteId provided, verify it belongs to the resolved companyId (skip for SUPER_ADMIN)
-  if (siteId && session.user.role !== 'SUPER_ADMIN' && companyId) {
+  // Verify every supplied site belongs to the verified company context.
+  if (siteId) {
     const site = await prisma.site.findFirst({
       where: { id: siteId, companyId }
     })
     if (!site) {
-      return NextResponse.json({ error: `Forbidden: Site access denied for company ${companyId}` }, { status: 403 })
+      return NextResponse.json({ error: 'Forbidden: Site access denied' }, { status: 403 })
     }
   }
 
@@ -55,12 +49,7 @@ export async function POST(request: Request) {
   const buffer = Buffer.from(bytes)
   const base64 = `data:${file.type};base64,${buffer.toString('base64')}`
 
-  // Resolve companySlug — site engineers may not have it in their JWT
-  let companySlug = session.user.companySlug ?? null
-  if (!companySlug && companyId) {
-    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { slug: true } })
-    companySlug = company?.slug ?? 'company'
-  }
+  const companySlug = user.companySlug ?? 'company'
   const folder = getCloudinaryFolder(companySlug ?? 'company', siteId ?? 'general', moduleName)
 
   let result: { public_id: string; secure_url: string; format: string; bytes: number; width?: number; height?: number }
@@ -98,7 +87,7 @@ export async function POST(request: Request) {
           height: result.height,
           folder,
           originalName: file.name,
-          uploadedById: session.user.id,
+          uploadedById: user.id,
         },
       })
     }
