@@ -2,73 +2,10 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Role } from '@prisma/client'
-import bcrypt from 'bcryptjs'
 import { Shield } from 'lucide-react'
 import ModuleAccessSelector from '@/components/ui/ModuleAccessSelector'
-
-async function createUser(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  const companyId = session.user.companyId
-  const name = formData.get('name') as string
-  const email = formData.get('email') as string
-  const phone = formData.get('phone') as string
-  const password = formData.get('password') as string
-  const role = formData.get('role') as Role
-  const siteIds = formData.getAll('siteIds') as string[]
-  const moduleControlsStr = formData.get('moduleControls') as string | null
-  let moduleControls = null
-  if (moduleControlsStr) {
-    try { moduleControls = JSON.parse(moduleControlsStr) } catch {}
-  }
-
-  if (!name || !email || !password || !role) return
-
-  // Check user limit
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-    include: { _count: { select: { members: { where: { isActive: true } } } } },
-  })
-
-  if (!company) throw new Error('Company not found')
-  if (company._count.members >= company.userLimit) {
-    throw new Error('User limit reached. Please upgrade your plan.')
-  }
-
-  // Check if email exists
-  const existing = await prisma.user.findUnique({ where: { email } })
-  if (existing) throw new Error('Email already in use')
-
-  const passwordHash = await bcrypt.hash(password, 12)
-
-  await prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: {
-        name,
-        email,
-        phone,
-        passwordHash,
-        role,
-      },
-    })
-
-    await tx.companyMember.create({
-      data: {
-        userId: user.id,
-        companyId,
-        role,
-        siteIds: siteIds.length > 0 ? siteIds : [],
-        moduleControls,
-        isActive: true,
-      },
-    })
-  })
-
-  redirect('/employees')
-}
+import { inviteEmployee } from '@/actions/users'
+import { INVITABLE_EMPLOYEE_ROLES } from '@/lib/permissions'
 
 const roleDescriptions: Record<string, { label: string; desc: string; access: string }> = {
   COMPANY_ADMIN: {
@@ -126,7 +63,7 @@ export default async function InviteUserPage() {
 
       <div className="p-6 max-w-2xl mx-auto space-y-5">
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-          <form action={createUser} className="space-y-5">
+          <form action={inviteEmployee} className="space-y-5">
             {/* Basic Info */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Full Name *</label>
