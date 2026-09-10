@@ -1,37 +1,13 @@
-import { auth } from '@/lib/auth'
+import { getClientPortalSite, getClientPortalSites } from '@/lib/auth/client-portal'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import { MapPin, Check, ImageIcon, CreditCard, ChevronRight, FolderX, Sparkles, AlertCircle, Clock } from 'lucide-react'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ClientPortal() {
-  const session = await auth()
-  if (session?.user?.role !== 'CLIENT') redirect('/dashboard')
-
-  // Find client record by email
-  const clientRecord = await prisma.client.findFirst({
-    where: { email: session?.user?.email },
-    include: { invoices: { orderBy: { createdAt: 'desc' } } }
-  })
-
-  // Find the client's assigned site — prefer siteId if set, else fall back to companyId
-  const site = await prisma.site.findFirst({
-    where: clientRecord?.siteId
-      ? { id: clientRecord.siteId, deletedAt: null }
-      : { companyId: clientRecord?.companyId, deletedAt: null },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      company: true,
-      photos: {
-        where: { approvedForClient: true },
-        orderBy: { createdAt: 'desc' },
-        take: 6,
-        include: { task: true }
-      }
-    }
-  })
+  const [assignedSite] = await getClientPortalSites()
+  const site = assignedSite ? await getClientPortalSite(assignedSite.id) : null
 
   if (!site) {
     return (
@@ -46,6 +22,18 @@ export default async function ClientPortal() {
       </div>
     )
   }
+
+  const clientRecord = site.clientId
+    ? await prisma.client.findFirst({
+        where: { id: site.clientId, companyId: site.companyId },
+        include: {
+          invoices: {
+            where: { siteId: site.id, clientId: site.clientId, companyId: site.companyId },
+            orderBy: { createdAt: 'desc' },
+          },
+        },
+      })
+    : null
 
   // Calculate progress from checklist tasks
   const allTasks = await prisma.projectChecklistTask.findMany({
