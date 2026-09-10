@@ -327,19 +327,34 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
     throw new Error('Forbidden: You are not authorized to disburse payments')
   }
 
-  const approval = await prisma.approval.findUnique({ where: { id } })
+  const approvalWhere = user.role === 'SUPER_ADMIN'
+    ? { id, deletedAt: null }
+    : { id, companyId: user.companyId!, deletedAt: null }
+  const approval = await prisma.approval.findFirst({ where: approvalWhere })
   if (!approval) throw new Error('Approval not found')
+  if (approval.currentStatus !== 'APPROVED') {
+    throw new Error('Only approved requests can be marked paid')
+  }
   if ((confirmationText ?? '').trim() !== 'PAID') {
     throw new Error('Disbursement confirmation text must exactly match PAID')
   }
 
-  const updated = await prisma.approval.update({
-    where: { id },
+  const transition = await prisma.approval.updateMany({
+    where: {
+      id,
+      companyId: approval.companyId,
+      deletedAt: null,
+      currentStatus: 'APPROVED',
+    },
     data: {
       currentStatus: 'PAID',
       closedAt: new Date(),
     },
   })
+  if (transition.count !== 1) {
+    throw new Error('Approval is no longer approved and cannot be marked paid')
+  }
+  const updated = { id }
 
   await prisma.approvalTimeline.create({
     data: {
@@ -367,12 +382,12 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
 
   if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
     await prisma.expense.updateMany({
-      where: { id: approval.entityId },
+      where: { id: approval.entityId, companyId: approval.companyId },
       data: { approvalStatus: 'PAID' },
     })
   } else if (approval.entityType === 'SALARY_RUN') {
     await prisma.salaryRun.updateMany({
-      where: { id: approval.entityId },
+      where: { id: approval.entityId, companyId: approval.companyId },
       data: { status: 'PAID' },
     })
   }
