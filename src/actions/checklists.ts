@@ -1,6 +1,7 @@
 'use server'
 
 import { auth } from '@/lib/auth'
+import { requireUser } from '@/lib/auth/require-user'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
@@ -359,15 +360,19 @@ export async function rejectPhotoAction(photoId: string) {
 
 // Client confirms they have seen / accepted a task photo → marks task completed
 export async function clientApproveTaskPhoto(photoId: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error('Unauthorized')
+  const user = await requireUser()
+  if (user.role !== 'CLIENT') throw new Error('FORBIDDEN: Client portal access required')
 
-  const photo = await prisma.sitePhoto.findUnique({
-    where: { id: photoId },
-    include: { task: true }
+  const photo = await prisma.sitePhoto.findFirst({
+    where: {
+      id: photoId,
+      approvedForClient: true,
+      site: { clientUserId: user.id, deletedAt: null },
+    },
+    include: { task: true },
   })
 
-  if (!photo) throw new Error('Photo not found')
+  if (!photo) throw new Error('Photo not found or access denied')
 
   // Mark the linked task as client-confirmed
   if (photo.taskId) {
