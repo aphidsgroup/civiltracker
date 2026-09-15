@@ -2,98 +2,65 @@
 
 import { auth } from '@/lib/auth'
 import { requireUser } from '@/lib/auth/require-user'
+import {
+  requireChecklistCategory,
+  requireChecklistPhoto,
+  requireChecklistSite,
+  requireChecklistTask,
+  requireProjectChecklist,
+} from '@/lib/auth/checklist-site'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
 // Deep clone a master template to a project
 export async function enableChecklistForProject(siteId: string, templateId: string) {
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-  const { companyId } = session.user
-
-  // Check if a checklist already exists
-  const existing = await prisma.projectChecklist.findUnique({
-    where: { siteId }
+  const { site } = await requireChecklistSite(siteId)
+  const existing = await prisma.projectChecklist.findFirst({
+    where: { siteId: site.id, companyId: site.companyId },
   })
   if (existing) throw new Error('Checklist already enabled for this project')
 
-  // Fetch full template
-  const template = await prisma.checklistTemplate.findUnique({
-    where: { id: templateId },
-    include: {
-      stages: {
-        include: {
-          categories: {
-            include: { tasks: true }
-          }
-        }
-      }
-    }
+  const template = await prisma.checklistTemplate.findFirst({
+    where: { id: templateId, OR: [{ companyId: site.companyId }, { isGlobal: true }] },
+    include: { stages: { include: { categories: { include: { tasks: true } } } } },
   })
+  if (!template) throw new Error('FORBIDDEN: Template not found or access denied')
 
-  if (!template) throw new Error('Template not found')
-
-  // Create Project Checklist
   await prisma.projectChecklist.create({
     data: {
-      siteId,
-      templateId,
-      companyId,
-      stages: {
-        create: template.stages.map(stage => ({
-          name: stage.name,
-          order: stage.order,
-          weight: stage.weight,
-          categories: {
-            create: stage.categories.map(cat => ({
-              name: cat.name,
-              order: cat.order,
-              tasks: {
-                create: cat.tasks.map(task => ({
-                  name: task.name,
-                  order: task.order,
-                  isRequired: task.isRequired
-                }))
-              }
-            }))
-          }
-        }))
-      }
-    }
+      siteId: site.id, templateId: template.id, companyId: site.companyId,
+      stages: { create: template.stages.map((stage) => ({
+        name: stage.name, order: stage.order, weight: stage.weight,
+        categories: { create: stage.categories.map((category) => ({
+          name: category.name, order: category.order,
+          tasks: { create: category.tasks.map((task) => ({ name: task.name, order: task.order, isRequired: task.isRequired })) },
+        })) },
+      })) },
+    },
   })
 
-  revalidatePath(`/sites/${siteId}`)
+  revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
 
 export async function toggleTaskStatus(siteId: string, taskId: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED', isClientDone = false, isNeglected = false) {
-  const session = await auth()
-  if (!session?.user) throw new Error('Unauthorized')
+  const { user, site, task } = await requireChecklistTask(siteId, taskId)
 
-  // Resolve companyId — site engineers may not have it in their JWT
-  let companyId = session.user.companyId ?? null
-  if (!companyId) {
-    const site = await prisma.site.findUnique({ where: { id: siteId }, select: { companyId: true } })
-    companyId = site?.companyId ?? null
-  }
-
-  const task = await prisma.projectChecklistTask.update({
-    where: { id: taskId },
+  await prisma.projectChecklistTask.update({
+    where: { id: task.id },
     data: {
-      status,
-      isClientDone,
-      isNeglected,
+      status, isClientDone, isNeglected,
       completedAt: status === 'COMPLETED' ? new Date() : null,
-      completedById: status === 'COMPLETED' ? session.user.id : null,
-    }
+      completedById: status === 'COMPLETED' ? user.id : null,
+    },
   })
 
   if (status === 'COMPLETED') {
     // Task ticked — create TICK entry, storing taskId so we can delete it on untick
     await prisma.auditLog.create({
       data: {
-        userId: session.user.id,
-        companyId,
+        userId: user.id,
+        companyId: site.companyId,
         module: 'CHECKLIST',
         action: 'TICK',
         recordId: siteId,
@@ -103,7 +70,7 @@ export async function toggleTaskStatus(siteId: string, taskId: string, status: '
   } else {
     // Task unticked — fetch all checklist entries for this site, delete matching ones
     const allEntries = await prisma.auditLog.findMany({
-      where: { module: 'CHECKLIST', recordId: siteId },
+      where: { module: 'CHECKLIST', recordId: site.id, companyId: site.companyId },
       select: { id: true, action: true, after: true }
     })
 
@@ -133,77 +100,45 @@ export async function toggleTaskStatus(siteId: string, taskId: string, status: '
 
 
 export async function toggleCategoryNeglect(siteId: string, categoryId: string, isNeglected: boolean) {
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  await prisma.projectChecklistCategory.update({
-    where: { id: categoryId },
-    data: { isNeglected }
-  })
-
-  revalidatePath(`/sites/${siteId}`)
+  const { site, category } = await requireChecklistCategory(siteId, categoryId)
+  await prisma.projectChecklistCategory.update({ where: { id: category.id }, data: { isNeglected } })
+  revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
 
 export async function addCustomTask(siteId: string, categoryId: string, name: string) {
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  await prisma.projectChecklistTask.create({
-    data: {
-      categoryId,
-      name,
-      order: 999, // append to end
-    }
-  })
-
-  revalidatePath(`/sites/${siteId}`)
+  const { site, category } = await requireChecklistCategory(siteId, categoryId)
+  await prisma.projectChecklistTask.create({ data: { categoryId: category.id, name, order: 999 } })
+  revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
 
 export async function editChecklistTask(siteId: string, taskId: string, newName: string) {
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  await prisma.projectChecklistTask.update({
-    where: { id: taskId },
-    data: { name: newName }
-  })
-
-  revalidatePath(`/sites/${siteId}`)
+  const { site, task } = await requireChecklistTask(siteId, taskId)
+  await prisma.projectChecklistTask.update({ where: { id: task.id }, data: { name: newName } })
+  revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
 
 export async function deleteChecklistTask(siteId: string, taskId: string) {
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  await prisma.projectChecklistTask.delete({
-    where: { id: taskId }
-  })
-
-  revalidatePath(`/sites/${siteId}`)
+  const { site, task } = await requireChecklistTask(siteId, taskId)
+  await prisma.projectChecklistTask.delete({ where: { id: task.id } })
+  revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
 
 export async function deleteProjectChecklist(siteId: string) {
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  await prisma.projectChecklist.delete({
-    where: { siteId }
-  })
-  
-  revalidatePath(`/sites/${siteId}`)
+  const { site, checklist } = await requireProjectChecklist(siteId)
+  await prisma.projectChecklist.delete({ where: { id: checklist.id } })
+  revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
 
 export async function getPendingTasks(siteId: string) {
-  const session = await auth()
-  if (!session?.user?.companyId) return []
+  const { site } = await requireChecklistSite(siteId)
 
-  const checklist = await prisma.projectChecklist.findUnique({
-    where: { siteId },
+  const checklist = await prisma.projectChecklist.findFirst({
+    where: { siteId: site.id, companyId: site.companyId },
     include: {
       stages: {
         orderBy: { order: 'asc' },
@@ -244,20 +179,20 @@ export async function getPendingTasks(siteId: string) {
 }
 
 export async function getPendingChecklistPhotos(siteId?: string) {
-  const session = await auth()
-  if (!session?.user?.id) return []
+  const user = await requireUser()
+  let companyId = user.companyId
+  let authorizedSiteId: string | undefined
 
-  let companyId = session.user.companyId
-  if (!companyId) {
-    const member = await prisma.companyMember.findFirst({ where: { userId: session.user.id } })
-    if (member) companyId = member.companyId
+  if (siteId) {
+    const { site } = await requireChecklistSite(siteId)
+    companyId = site.companyId
+    authorizedSiteId = site.id
   }
-
   if (!companyId) return []
 
   const pendingTasks = await prisma.projectChecklistTask.findMany({
     where: {
-      category: { stage: { checklist: { companyId, siteId: siteId || undefined } } },
+      category: { stage: { checklist: { companyId, siteId: authorizedSiteId } } },
       OR: [ { status: 'COMPLETED' }, { isClientDone: true } ],
       sitePhotos: { none: {} }
     },
@@ -276,7 +211,7 @@ export async function getPendingChecklistPhotos(siteId?: string) {
   // Fetch site names since ProjectChecklist doesn't have a direct site relation in prisma include
   const siteIds = [...new Set(pendingTasks.map(t => t.category.stage.checklist.siteId))]
   const sites = await prisma.site.findMany({
-    where: { id: { in: siteIds } },
+    where: { id: { in: siteIds }, companyId, deletedAt: null },
     select: { id: true, name: true }
   })
   const siteMap = new Map(sites.map(s => [s.id, s.name]))
@@ -292,30 +227,21 @@ export async function getPendingChecklistPhotos(siteId?: string) {
 }
 
 export async function uploadChecklistPhotoAction(taskId: string, siteId: string, imageUrl: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error('Unauthorized')
-
-  // Resolve companyId — site engineers may not have it in their session token
-  let companyId = session.user.companyId ?? null
-  if (!companyId) {
-    const site = await prisma.site.findUnique({ where: { id: siteId }, select: { companyId: true } })
-    if (!site) throw new Error('Site not found')
-    companyId = site.companyId
-  }
+  const { user, site, task } = await requireChecklistTask(siteId, taskId)
 
   await prisma.sitePhoto.create({
     data: {
-      companyId,
-      siteId,
-      taskId,
+      companyId: site.companyId,
+      siteId: site.id,
+      taskId: task.id,
       secureUrl: imageUrl,
-      cloudinaryPublicId: `checklist_${taskId}_${Date.now()}`,
+      cloudinaryPublicId: `checklist_${task.id}_${Date.now()}`,
       caption: 'Checklist Task Completed',
-      uploadedById: session.user.id
-    }
+      uploadedById: user.id,
+    },
   })
 
-  revalidatePath(`/sites/${siteId}/photos`)
+  revalidatePath(`/sites/${site.id}/photos`)
   revalidatePath(`/mobile/checklist`)
   return { success: true }
 }
@@ -323,38 +249,29 @@ export async function uploadChecklistPhotoAction(taskId: string, siteId: string,
 
 // Admin approves a site photo → makes it visible to client
 export async function approvePhotoAction(photoId: string) {
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  const photo = await prisma.sitePhoto.update({
-    where: { id: photoId },
-    data: {
-      approvedForClient: true,
-      approvedById: session.user.id,
-      approvedAt: new Date()
-    },
-    include: { task: true }
+  const { user, photo } = await requireChecklistPhoto(photoId)
+  const updated = await prisma.sitePhoto.update({
+    where: { id: photo.id },
+    data: { approvedForClient: true, approvedById: user.id, approvedAt: new Date() },
+    include: { task: true },
   })
 
-  if (photo.siteId) {
-    revalidatePath(`/sites/${photo.siteId}/photos`)
+  if (updated.siteId) {
+    revalidatePath(`/sites/${updated.siteId}/photos`)
     revalidatePath(`/client-portal`)
     revalidatePath(`/client-portal/photos`)
   }
   return { success: true }
 }
 
-// Admin rejects / un-approves a photo
 export async function rejectPhotoAction(photoId: string) {
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  const photo = await prisma.sitePhoto.update({
-    where: { id: photoId },
-    data: { approvedForClient: false, approvedById: null, approvedAt: null }
+  const { photo } = await requireChecklistPhoto(photoId)
+  const updated = await prisma.sitePhoto.update({
+    where: { id: photo.id },
+    data: { approvedForClient: false, approvedById: null, approvedAt: null },
   })
 
-  if (photo.siteId) revalidatePath(`/sites/${photo.siteId}/photos`)
+  if (updated.siteId) revalidatePath(`/sites/${updated.siteId}/photos`)
   return { success: true }
 }
 
@@ -369,10 +286,28 @@ export async function clientApproveTaskPhoto(photoId: string) {
       approvedForClient: true,
       site: { clientUserId: user.id, deletedAt: null },
     },
-    include: { task: true },
+    include: {
+      site: { select: { companyId: true } },
+      task: {
+        include: {
+          category: {
+            include: {
+              stage: { include: { checklist: { select: { siteId: true, companyId: true } } } },
+            },
+          },
+        },
+      },
+    },
   })
 
   if (!photo) throw new Error('Photo not found or access denied')
+  if (photo.companyId !== photo.site.companyId) {
+    throw new Error('Photo company does not match its authorized site')
+  }
+  const checklist = photo.task?.category.stage.checklist
+  if (photo.taskId && (!checklist || checklist.siteId !== photo.siteId || checklist.companyId !== photo.companyId)) {
+    throw new Error('Photo task is not linked to the authorized site')
+  }
 
   // Mark the linked task as client-confirmed
   if (photo.taskId) {

@@ -23,7 +23,11 @@ beforeEach(() => {
 
 describe('clientApproveTaskPhoto', () => {
   it('requires an approved photo from a site explicitly assigned to the authenticated client', async () => {
-    mocks.prisma.sitePhoto.findFirst.mockResolvedValue({ id: 'photo_1', taskId: 'task_1', siteId: 'site_1' })
+    mocks.prisma.sitePhoto.findFirst.mockResolvedValue({
+      id: 'photo_1', taskId: 'task_1', siteId: 'site_1', companyId: 'company_1',
+      site: { companyId: 'company_1' },
+      task: { category: { stage: { checklist: { siteId: 'site_1', companyId: 'company_1' } } } },
+    })
 
     await clientApproveTaskPhoto('photo_1')
 
@@ -50,10 +54,25 @@ describe('clientApproveTaskPhoto', () => {
     expect(mocks.prisma.projectChecklistTask.update).not.toHaveBeenCalled()
   })
 
-  it('does not update a task when the photo is not assigned to the client', async () => {
-    mocks.prisma.sitePhoto.findFirst.mockResolvedValue(null)
+  it('does not update a task when the photo company differs from its authorized site', async () => {
+    mocks.prisma.sitePhoto.findFirst.mockResolvedValue({
+      id: 'inconsistent_photo', taskId: 'task_1', siteId: 'site_1', companyId: 'company_1',
+      site: { companyId: 'company_2' },
+      task: { category: { stage: { checklist: { siteId: 'site_1', companyId: 'company_1' } } } },
+    })
 
-    await expect(clientApproveTaskPhoto('other-photo')).rejects.toThrow(/photo not found or access denied/i)
+    await expect(clientApproveTaskPhoto('inconsistent_photo')).rejects.toThrow(/company does not match/i)
+    expect(mocks.prisma.projectChecklistTask.update).not.toHaveBeenCalled()
+  })
+
+  it('does not update a task linked to a different site or company', async () => {
+    mocks.prisma.sitePhoto.findFirst.mockResolvedValue({
+      id: 'bad_photo', taskId: 'foreign_task', siteId: 'site_1', companyId: 'company_1',
+      site: { companyId: 'company_1' },
+      task: { category: { stage: { checklist: { siteId: 'site_2', companyId: 'company_2' } } } },
+    })
+
+    await expect(clientApproveTaskPhoto('bad_photo')).rejects.toThrow(/not linked to the authorized site/i)
     expect(mocks.prisma.projectChecklistTask.update).not.toHaveBeenCalled()
   })
 })
