@@ -1,12 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  requireUser: vi.fn(),
-  hasPermission: vi.fn(),
-  revalidatePath: vi.fn(),
-  logActivity: vi.fn(),
-  syncSiteBudget: vi.fn(),
-  prisma: {
+const mocks = vi.hoisted(() => {
+  const prisma = {
+    $transaction: vi.fn(),
     site: { findFirst: vi.fn(), findUnique: vi.fn() },
     approval: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     approvalTimeline: { create: vi.fn() },
@@ -17,8 +13,35 @@ const mocks = vi.hoisted(() => ({
     material: { findFirst: vi.fn(), findUnique: vi.fn() },
     document: { findFirst: vi.fn(), findUnique: vi.fn() },
     purchaseOrder: { findFirst: vi.fn(), findUnique: vi.fn() },
-  },
-}))
+  }
+
+  // The interactive transaction client is a distinct object whose delegates forward to
+  // the shared mocks, so every assertion below still sees the call while a write issued
+  // on the global client instead of `tx` leaves these spies untouched.
+  const tx = {
+    approval: {
+      update: vi.fn((args: unknown) => prisma.approval.update(args)),
+      updateMany: vi.fn((args: unknown) => prisma.approval.updateMany(args)),
+    },
+    approvalTimeline: { create: vi.fn((args: unknown) => prisma.approvalTimeline.create(args)) },
+    expense: {
+      findFirst: vi.fn((args: unknown) => prisma.expense.findFirst(args)),
+      update: vi.fn((args: unknown) => prisma.expense.update(args)),
+      updateMany: vi.fn((args: unknown) => prisma.expense.updateMany(args)),
+    },
+    salaryRun: { updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)) },
+  }
+
+  return {
+    requireUser: vi.fn(),
+    hasPermission: vi.fn(),
+    revalidatePath: vi.fn(),
+    logActivity: vi.fn(),
+    syncSiteBudget: vi.fn(),
+    prisma,
+    tx,
+  }
+})
 
 vi.mock('@/lib/auth/require-user', () => ({ requireUser: mocks.requireUser }))
 vi.mock('@/lib/permissions', () => ({ hasPermission: mocks.hasPermission }))
@@ -51,10 +74,15 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireUser.mockResolvedValue({ id: 'user_1', name: 'Admin', email: 'admin@acme.test', role: 'COMPANY_ADMIN', companyId: 'company_1' })
   mocks.hasPermission.mockReturnValue(false)
+  mocks.prisma.$transaction.mockImplementation(
+    async (run: (client: typeof mocks.tx) => unknown) => run(mocks.tx)
+  )
   mocks.prisma.site.findFirst.mockResolvedValue({ id: 'site_1', companyId: 'company_1' })
   mocks.prisma.approval.create.mockResolvedValue({ id: 'approval_new' })
   mocks.prisma.approval.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.approval.update.mockResolvedValue({ id: 'approval_1' })
+  mocks.prisma.expense.updateMany.mockResolvedValue({ count: 1 })
+  mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
 })
 
 describe('createApprovalAction entity tenant binding', () => {
@@ -107,6 +135,43 @@ describe('createApprovalAction entity tenant binding', () => {
     ).rejects.toThrow(/variation/i)
 
     expectNoApprovalMutations()
+  })
+
+  it.each([
+    ['EXPENSE', 'expense'],
+    ['BILL', 'expense'],
+    ['DPR', 'dailyProgressReport'],
+    ['MATERIAL_REQUEST', 'material'],
+    ['SALARY_RUN', 'salaryRun'],
+    ['DOCUMENT', 'document'],
+  ] as const)('refuses to bind a site bound %s to a request that carries no site', async (entityType, delegate) => {
+    await expect(
+      createApprovalAction({
+        entityType,
+        entityId: 'site_bound_entity',
+        title: 'Site bound entity without a site',
+      })
+    ).rejects.toThrow(/site/i)
+
+    expect(mocks.prisma[delegate].findFirst).not.toHaveBeenCalled()
+    expectNoApprovalMutations()
+  })
+
+  it('still allows a company level PURCHASE_ORDER request without a site', async () => {
+    mocks.prisma.purchaseOrder.findFirst.mockResolvedValue({ id: 'po_1', companyId: 'company_1' })
+
+    await createApprovalAction({
+      entityType: 'PURCHASE_ORDER',
+      entityId: 'po_1',
+      title: 'Purchase order',
+    })
+
+    expect(mocks.prisma.purchaseOrder.findFirst).toHaveBeenCalledWith({
+      where: { id: 'po_1', companyId: 'company_1' },
+    })
+    expect(mocks.prisma.approval.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ siteId: null, entityId: 'po_1' }) })
+    )
   })
 
   it('creates the approval once the entity resolves inside the tenant', async () => {
@@ -330,5 +395,80 @@ describe('rejectApprovalAction atomic tenant bound transition', () => {
     await expect(rejectApprovalAction('other_company_approval', 'Not budgeted')).rejects.toThrow(/approval not found/i)
 
     expectNoApprovalMutations()
+  })
+})
+
+describe('linked entity writes are atomic with the approval transition', () => {
+  beforeEach(() => {
+    mocks.prisma.approval.findFirst.mockResolvedValue({
+      id: 'approval_1',
+      companyId: 'company_1',
+      siteId: 'site_1',
+      currentStatus: 'PENDING',
+      entityType: 'EXPENSE',
+      entityId: 'expense_1',
+      title: 'Expense',
+    })
+  })
+
+  function expectNoPostTransactionEffects() {
+    expect(mocks.logActivity).not.toHaveBeenCalled()
+    expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  }
+
+  it('drives the approve transition, timeline and linked expense write through the transaction client', async () => {
+    await approveApprovalAction('approval_1', undefined, 'APPROVE')
+
+    expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.approval.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.approvalTimeline.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.expense.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.syncSiteBudget).toHaveBeenCalledWith('site_1')
+  })
+
+  it('drives the reject transition, timeline and linked expense write through the transaction client', async () => {
+    await rejectApprovalAction('approval_1', 'Not budgeted')
+
+    expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.approval.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.approvalTimeline.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.expense.updateMany).toHaveBeenCalledTimes(1)
+  })
+
+  it('rolls the approval back when the linked expense update matches no row', async () => {
+    mocks.prisma.expense.updateMany.mockResolvedValue({ count: 0 })
+
+    await expect(approveApprovalAction('approval_1', undefined, 'APPROVE')).rejects.toThrow(/linked expense/i)
+
+    expect(mocks.tx.expense.updateMany).toHaveBeenCalledTimes(1)
+    expectNoPostTransactionEffects()
+  })
+
+  it('rolls the approval back when the linked salary run update matches no row', async () => {
+    mocks.prisma.approval.findFirst.mockResolvedValue({
+      id: 'approval_2',
+      companyId: 'company_1',
+      siteId: 'site_1',
+      currentStatus: 'SUBMITTED',
+      entityType: 'SALARY_RUN',
+      entityId: 'salary_1',
+      title: 'Salary',
+    })
+    mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 0 })
+
+    await expect(approveApprovalAction('approval_2', undefined, 'APPROVE')).rejects.toThrow(/linked salary run/i)
+
+    expect(mocks.tx.salaryRun.updateMany).toHaveBeenCalledTimes(1)
+    expectNoPostTransactionEffects()
+  })
+
+  it('rolls the rejection back when the linked expense update matches no row', async () => {
+    mocks.prisma.expense.updateMany.mockResolvedValue({ count: 0 })
+
+    await expect(rejectApprovalAction('approval_1', 'Not budgeted')).rejects.toThrow(/linked expense/i)
+
+    expect(mocks.tx.expense.updateMany).toHaveBeenCalledTimes(1)
+    expectNoPostTransactionEffects()
   })
 })

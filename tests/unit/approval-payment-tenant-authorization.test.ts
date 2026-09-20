@@ -51,7 +51,7 @@ describe('markApprovalPaidAction tenant authorization', () => {
   it('scopes linked expense and salary mutations to the fetched approval company', async () => {
     await markApprovalPaidAction('approval_1', undefined, 'PAID')
     expect(mocks.prisma.expense.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'expense_1', companyId: 'company_1' },
+      where: { id: 'expense_1', companyId: 'company_1', deletedAt: null },
     }))
 
     mocks.prisma.approval.findFirst.mockResolvedValue({ id: 'approval_2', companyId: 'company_1', currentStatus: 'APPROVED', entityType: 'SALARY_RUN', entityId: 'salary_1', title: 'Salary' })

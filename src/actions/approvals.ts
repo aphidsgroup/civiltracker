@@ -5,7 +5,22 @@ import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/audit'
-import type { ApprovalEntityType, ApprovalPriority, ApprovalStatus } from '@prisma/client'
+import type { ApprovalEntityType, ApprovalPriority, ApprovalStatus, Prisma } from '@prisma/client'
+
+/**
+ * Entity types whose records always live under a single site. A request for one of
+ * them must carry a site, otherwise the approval would escape site scoping and the
+ * entity lookup would silently fall back to a company-wide match.
+ * PURCHASE_ORDER is the only deliberately company-level entity.
+ */
+const SITE_BOUND_ENTITY_TYPES: ReadonlySet<ApprovalEntityType> = new Set<ApprovalEntityType>([
+  'EXPENSE',
+  'BILL',
+  'DPR',
+  'MATERIAL_REQUEST',
+  'SALARY_RUN',
+  'DOCUMENT',
+])
 
 /**
  * Resolves the entity an approval points at strictly inside the approval tenant:
@@ -66,6 +81,12 @@ export async function createApprovalAction(data: {
   const user = await requireUser()
   if (data.entityType === 'VARIATION') {
     throw new Error('Unsupported: VARIATION approvals cannot be requested through this workflow')
+  }
+
+  // Fail closed before any entity lookup or write: a site-bound entity may never be
+  // attached to a company-level request.
+  if (!data.siteId && SITE_BOUND_ENTITY_TYPES.has(data.entityType)) {
+    throw new Error(`Forbidden: ${data.entityType} approvals require a site and this request carries no site`)
   }
 
   const site = data.siteId
@@ -241,35 +262,78 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
     throw new Error(`Forbidden: Role ${user.role} is not authorized to approve ${approval.entityType}`)
   }
 
-  const transition = await prisma.approval.updateMany({
-    where: {
-      id,
-      companyId: approval.companyId,
-      deletedAt: null,
-      currentStatus: { in: OPEN_APPROVAL_STATUSES },
-    },
-    data: {
-      currentStatus: 'APPROVED',
-      approvedById: user.id,
-      approvedAt: new Date(),
-    },
-  })
-  if (transition.count !== 1) {
-    throw new Error('Approval is no longer processable and cannot be approved')
-  }
-  const updated = { id, currentStatus: 'APPROVED' as ApprovalStatus }
+  // The conditional transition, its timeline entry and the linked entity mutation are
+  // one unit of work: a linked row that cannot be reached inside the approval tenant
+  // rolls the approval back to its open status instead of leaving the two out of sync.
+  const budgetSiteId = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const transition = await tx.approval.updateMany({
+      where: {
+        id,
+        companyId: approval.companyId,
+        deletedAt: null,
+        currentStatus: { in: OPEN_APPROVAL_STATUSES },
+      },
+      data: {
+        currentStatus: 'APPROVED',
+        approvedById: user.id,
+        approvedAt: new Date(),
+      },
+    })
+    if (transition.count !== 1) {
+      throw new Error('Approval is no longer processable and cannot be approved')
+    }
 
-  await prisma.approvalTimeline.create({
-    data: {
-      companyId: approval.companyId,
-      approvalId: id,
-      actorUserId: user.id,
-      action: 'APPROVED',
-      fromStatus: approval.currentStatus,
-      toStatus: 'APPROVED',
-      note: note || 'Request officially approved',
-    },
+    await tx.approvalTimeline.create({
+      data: {
+        companyId: approval.companyId,
+        approvalId: id,
+        actorUserId: user.id,
+        action: 'APPROVED',
+        fromStatus: approval.currentStatus,
+        toStatus: 'APPROVED',
+        note: note || 'Request officially approved',
+      },
+    })
+
+    if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
+      const linked = await tx.expense.updateMany({
+        where: {
+          id: approval.entityId,
+          companyId: approval.companyId,
+          deletedAt: null,
+          ...(approval.siteId ? { siteId: approval.siteId } : {}),
+        },
+        data: { approvalStatus: 'APPROVED', approvedById: user.id, approvedAt: new Date() },
+      })
+      if (linked.count !== 1) {
+        throw new Error('Linked expense not found in the approval tenant and cannot be approved')
+      }
+      if (approval.siteId) return approval.siteId
+      const linkedExpense = await tx.expense.findFirst({
+        where: { id: approval.entityId, companyId: approval.companyId, deletedAt: null },
+        select: { siteId: true },
+      })
+      return linkedExpense?.siteId ?? null
+    }
+
+    if (approval.entityType === 'SALARY_RUN') {
+      const linked = await tx.salaryRun.updateMany({
+        where: {
+          id: approval.entityId,
+          companyId: approval.companyId,
+          ...(approval.siteId ? { siteId: approval.siteId } : {}),
+        },
+        data: { status: 'APPROVED' },
+      })
+      if (linked.count !== 1) {
+        throw new Error('Linked salary run not found in the approval tenant and cannot be approved')
+      }
+    }
+
+    return null
   })
+
+  const updated = { id, currentStatus: 'APPROVED' as ApprovalStatus }
 
   await logActivity({
     userId: user.id,
@@ -282,37 +346,11 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
     after: { status: 'APPROVED', note },
   })
 
-  if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
-    const linked = await prisma.expense.updateMany({
-      where: {
-        id: approval.entityId,
-        companyId: approval.companyId,
-        deletedAt: null,
-        ...(approval.siteId ? { siteId: approval.siteId } : {}),
-      },
-      data: { approvalStatus: 'APPROVED', approvedById: user.id, approvedAt: new Date() },
-    })
-    if (linked?.count === 1) {
-      const siteId = approval.siteId
-        ?? (await prisma.expense.findFirst({
-          where: { id: approval.entityId, companyId: approval.companyId, deletedAt: null },
-          select: { siteId: true },
-        }))?.siteId
-        ?? null
-      if (siteId) {
-        const { syncSiteBudget } = await import('@/lib/budget')
-        await syncSiteBudget(siteId)
-      }
-    }
-  } else if (approval.entityType === 'SALARY_RUN') {
-    await prisma.salaryRun.updateMany({
-      where: {
-        id: approval.entityId,
-        companyId: approval.companyId,
-        ...(approval.siteId ? { siteId: approval.siteId } : {}),
-      },
-      data: { status: 'APPROVED' },
-    })
+  // Budget aggregation lives outside the database transaction so an external sync
+  // failure cannot roll back a committed approval.
+  if (budgetSiteId) {
+    const { syncSiteBudget } = await import('@/lib/budget')
+    await syncSiteBudget(budgetSiteId)
   }
 
   revalidatePath('/approvals')
@@ -336,36 +374,56 @@ export async function rejectApprovalAction(id: string, reason: string) {
     throw new Error(`Forbidden: Role ${user.role} is not authorized to reject ${approval.entityType}`)
   }
 
-  const transition = await prisma.approval.updateMany({
-    where: {
-      id,
-      companyId: approval.companyId,
-      deletedAt: null,
-      currentStatus: { in: OPEN_APPROVAL_STATUSES },
-    },
-    data: {
-      currentStatus: 'REJECTED',
-      rejectedById: user.id,
-      rejectedAt: new Date(),
-      rejectionReason: reason,
-    },
-  })
-  if (transition.count !== 1) {
-    throw new Error('Approval is no longer processable and cannot be rejected')
-  }
-  const updated = { id, currentStatus: 'REJECTED' as ApprovalStatus }
+  // Same unit of work as approval: transition, timeline and the linked entity move
+  // together or not at all.
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const transition = await tx.approval.updateMany({
+      where: {
+        id,
+        companyId: approval.companyId,
+        deletedAt: null,
+        currentStatus: { in: OPEN_APPROVAL_STATUSES },
+      },
+      data: {
+        currentStatus: 'REJECTED',
+        rejectedById: user.id,
+        rejectedAt: new Date(),
+        rejectionReason: reason,
+      },
+    })
+    if (transition.count !== 1) {
+      throw new Error('Approval is no longer processable and cannot be rejected')
+    }
 
-  await prisma.approvalTimeline.create({
-    data: {
-      companyId: approval.companyId,
-      approvalId: id,
-      actorUserId: user.id,
-      action: 'REJECTED',
-      fromStatus: approval.currentStatus,
-      toStatus: 'REJECTED',
-      note: reason,
-    },
+    await tx.approvalTimeline.create({
+      data: {
+        companyId: approval.companyId,
+        approvalId: id,
+        actorUserId: user.id,
+        action: 'REJECTED',
+        fromStatus: approval.currentStatus,
+        toStatus: 'REJECTED',
+        note: reason,
+      },
+    })
+
+    if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
+      const linked = await tx.expense.updateMany({
+        where: {
+          id: approval.entityId,
+          companyId: approval.companyId,
+          deletedAt: null,
+          ...(approval.siteId ? { siteId: approval.siteId } : {}),
+        },
+        data: { approvalStatus: 'REJECTED', rejectedById: user.id, rejectedAt: new Date(), rejectionNote: reason },
+      })
+      if (linked.count !== 1) {
+        throw new Error('Linked expense not found in the approval tenant and cannot be rejected')
+      }
+    }
   })
+
+  const updated = { id, currentStatus: 'REJECTED' as ApprovalStatus }
 
   await logActivity({
     userId: user.id,
@@ -377,18 +435,6 @@ export async function rejectApprovalAction(id: string, reason: string) {
     before: { status: approval.currentStatus },
     after: { status: 'REJECTED', reason },
   })
-
-  if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
-    await prisma.expense.updateMany({
-      where: {
-        id: approval.entityId,
-        companyId: approval.companyId,
-        deletedAt: null,
-        ...(approval.siteId ? { siteId: approval.siteId } : {}),
-      },
-      data: { approvalStatus: 'REJECTED', rejectedById: user.id, rejectedAt: new Date(), rejectionNote: reason },
-    })
-  }
 
   revalidatePath('/approvals')
   revalidatePath(`/approvals/${id}`)
@@ -459,12 +505,21 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
 
   if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
     await prisma.expense.updateMany({
-      where: { id: approval.entityId, companyId: approval.companyId },
+      where: {
+        id: approval.entityId,
+        companyId: approval.companyId,
+        deletedAt: null,
+        ...(approval.siteId ? { siteId: approval.siteId } : {}),
+      },
       data: { approvalStatus: 'PAID' },
     })
   } else if (approval.entityType === 'SALARY_RUN') {
     await prisma.salaryRun.updateMany({
-      where: { id: approval.entityId, companyId: approval.companyId },
+      where: {
+        id: approval.entityId,
+        companyId: approval.companyId,
+        ...(approval.siteId ? { siteId: approval.siteId } : {}),
+      },
       data: { status: 'PAID' },
     })
   }
