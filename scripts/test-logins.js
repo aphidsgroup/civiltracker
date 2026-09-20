@@ -5,9 +5,9 @@ const http = require('http')
 const BASE_URL = 'https://civiltracker.buildogram.in'
 
 const TESTS = [
-  { name: 'Super Admin', email: 'admin@civiltracker.in', password: 'Admin@123456', expectedRedirect: '/super-admin/dashboard' },
-  { name: 'Company Admin', email: 'arun@madras-crafters.in', password: 'Admin@123456', expectedRedirect: '/dashboard' },
-  { name: 'Site Engineer', email: 'murugan@madras-crafters.in', password: 'Admin@123456', expectedRedirect: '/mobile/home' },
+  { name: 'Super Admin', email: 'admin@civiltracker.in', password: process.env.E2E_TEST_PASSWORD ?? '', expectedRedirect: '/super-admin/dashboard' },
+  { name: 'Company Admin', email: 'arun@madras-crafters.in', password: process.env.E2E_TEST_PASSWORD ?? '', expectedRedirect: '/dashboard' },
+  { name: 'Site Engineer', email: 'murugan@madras-crafters.in', password: process.env.E2E_TEST_PASSWORD ?? '', expectedRedirect: '/mobile/home' },
 ]
 
 function fetchUrl(url, options = {}) {

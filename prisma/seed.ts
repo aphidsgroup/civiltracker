@@ -255,12 +255,7 @@ async function main() {
   console.log('✅ Client, approvals & notifications created')
 
   console.log('\n🎉 Seed complete!')
-  console.log('Demo accounts:')
-  console.log('  Super Admin:   admin@civiltracker.in / Admin@123456')
-  console.log('  Company Admin: arun@madras-crafters.in / Admin@123456')
-  console.log('  Site Engineer: murugan@madras-crafters.in / Admin@123456')
-  console.log('  Accountant:    priya@madras-crafters.in / Admin@123456')
-  console.log('  Client:        client@annanagar.in / Admin@123456')
+  console.log('Demo accounts created. Use the DEMO_SEED_PASSWORD supplied for this non-production seed run.')
 }
 
 main()

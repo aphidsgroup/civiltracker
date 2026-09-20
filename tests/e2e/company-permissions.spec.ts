@@ -8,7 +8,7 @@ test.describe('Phase 9 Company Permissions & Limits', () => {
     // Authenticate
     await page.goto('/login')
     await page.fill('input[name="email"]', 'arun@madras-crafters.in')
-    await page.fill('input[name="password"]', 'Admin@123456')
+    await page.fill('input[name="password"]', process.env.E2E_TEST_PASSWORD ?? '')
     await page.locator('button:has-text("Sign in"), button[type="submit"]').first().click()
     await page.waitForURL('**/dashboard')
 
