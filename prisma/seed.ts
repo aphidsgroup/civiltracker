@@ -104,7 +104,7 @@ async function main() {
 
   // ── Sites ────────────────────────────────────────────────────
   const annaNagar = await prisma.site.create({
-    data: { companyId: company.id, name: 'Anna Nagar Villa Project', slug: 'anna-nagar-villa', location: 'Anna Nagar, Chennai', address: '3rd Avenue, Anna Nagar, Chennai - 600040', clientName: 'R. Subramanian', contractType: 'Item-rate', budget: 18500000, spent: 11400000, progress: 62, status: SiteStatus.ACTIVE, currentStage: 'MEP', startDate: new Date('2026-02-08'), handoverDate: new Date('2026-12-18'), engineerId: murugan.id, createdById: arun.id },
+    data: { companyId: company.id, name: 'Anna Nagar Villa Project', slug: 'anna-nagar-villa', location: 'Anna Nagar, Chennai', address: '3rd Avenue, Anna Nagar, Chennai - 600040', clientName: 'R. Subramanian', clientUserId: clientUser.id, contractType: 'Item-rate', budget: 18500000, spent: 11400000, progress: 62, status: SiteStatus.ACTIVE, currentStage: 'MEP', startDate: new Date('2026-02-08'), handoverDate: new Date('2026-12-18'), engineerId: murugan.id, createdById: arun.id },
   })
   const porur = await prisma.site.create({
     data: { companyId: company.id, name: 'Porur Residential Renovation', slug: 'porur-residential', location: 'Porur, Chennai', clientName: 'K. Lakshmi', contractType: 'Cost-plus', budget: 6800000, spent: 2800000, progress: 41, status: SiteStatus.ACTIVE, currentStage: 'PLASTERING', startDate: new Date('2026-03-15'), createdById: arun.id },

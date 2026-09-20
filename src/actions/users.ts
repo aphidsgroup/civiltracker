@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth/require-permission'
-import { auth } from '@/lib/auth'
+import { requireUser } from '@/lib/auth/require-user'
 import { Role } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { logActivity } from '@/lib/audit'
@@ -231,13 +231,6 @@ export async function updateEmployee(formData: FormData): Promise<void> {
       },
     })
 
-    // The session role is read from User.role, so it must move with the membership
-    // role — otherwise a demoted member keeps their old permissions until re-login.
-    await tx.user.update({
-      where: { id: member.userId },
-      data: { role: input.role as Role, isActive: input.isActive },
-    })
-
     await tx.auditLog.create({
       data: {
         companyId,
@@ -338,13 +331,11 @@ export async function removeEmployeeFromCompany(formData: FormData): Promise<voi
  * - COMPANY_ADMIN can reset passwords for users within their own company.
  */
 export async function resetUserPassword(userId: string, newPassword: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error('Unauthorized')
+  const actor = await requireUser()
+  const actorRole = actor.role
+  const actorCompanyId = actor.companyId
 
-  const actorRole = session.user.role as Role
-  const actorCompanyId = session.user.companyId
-
-  if (actorRole !== 'SUPER_ADMIN' && actorRole !== 'COMPANY_ADMIN') {
+  if (actorRole !== Role.SUPER_ADMIN && actorRole !== Role.COMPANY_ADMIN) {
     throw new Error('Only Super Admins and Company Admins can reset passwords.')
   }
 
@@ -356,7 +347,7 @@ export async function resetUserPassword(userId: string, newPassword: string) {
   if (actorRole === 'COMPANY_ADMIN') {
     if (!actorCompanyId) throw new Error('No company associated with this admin.')
     const membership = await prisma.companyMember.findFirst({
-      where: { userId, companyId: actorCompanyId },
+      where: { userId, companyId: actorCompanyId, isActive: true },
     })
     if (!membership) {
       throw new Error('You can only reset passwords for users within your own company.')
@@ -373,15 +364,14 @@ export async function resetUserPassword(userId: string, newPassword: string) {
     data: { passwordHash: hash },
   })
 
-  const actor = await prisma.user.findUnique({ where: { id: session.user.id! }, select: { name: true, email: true } })
-  const target = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true, companyMembers: { select: { companyId: true }, take: 1 } } })
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } })
   await logActivity({
-    userId: session.user.id!,
-    companyId: target?.companyMembers?.[0]?.companyId ?? session.user.companyId,
+    userId: actor.id,
+    companyId: actorCompanyId,
     action: 'UPDATE',
     module: 'PASSWORD_RESET',
     recordId: userId,
-    description: `${actor?.name ?? actor?.email ?? 'Admin'} reset password for "${target?.name ?? target?.email ?? userId}"`,
+    description: `${actor.name ?? actor.email ?? 'Admin'} reset password for "${target?.name ?? target?.email ?? userId}"`,
   })
 
   revalidatePath('/settings/users')

@@ -49,7 +49,7 @@ vi.mock('@/lib/auth/require-user', () => ({
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }))
 
-const { inviteEmployee, updateEmployee, removeEmployeeFromCompany } = await import('@/actions/users')
+const { inviteEmployee, updateEmployee, removeEmployeeFromCompany, resetUserPassword } = await import('@/actions/users')
 const { canAssignRole, canManageMemberWithRole, INVITABLE_EMPLOYEE_ROLES } = await import(
   '@/lib/permissions'
 )
@@ -415,7 +415,7 @@ describe('updateEmployee: role escalation on existing members', () => {
     expect(mocks.tx.companyMember.update).not.toHaveBeenCalled()
   })
 
-  it('applies an allowed role change, syncs the login role and records it durably', async () => {
+  it('applies an allowed role change only to the tenant membership and records it durably', async () => {
     await updateEmployee(updateForm({ role: 'SUPERVISOR' }))
 
     expect(mocks.tx.companyMember.update).toHaveBeenCalledTimes(1)
@@ -425,9 +425,10 @@ describe('updateEmployee: role escalation on existing members', () => {
     )
     expect(args.data.role).toBe('SUPERVISOR')
 
-    // The session role is read from User.role, so it must move with the membership role.
-    expect(mocks.tx.user.update).toHaveBeenCalledTimes(1)
-    expect(mocks.tx.user.update.mock.calls[0][0].data.role).toBe('SUPERVISOR')
+    // Role and activity are tenant-scoped on CompanyMember; global User state must
+    // not change because the same user can belong to another company.
+    expect(mocks.tx.user.update).not.toHaveBeenCalled()
+    expect(mocks.prisma.user.update).not.toHaveBeenCalled()
 
     expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
     expect(mocks.tx.auditLog.create.mock.calls[0][0].data.module).toBe('USER')
@@ -489,6 +490,27 @@ describe('removeEmployeeFromCompany: access revocation guardrails', () => {
     expect(mocks.tx.user.update).not.toHaveBeenCalled()
     expect(mocks.prisma.user.update).not.toHaveBeenCalled()
     expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('resetUserPassword: live membership guard', () => {
+  it('rejects inactive target membership before changing the password', async () => {
+    mocks.prisma.companyMember.findFirst.mockResolvedValue(null)
+    await expect(resetUserPassword('user_target', 'A-long-enough-password')).rejects.toThrow(/within your own company/i)
+    expect(mocks.prisma.companyMember.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ userId: 'user_target', companyId: COMPANY_ID, isActive: true }),
+    }))
+    expect(mocks.prisma.user.update).not.toHaveBeenCalled()
+  })
+
+  it('scopes a permitted reset to the actor company audit context', async () => {
+    mocks.prisma.companyMember.findFirst.mockResolvedValue({ role: 'SITE_ENGINEER', isActive: true })
+    mocks.prisma.user.findUnique.mockResolvedValue({ name: 'Target User', email: 'target@acme.test' })
+    await resetUserPassword('user_target', 'A-long-enough-password')
+    expect(mocks.prisma.companyMember.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ userId: 'user_target', companyId: COMPANY_ID, isActive: true }),
+    }))
+    expect(mocks.prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'user_target' } }))
   })
 })
 
