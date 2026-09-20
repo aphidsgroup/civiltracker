@@ -33,7 +33,7 @@ async function requireActiveCompanySites(companyId: string, siteIds: string[]) {
   return uniqueSiteIds
 }
 
-async function createClientUser(formData: FormData) {
+export async function createClientUser(formData: FormData) {
   'use server'
   const actor = await requirePermission('company.manage')
   const companyId = actor.companyId
@@ -67,10 +67,13 @@ async function createClientUser(formData: FormData) {
     await tx.companyMember.create({
       data: { userId: user.id, companyId, role: 'CLIENT', siteIds: assignedSiteIds, isActive: true },
     })
-    await tx.site.updateMany({
+    const assigned = await tx.site.updateMany({
       where: { id: { in: assignedSiteIds }, companyId, deletedAt: null, status: 'ACTIVE' },
       data: { clientUserId: user.id },
     })
+    if (assigned.count !== assignedSiteIds.length) {
+      throw new Error('One or more selected sites changed before client access could be assigned.')
+    }
   })
 
   revalidatePath('/client-accounts')
@@ -114,7 +117,7 @@ async function removeClientAccount(formData: FormData) {
   revalidatePath('/client-accounts')
 }
 
-async function assignClientSites(formData: FormData) {
+export async function assignClientSites(formData: FormData) {
   'use server'
   const actor = await requireClientManager()
   const companyId = actor.companyId
@@ -130,10 +133,13 @@ async function assignClientSites(formData: FormData) {
 
   await prisma.$transaction(async tx => {
     await tx.site.updateMany({ where: { companyId, clientUserId: member.userId }, data: { clientUserId: null } })
-    await tx.site.updateMany({
+    const assigned = await tx.site.updateMany({
       where: { id: { in: siteIds }, companyId, deletedAt: null, status: 'ACTIVE' },
       data: { clientUserId: member.userId },
     })
+    if (assigned.count !== siteIds.length) {
+      throw new Error('One or more selected sites changed before client access could be assigned.')
+    }
     await tx.companyMember.update({ where: { id: member.id, companyId }, data: { siteIds } })
     await tx.auditLog.create({
       data: {
