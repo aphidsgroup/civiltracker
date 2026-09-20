@@ -5,8 +5,9 @@ import bcrypt from 'bcryptjs'
 const prisma = new PrismaClient()
 
 async function main() {
-  if (process.env.NODE_ENV === 'production' || process.env.ALLOW_DESTRUCTIVE_DEMO_SEED !== 'true') {
-    throw new Error('Refusing destructive demo seed outside an explicitly enabled non-production environment')
+  const allowedSeedEnvironments = new Set(['development', 'test'])
+  if (!allowedSeedEnvironments.has(process.env.NODE_ENV ?? '') || process.env.ALLOW_DESTRUCTIVE_DEMO_SEED !== 'true') {
+    throw new Error('Refusing destructive demo seed outside an explicitly enabled development or test environment')
   }
   const demoPassword = process.env.DEMO_SEED_PASSWORD
   if (!demoPassword || demoPassword.length < 16) {
