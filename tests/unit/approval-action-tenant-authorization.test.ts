@@ -222,23 +222,39 @@ describe('getApprovalByIdAction tenant scoping', () => {
     expect(result.entityData).toEqual({ id: 'expense_1', billAttachments: [] })
   })
 
-  it('omits the site predicate for a company level approval', async () => {
+  it('omits the site predicate only for the company level PURCHASE_ORDER entity', async () => {
     mocks.prisma.approval.findFirst.mockResolvedValue({
       id: 'approval_2',
+      companyId: 'company_1',
+      siteId: null,
+      entityType: 'PURCHASE_ORDER',
+      entityId: 'po_1',
+    })
+    mocks.prisma.purchaseOrder.findFirst.mockResolvedValue({ id: 'po_1', companyId: 'company_1' })
+
+    await getApprovalByIdAction('approval_2')
+
+    expect(mocks.prisma.purchaseOrder.findUnique).not.toHaveBeenCalled()
+    expect(mocks.prisma.purchaseOrder.findFirst).toHaveBeenCalledWith({
+      where: { id: 'po_1', companyId: 'company_1' },
+    })
+  })
+
+  // A site-bound entity on a site-null approval used to reach a company-wide lookup,
+  // which resolves the record on any site of the company.
+  it('refuses a legacy SALARY_RUN approval that carries no site instead of widening the lookup', async () => {
+    mocks.prisma.approval.findFirst.mockResolvedValue({
+      id: 'approval_3',
       companyId: 'company_1',
       siteId: null,
       entityType: 'SALARY_RUN',
       entityId: 'salary_1',
     })
-    mocks.prisma.salaryRun.findFirst.mockResolvedValue({ id: 'salary_1', items: [] })
 
-    await getApprovalByIdAction('approval_2')
+    await expect(getApprovalByIdAction('approval_3')).rejects.toThrow(/site/i)
 
+    expect(mocks.prisma.salaryRun.findFirst).not.toHaveBeenCalled()
     expect(mocks.prisma.salaryRun.findUnique).not.toHaveBeenCalled()
-    expect(mocks.prisma.salaryRun.findFirst).toHaveBeenCalledWith({
-      where: { id: 'salary_1', companyId: 'company_1' },
-      include: { items: true },
-    })
   })
 })
 

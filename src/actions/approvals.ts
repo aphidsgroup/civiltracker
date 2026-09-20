@@ -5,22 +5,50 @@ import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/audit'
-import type { ApprovalEntityType, ApprovalPriority, ApprovalStatus, Prisma } from '@prisma/client'
+import type { ApprovalEntityType, ApprovalPriority, ApprovalStatus, Prisma, SalaryRunStatus } from '@prisma/client'
 
 /**
- * Entity types whose records always live under a single site. A request for one of
- * them must carry a site, otherwise the approval would escape site scoping and the
- * entity lookup would silently fall back to a company-wide match.
- * PURCHASE_ORDER is the only deliberately company-level entity.
+ * SalaryRunStatus is DRAFT | SUBMITTED | VERIFIED | APPROVED | PAID — there is no
+ * REJECTED member. A rejected payroll therefore returns to DRAFT, the schema default
+ * and the only status from which the run can be corrected and resubmitted, so that a
+ * rejected approval never leaves its salary run sitting on an approved/payable status.
  */
-const SITE_BOUND_ENTITY_TYPES: ReadonlySet<ApprovalEntityType> = new Set<ApprovalEntityType>([
-  'EXPENSE',
-  'BILL',
-  'DPR',
-  'MATERIAL_REQUEST',
-  'SALARY_RUN',
-  'DOCUMENT',
+const REJECTED_SALARY_RUN_STATUS: SalaryRunStatus = 'DRAFT'
+
+/**
+ * PURCHASE_ORDER is the only deliberately company-level approval entity. Every other
+ * entity type keeps its records under a single site, so its approval must carry that
+ * site: without one the entity lookup and every linked write silently widen to a
+ * company-only match that resolves a record on any site of the company.
+ */
+const COMPANY_LEVEL_ENTITY_TYPES: ReadonlySet<ApprovalEntityType> = new Set<ApprovalEntityType>([
+  'PURCHASE_ORDER',
 ])
+
+function approvalRequiresSite(entityType: ApprovalEntityType) {
+  return !COMPANY_LEVEL_ENTITY_TYPES.has(entityType)
+}
+
+/**
+ * Fail-closed guard for approval rows that already exist in the database. Requests
+ * created today are site bound at creation, but rows written before that rule — or
+ * written straight to the database — can still carry siteId = null on a site-bound
+ * entity type, which turns every read and transition below into a company-wide match.
+ * Every path that resolves or mutates a linked entity calls this first, so the row is
+ * refused before entity resolution, transition, timeline, audit, budget sync or any
+ * linked write.
+ */
+function assertApprovalSiteBinding(approval: {
+  id: string
+  entityType: ApprovalEntityType
+  siteId: string | null
+}) {
+  if (approval.siteId) return
+  if (!approvalRequiresSite(approval.entityType)) return
+  throw new Error(
+    `Forbidden: ${approval.entityType} approval ${approval.id} carries no site binding and cannot be read or actioned`
+  )
+}
 
 /**
  * Resolves the entity an approval points at strictly inside the approval tenant:
@@ -85,7 +113,7 @@ export async function createApprovalAction(data: {
 
   // Fail closed before any entity lookup or write: a site-bound entity may never be
   // attached to a company-level request.
-  if (!data.siteId && SITE_BOUND_ENTITY_TYPES.has(data.entityType)) {
+  if (!data.siteId && approvalRequiresSite(data.entityType)) {
     throw new Error(`Forbidden: ${data.entityType} approvals require a site and this request carries no site`)
   }
 
@@ -211,6 +239,7 @@ export async function getApprovalByIdAction(id: string) {
   })
 
   if (!approval) throw new Error('Approval not found or access denied')
+  assertApprovalSiteBinding(approval)
 
   const entityData = await findLinkedApprovalEntity(approval.entityType, approval.entityId, {
     companyId: approval.companyId,
@@ -251,6 +280,7 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
   const approval = await prisma.approval.findFirst({ where: { id, ...companyFilter, deletedAt: null } })
   if (!approval) throw new Error('Approval not found')
+  assertApprovalSiteBinding(approval)
   if ((confirmationText ?? '').trim() !== 'APPROVE') {
     throw new Error('Approval confirmation text must exactly match APPROVE')
   }
@@ -295,6 +325,8 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
       },
     })
 
+    // The site guard above already refused a site-bound approval without a site, so
+    // every linked write below is unconditionally scoped to the approval site.
     if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
       const linked = await tx.expense.updateMany({
         where: {
@@ -308,12 +340,7 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
       if (linked.count !== 1) {
         throw new Error('Linked expense not found in the approval tenant and cannot be approved')
       }
-      if (approval.siteId) return approval.siteId
-      const linkedExpense = await tx.expense.findFirst({
-        where: { id: approval.entityId, companyId: approval.companyId, deletedAt: null },
-        select: { siteId: true },
-      })
-      return linkedExpense?.siteId ?? null
+      return approval.siteId
     }
 
     if (approval.entityType === 'SALARY_RUN') {
@@ -321,7 +348,7 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
         where: {
           id: approval.entityId,
           companyId: approval.companyId,
-          ...(approval.siteId ? { siteId: approval.siteId } : {}),
+          siteId: approval.siteId,
         },
         data: { status: 'APPROVED' },
       })
@@ -369,6 +396,7 @@ export async function rejectApprovalAction(id: string, reason: string) {
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
   const approval = await prisma.approval.findFirst({ where: { id, ...companyFilter, deletedAt: null } })
   if (!approval) throw new Error('Approval not found')
+  assertApprovalSiteBinding(approval)
 
   if (!verifyCanApproveEntity(user.role, approval.entityType)) {
     throw new Error(`Forbidden: Role ${user.role} is not authorized to reject ${approval.entityType}`)
@@ -407,6 +435,8 @@ export async function rejectApprovalAction(id: string, reason: string) {
       },
     })
 
+    // The site guard above already refused a site-bound approval without a site, so
+    // every linked write below is unconditionally scoped to the approval site.
     if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
       const linked = await tx.expense.updateMany({
         where: {
@@ -419,6 +449,20 @@ export async function rejectApprovalAction(id: string, reason: string) {
       })
       if (linked.count !== 1) {
         throw new Error('Linked expense not found in the approval tenant and cannot be rejected')
+      }
+    }
+
+    if (approval.entityType === 'SALARY_RUN') {
+      const linked = await tx.salaryRun.updateMany({
+        where: {
+          id: approval.entityId,
+          companyId: approval.companyId,
+          siteId: approval.siteId,
+        },
+        data: { status: REJECTED_SALARY_RUN_STATUS },
+      })
+      if (linked.count !== 1) {
+        throw new Error('Linked salary run not found in the approval tenant and cannot be rejected')
       }
     }
   })
@@ -455,6 +499,7 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
     : { id, companyId: user.companyId!, deletedAt: null }
   const approval = await prisma.approval.findFirst({ where: approvalWhere })
   if (!approval) throw new Error('Approval not found')
+  assertApprovalSiteBinding(approval)
   if (approval.currentStatus !== 'APPROVED') {
     throw new Error('Only approved requests can be marked paid')
   }
@@ -503,6 +548,8 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
     after: { status: 'PAID', paymentData: paymentData ?? null },
   })
 
+  // The site guard above already refused a site-bound approval without a site, so
+  // every linked write below is unconditionally scoped to the approval site.
   if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
     await prisma.expense.updateMany({
       where: {
@@ -518,7 +565,7 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
       where: {
         id: approval.entityId,
         companyId: approval.companyId,
-        ...(approval.siteId ? { siteId: approval.siteId } : {}),
+        siteId: approval.siteId,
       },
       data: { status: 'PAID' },
     })
