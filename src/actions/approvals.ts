@@ -585,8 +585,12 @@ export async function addApprovalCommentAction(approvalId: string, comment: stri
   const approvalWhere = user.role === 'SUPER_ADMIN'
     ? { id: approvalId, deletedAt: null }
     : { id: approvalId, companyId: user.companyId!, deletedAt: null }
-  const approval = await prisma.approval.findFirst({ where: approvalWhere, select: { companyId: true } })
+  const approval = await prisma.approval.findFirst({
+    where: approvalWhere,
+    select: { id: true, companyId: true, entityType: true, siteId: true },
+  })
   if (!approval) throw new Error('Approval not found')
+  assertApprovalSiteBinding(approval)
 
   const created = await prisma.approvalComment.create({
     data: {

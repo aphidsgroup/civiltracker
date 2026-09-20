@@ -30,8 +30,50 @@ describe('approval comment tenant authorization', () => {
 
     expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({
       where: { id: 'other_company_approval', companyId: 'company_1', deletedAt: null },
-      select: { companyId: true },
+      select: { id: true, companyId: true, entityType: true, siteId: true },
     })
     expect(mocks.prisma.approvalComment.create).not.toHaveBeenCalled()
+  })
+
+  it('rejects a same-company legacy site-null EXPENSE approval before comment creation', async () => {
+    // A row that predates site binding: same company, so the tenant filter admits it,
+    // but the site-bound entity type carries no site and the thread must stay closed.
+    mocks.prisma.approval.findFirst.mockResolvedValue({
+      id: 'legacy_approval',
+      companyId: 'company_1',
+      entityType: 'EXPENSE',
+      siteId: null,
+    })
+
+    await expect(addApprovalCommentAction('legacy_approval', 'Attempted comment on a site-less approval')).rejects.toThrow(/site/i)
+
+    expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({
+      where: { id: 'legacy_approval', companyId: 'company_1', deletedAt: null },
+      select: { id: true, companyId: true, entityType: true, siteId: true },
+    })
+    expect(mocks.prisma.approvalComment.create).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('still comments on a company level PURCHASE_ORDER approval that has no site', async () => {
+    mocks.prisma.approval.findFirst.mockResolvedValue({
+      id: 'po_approval',
+      companyId: 'company_1',
+      entityType: 'PURCHASE_ORDER',
+      siteId: null,
+    })
+    mocks.prisma.approvalComment.create.mockResolvedValue({ id: 'comment_1' })
+
+    const created = await addApprovalCommentAction('po_approval', 'Company level note')
+
+    expect(created).toEqual({ id: 'comment_1' })
+    expect(mocks.prisma.approvalComment.create).toHaveBeenCalledWith({
+      data: {
+        companyId: 'company_1',
+        approvalId: 'po_approval',
+        userId: 'user_1',
+        comment: 'Company level note',
+      },
+    })
   })
 })
