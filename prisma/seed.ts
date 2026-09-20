@@ -5,7 +5,15 @@ import bcrypt from 'bcryptjs'
 const prisma = new PrismaClient()
 
 async function main() {
-  console.log('🌱 Seeding Civil Tracker database...')
+  if (process.env.NODE_ENV === 'production' || process.env.ALLOW_DESTRUCTIVE_DEMO_SEED !== 'true') {
+    throw new Error('Refusing destructive demo seed outside an explicitly enabled non-production environment')
+  }
+  const demoPassword = process.env.DEMO_SEED_PASSWORD
+  if (!demoPassword || demoPassword.length < 16) {
+    throw new Error('DEMO_SEED_PASSWORD must be set to a non-default value of at least 16 characters')
+  }
+
+  console.log('Seeding explicitly enabled non-production demo database...')
 
   // Clean slate
   await prisma.auditLog.deleteMany()
@@ -57,7 +65,7 @@ async function main() {
 
   // ── Super Admin ──────────────────────────────────────────────
   const superAdmin = await prisma.user.create({
-    data: { email: 'admin@civiltracker.in', name: 'Platform Admin', phone: '+91 99999 00001', passwordHash: await hash('Admin@123456'), role: Role.SUPER_ADMIN },
+    data: { email: 'admin@civiltracker.in', name: 'Platform Admin', phone: '+91 99999 00001', passwordHash: await hash(demoPassword), role: Role.SUPER_ADMIN },
   })
   console.log('✅ Super admin created')
 
@@ -76,11 +84,11 @@ async function main() {
   console.log('✅ Companies created')
 
   // ── Users ────────────────────────────────────────────────────
-  const arun = await prisma.user.create({ data: { email: 'arun@madras-crafters.in', name: 'Arun Selvaraj', phone: '+91 98401 55011', passwordHash: await hash('Admin@123456'), role: Role.COMPANY_ADMIN } })
-  const priya = await prisma.user.create({ data: { email: 'priya@madras-crafters.in', name: 'Priya Rajan', phone: '+91 98401 55012', passwordHash: await hash('Admin@123456'), role: Role.ACCOUNTANT } })
-  const murugan = await prisma.user.create({ data: { email: 'murugan@madras-crafters.in', name: 'Murugan R', phone: '+91 94440 55013', passwordHash: await hash('Admin@123456'), role: Role.SITE_ENGINEER } })
-  const vetrivel = await prisma.user.create({ data: { email: 'vetrivel@madras-crafters.in', name: 'Vetrivel K', phone: '+91 94440 55014', passwordHash: await hash('Admin@123456'), role: Role.SUPERVISOR } })
-  const clientUser = await prisma.user.create({ data: { email: 'client@annanagar.in', name: 'R. Subramanian', phone: '+91 98401 11100', passwordHash: await hash('Admin@123456'), role: Role.CLIENT } })
+  const arun = await prisma.user.create({ data: { email: 'arun@madras-crafters.in', name: 'Arun Selvaraj', phone: '+91 98401 55011', passwordHash: await hash(demoPassword), role: Role.COMPANY_ADMIN } })
+  const priya = await prisma.user.create({ data: { email: 'priya@madras-crafters.in', name: 'Priya Rajan', phone: '+91 98401 55012', passwordHash: await hash(demoPassword), role: Role.ACCOUNTANT } })
+  const murugan = await prisma.user.create({ data: { email: 'murugan@madras-crafters.in', name: 'Murugan R', phone: '+91 94440 55013', passwordHash: await hash(demoPassword), role: Role.SITE_ENGINEER } })
+  const vetrivel = await prisma.user.create({ data: { email: 'vetrivel@madras-crafters.in', name: 'Vetrivel K', phone: '+91 94440 55014', passwordHash: await hash(demoPassword), role: Role.SUPERVISOR } })
+  const clientUser = await prisma.user.create({ data: { email: 'client@annanagar.in', name: 'R. Subramanian', phone: '+91 98401 11100', passwordHash: await hash(demoPassword), role: Role.CLIENT } })
 
   await prisma.companyMember.createMany({
     data: [
