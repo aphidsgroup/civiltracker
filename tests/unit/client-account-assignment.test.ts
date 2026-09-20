@@ -65,7 +65,10 @@ describe('client account site assignments', () => {
       data: expect.objectContaining({ userId: 'client_1', companyId, role: 'CLIENT', siteIds: ['site_1'] }),
     }))
     expect(mocks.tx.site.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: { in: ['site_1'] }, companyId, deletedAt: null, status: 'ACTIVE' },
+      where: {
+        id: { in: ['site_1'] }, companyId, deletedAt: null, status: 'ACTIVE',
+        OR: [{ clientUserId: null }, { clientUserId: 'client_1' }],
+      },
       data: { clientUserId: 'client_1' },
     }))
   })
@@ -73,6 +76,14 @@ describe('client account site assignments', () => {
   it('aborts when the transactional site assignment affects fewer sites than validated', async () => {
     mocks.tx.site.updateMany.mockResolvedValue({ count: 0 })
     await expect(createClientUser(form({ name: 'Client', email: 'client@example.test', password: 'secure-password', siteIds: ['site_1'] }))).rejects.toThrow(/changed before client access/i)
+  })
+
+  it('rejects an attempt to take a site already assigned to another client', async () => {
+    mocks.tx.site.updateMany.mockResolvedValue({ count: 0 })
+    await expect(createClientUser(form({ name: 'Client', email: 'client@example.test', password: 'secure-password', siteIds: ['site_1'] }))).rejects.toThrow(/changed before client access/i)
+    expect(mocks.tx.site.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ OR: [{ clientUserId: null }, { clientUserId: 'client_1' }] }),
+    }))
   })
 
   it('clears prior assignments then atomically writes the selected active company sites', async () => {

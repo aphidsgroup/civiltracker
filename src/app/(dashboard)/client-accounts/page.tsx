@@ -68,7 +68,10 @@ export async function createClientUser(formData: FormData) {
       data: { userId: user.id, companyId, role: 'CLIENT', siteIds: assignedSiteIds, isActive: true },
     })
     const assigned = await tx.site.updateMany({
-      where: { id: { in: assignedSiteIds }, companyId, deletedAt: null, status: 'ACTIVE' },
+      where: {
+        id: { in: assignedSiteIds }, companyId, deletedAt: null, status: 'ACTIVE',
+        OR: [{ clientUserId: null }, { clientUserId: user.id }],
+      },
       data: { clientUserId: user.id },
     })
     if (assigned.count !== assignedSiteIds.length) {
@@ -134,7 +137,10 @@ export async function assignClientSites(formData: FormData) {
   await prisma.$transaction(async tx => {
     await tx.site.updateMany({ where: { companyId, clientUserId: member.userId }, data: { clientUserId: null } })
     const assigned = await tx.site.updateMany({
-      where: { id: { in: siteIds }, companyId, deletedAt: null, status: 'ACTIVE' },
+      where: {
+        id: { in: siteIds }, companyId, deletedAt: null, status: 'ACTIVE',
+        OR: [{ clientUserId: null }, { clientUserId: member.userId }],
+      },
       data: { clientUserId: member.userId },
     })
     if (assigned.count !== siteIds.length) {
