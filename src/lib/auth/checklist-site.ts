@@ -9,6 +9,7 @@ export async function requireChecklistSite(siteId: string) {
       id: siteId,
       deletedAt: null,
       ...(user.role === Role.SUPER_ADMIN ? {} : { companyId: user.companyId! }),
+      ...(user.role === Role.CLIENT ? { clientUserId: user.id } : {}),
     },
     select: { id: true, companyId: true },
   })

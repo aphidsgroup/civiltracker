@@ -34,6 +34,15 @@ describe('checklist site resolver', () => {
     })
   })
 
+  it('binds a client caller to their exact assigned site', async () => {
+    mocks.requireUser.mockResolvedValue({ id: 'client_1', role: 'CLIENT', companyId: 'company_1' })
+    await requireChecklistSite('site_1')
+    expect(mocks.prisma.site.findFirst).toHaveBeenCalledWith({
+      where: { id: 'site_1', deletedAt: null, companyId: 'company_1', clientUserId: 'client_1' },
+      select: { id: true, companyId: true },
+    })
+  })
+
   it('binds a task through its checklist to the verified site and company', async () => {
     await requireChecklistTask('site_1', 'task_1')
     expect(mocks.prisma.projectChecklistTask.findFirst).toHaveBeenCalledWith({
