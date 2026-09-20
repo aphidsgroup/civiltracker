@@ -1,0 +1,334 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  requireUser: vi.fn(),
+  hasPermission: vi.fn(),
+  revalidatePath: vi.fn(),
+  logActivity: vi.fn(),
+  syncSiteBudget: vi.fn(),
+  prisma: {
+    site: { findFirst: vi.fn(), findUnique: vi.fn() },
+    approval: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    approvalTimeline: { create: vi.fn() },
+    approvalComment: { create: vi.fn() },
+    expense: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    salaryRun: { findFirst: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
+    dailyProgressReport: { findFirst: vi.fn(), findUnique: vi.fn() },
+    material: { findFirst: vi.fn(), findUnique: vi.fn() },
+    document: { findFirst: vi.fn(), findUnique: vi.fn() },
+    purchaseOrder: { findFirst: vi.fn(), findUnique: vi.fn() },
+  },
+}))
+
+vi.mock('@/lib/auth/require-user', () => ({ requireUser: mocks.requireUser }))
+vi.mock('@/lib/permissions', () => ({ hasPermission: mocks.hasPermission }))
+vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma, default: mocks.prisma }))
+vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
+vi.mock('@/lib/audit', () => ({ logActivity: mocks.logActivity }))
+vi.mock('@/lib/budget', () => ({ syncSiteBudget: mocks.syncSiteBudget }))
+
+const {
+  createApprovalAction,
+  getApprovalByIdAction,
+  approveApprovalAction,
+  rejectApprovalAction,
+} = await import('@/actions/approvals')
+
+const OPEN_STATUSES = ['PENDING', 'SUBMITTED', 'PENDING_REVIEW']
+
+function expectNoApprovalMutations() {
+  expect(mocks.prisma.approval.create).not.toHaveBeenCalled()
+  expect(mocks.prisma.approval.update).not.toHaveBeenCalled()
+  expect(mocks.prisma.approval.updateMany).not.toHaveBeenCalled()
+  expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
+  expect(mocks.logActivity).not.toHaveBeenCalled()
+  expect(mocks.prisma.expense.update).not.toHaveBeenCalled()
+  expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
+  expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  mocks.requireUser.mockResolvedValue({ id: 'user_1', name: 'Admin', email: 'admin@acme.test', role: 'COMPANY_ADMIN', companyId: 'company_1' })
+  mocks.hasPermission.mockReturnValue(false)
+  mocks.prisma.site.findFirst.mockResolvedValue({ id: 'site_1', companyId: 'company_1' })
+  mocks.prisma.approval.create.mockResolvedValue({ id: 'approval_new' })
+  mocks.prisma.approval.updateMany.mockResolvedValue({ count: 1 })
+  mocks.prisma.approval.update.mockResolvedValue({ id: 'approval_1' })
+})
+
+describe('createApprovalAction entity tenant binding', () => {
+  it('rejects an entity that is not bound to the resolved company, before any write', async () => {
+    mocks.prisma.expense.findFirst.mockResolvedValue(null)
+
+    await expect(
+      createApprovalAction({
+        siteId: 'site_1',
+        entityType: 'EXPENSE',
+        entityId: 'other_company_expense',
+        title: 'Cross-tenant expense',
+      })
+    ).rejects.toThrow(/entity not found or access denied/i)
+
+    expect(mocks.prisma.expense.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'other_company_expense', companyId: 'company_1', deletedAt: null, siteId: 'site_1' },
+      })
+    )
+    expectNoApprovalMutations()
+  })
+
+  it('requires the entity to match the supplied site when both are site bound', async () => {
+    mocks.prisma.dailyProgressReport.findFirst.mockResolvedValue(null)
+
+    await expect(
+      createApprovalAction({
+        siteId: 'site_1',
+        entityType: 'DPR',
+        entityId: 'dpr_on_site_2',
+        title: 'DPR from another site',
+      })
+    ).rejects.toThrow(/entity not found or access denied/i)
+
+    expect(mocks.prisma.dailyProgressReport.findFirst).toHaveBeenCalledWith({
+      where: { id: 'dpr_on_site_2', companyId: 'company_1', siteId: 'site_1' },
+    })
+    expectNoApprovalMutations()
+  })
+
+  it('rejects the unsupported VARIATION entity type without touching the database', async () => {
+    await expect(
+      createApprovalAction({
+        siteId: 'site_1',
+        entityType: 'VARIATION',
+        entityId: 'variation_1',
+        title: 'Variation request',
+      })
+    ).rejects.toThrow(/variation/i)
+
+    expectNoApprovalMutations()
+  })
+
+  it('creates the approval once the entity resolves inside the tenant', async () => {
+    mocks.prisma.dailyProgressReport.findFirst.mockResolvedValue({ id: 'dpr_1', companyId: 'company_1', siteId: 'site_1' })
+
+    await createApprovalAction({
+      siteId: 'site_1',
+      entityType: 'DPR',
+      entityId: 'dpr_1',
+      title: 'DPR',
+    })
+
+    expect(mocks.prisma.approval.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ companyId: 'company_1', siteId: 'site_1', entityId: 'dpr_1' }) })
+    )
+    expect(mocks.prisma.approvalTimeline.create).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('getApprovalByIdAction tenant scoping', () => {
+  it('excludes soft deleted approvals from the tenant scoped lookup', async () => {
+    mocks.prisma.approval.findFirst.mockResolvedValue(null)
+
+    await expect(getApprovalByIdAction('approval_1')).rejects.toThrow(/not found or access denied/i)
+
+    expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'approval_1', companyId: 'company_1', deletedAt: null } })
+    )
+  })
+
+  it('resolves the linked entity through company and site predicates rather than findUnique', async () => {
+    mocks.prisma.approval.findFirst.mockResolvedValue({
+      id: 'approval_1',
+      companyId: 'company_1',
+      siteId: 'site_1',
+      entityType: 'EXPENSE',
+      entityId: 'expense_1',
+    })
+    mocks.prisma.expense.findFirst.mockResolvedValue({ id: 'expense_1', billAttachments: [] })
+
+    const result = await getApprovalByIdAction('approval_1')
+
+    expect(mocks.prisma.expense.findUnique).not.toHaveBeenCalled()
+    expect(mocks.prisma.expense.findFirst).toHaveBeenCalledWith({
+      where: { id: 'expense_1', companyId: 'company_1', deletedAt: null, siteId: 'site_1' },
+      include: { billAttachments: true },
+    })
+    expect(result.entityData).toEqual({ id: 'expense_1', billAttachments: [] })
+  })
+
+  it('omits the site predicate for a company level approval', async () => {
+    mocks.prisma.approval.findFirst.mockResolvedValue({
+      id: 'approval_2',
+      companyId: 'company_1',
+      siteId: null,
+      entityType: 'SALARY_RUN',
+      entityId: 'salary_1',
+    })
+    mocks.prisma.salaryRun.findFirst.mockResolvedValue({ id: 'salary_1', items: [] })
+
+    await getApprovalByIdAction('approval_2')
+
+    expect(mocks.prisma.salaryRun.findUnique).not.toHaveBeenCalled()
+    expect(mocks.prisma.salaryRun.findFirst).toHaveBeenCalledWith({
+      where: { id: 'salary_1', companyId: 'company_1' },
+      include: { items: true },
+    })
+  })
+})
+
+describe('approveApprovalAction atomic tenant bound transition', () => {
+  beforeEach(() => {
+    mocks.prisma.approval.findFirst.mockResolvedValue({
+      id: 'approval_1',
+      companyId: 'company_1',
+      siteId: 'site_1',
+      currentStatus: 'PENDING',
+      entityType: 'EXPENSE',
+      entityId: 'expense_1',
+      title: 'Expense',
+    })
+    mocks.prisma.expense.findFirst.mockResolvedValue({ id: 'expense_1', siteId: 'site_1' })
+  })
+
+  it('scopes the approval lookup to the live tenant and excludes soft deleted rows', async () => {
+    await approveApprovalAction('approval_1', undefined, 'APPROVE')
+
+    expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({
+      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null },
+    })
+  })
+
+  it('transitions atomically from open statuses only, inside the approval tenant', async () => {
+    await approveApprovalAction('approval_1', undefined, 'APPROVE')
+
+    expect(mocks.prisma.approval.update).not.toHaveBeenCalled()
+    expect(mocks.prisma.approval.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'approval_1',
+          companyId: 'company_1',
+          deletedAt: null,
+          currentStatus: { in: OPEN_STATUSES },
+        },
+      })
+    )
+  })
+
+  it('aborts before timeline, audit and linked writes when the atomic transition loses the race', async () => {
+    mocks.prisma.approval.updateMany.mockResolvedValue({ count: 0 })
+
+    await expect(approveApprovalAction('approval_1', undefined, 'APPROVE')).rejects.toThrow(/no longer/i)
+
+    expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
+    expect(mocks.logActivity).not.toHaveBeenCalled()
+    expect(mocks.prisma.expense.update).not.toHaveBeenCalled()
+    expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
+    expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('scopes the linked expense update by company, soft delete and approval site', async () => {
+    await approveApprovalAction('approval_1', undefined, 'APPROVE')
+
+    expect(mocks.prisma.expense.update).not.toHaveBeenCalled()
+    expect(mocks.prisma.expense.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'expense_1', companyId: 'company_1', deletedAt: null, siteId: 'site_1' },
+      })
+    )
+  })
+
+  it('scopes the linked salary run update by company and approval site', async () => {
+    mocks.prisma.approval.findFirst.mockResolvedValue({
+      id: 'approval_2',
+      companyId: 'company_1',
+      siteId: 'site_1',
+      currentStatus: 'SUBMITTED',
+      entityType: 'SALARY_RUN',
+      entityId: 'salary_1',
+      title: 'Salary',
+    })
+
+    await approveApprovalAction('approval_2', undefined, 'APPROVE')
+
+    expect(mocks.prisma.salaryRun.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'salary_1', companyId: 'company_1', siteId: 'site_1' },
+      })
+    )
+  })
+
+  it('denies a cross tenant approval before any mutation', async () => {
+    mocks.prisma.approval.findFirst.mockResolvedValue(null)
+
+    await expect(approveApprovalAction('other_company_approval', undefined, 'APPROVE')).rejects.toThrow(/approval not found/i)
+
+    expectNoApprovalMutations()
+  })
+})
+
+describe('rejectApprovalAction atomic tenant bound transition', () => {
+  beforeEach(() => {
+    mocks.prisma.approval.findFirst.mockResolvedValue({
+      id: 'approval_1',
+      companyId: 'company_1',
+      siteId: 'site_1',
+      currentStatus: 'PENDING',
+      entityType: 'EXPENSE',
+      entityId: 'expense_1',
+      title: 'Expense',
+    })
+  })
+
+  it('scopes the approval lookup to the live tenant and excludes soft deleted rows', async () => {
+    await rejectApprovalAction('approval_1', 'Not budgeted')
+
+    expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({
+      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null },
+    })
+  })
+
+  it('transitions atomically from open statuses only, inside the approval tenant', async () => {
+    await rejectApprovalAction('approval_1', 'Not budgeted')
+
+    expect(mocks.prisma.approval.update).not.toHaveBeenCalled()
+    expect(mocks.prisma.approval.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'approval_1',
+          companyId: 'company_1',
+          deletedAt: null,
+          currentStatus: { in: OPEN_STATUSES },
+        },
+      })
+    )
+  })
+
+  it('aborts before timeline, audit and linked writes when the atomic transition loses the race', async () => {
+    mocks.prisma.approval.updateMany.mockResolvedValue({ count: 0 })
+
+    await expect(rejectApprovalAction('approval_1', 'Not budgeted')).rejects.toThrow(/no longer/i)
+
+    expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
+    expect(mocks.logActivity).not.toHaveBeenCalled()
+    expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('scopes the linked expense update by company, soft delete and approval site', async () => {
+    await rejectApprovalAction('approval_1', 'Not budgeted')
+
+    expect(mocks.prisma.expense.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'expense_1', companyId: 'company_1', deletedAt: null, siteId: 'site_1' },
+      })
+    )
+  })
+
+  it('denies a cross tenant approval before any mutation', async () => {
+    mocks.prisma.approval.findFirst.mockResolvedValue(null)
+
+    await expect(rejectApprovalAction('other_company_approval', 'Not budgeted')).rejects.toThrow(/approval not found/i)
+
+    expectNoApprovalMutations()
+  })
+})

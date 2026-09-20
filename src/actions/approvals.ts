@@ -7,6 +7,52 @@ import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/audit'
 import type { ApprovalEntityType, ApprovalPriority, ApprovalStatus } from '@prisma/client'
 
+/**
+ * Resolves the entity an approval points at strictly inside the approval tenant:
+ * always by company, and by site whenever the approval/request is site bound.
+ * Returns null when the entity does not exist inside that scope.
+ */
+async function findLinkedApprovalEntity(
+  entityType: ApprovalEntityType,
+  entityId: string,
+  scope: { companyId: string; siteId?: string | null }
+) {
+  const tenantScope = { id: entityId, companyId: scope.companyId }
+  const siteScope = scope.siteId ? { siteId: scope.siteId } : {}
+
+  switch (entityType) {
+    case 'EXPENSE':
+    case 'BILL':
+      return prisma.expense.findFirst({
+        where: { ...tenantScope, deletedAt: null, ...siteScope },
+        include: { billAttachments: true },
+      })
+    case 'DPR':
+      return prisma.dailyProgressReport.findFirst({
+        where: { ...tenantScope, ...siteScope },
+      })
+    case 'MATERIAL_REQUEST':
+      return prisma.material.findFirst({
+        where: { ...tenantScope, ...siteScope },
+      })
+    case 'SALARY_RUN':
+      return prisma.salaryRun.findFirst({
+        where: { ...tenantScope, ...siteScope },
+        include: { items: true },
+      })
+    case 'DOCUMENT':
+      return prisma.document.findFirst({
+        where: { ...tenantScope, ...siteScope },
+      })
+    case 'PURCHASE_ORDER':
+      return prisma.purchaseOrder.findFirst({
+        where: tenantScope,
+      })
+    default:
+      return null
+  }
+}
+
 export async function createApprovalAction(data: {
   siteId?: string | null
   entityType: ApprovalEntityType
@@ -18,6 +64,10 @@ export async function createApprovalAction(data: {
   approvalType?: string
 }) {
   const user = await requireUser()
+  if (data.entityType === 'VARIATION') {
+    throw new Error('Unsupported: VARIATION approvals cannot be requested through this workflow')
+  }
+
   const site = data.siteId
     ? await prisma.site.findFirst({
         where: {
@@ -35,6 +85,14 @@ export async function createApprovalAction(data: {
 
   const companyId = site?.companyId ?? user.companyId ?? null
   if (!companyId) throw new Error('Unauthorized: No active company context')
+
+  const linkedEntity = await findLinkedApprovalEntity(data.entityType, data.entityId, {
+    companyId,
+    siteId: site?.id ?? null,
+  })
+  if (!linkedEntity) {
+    throw new Error('Forbidden: Entity not found or access denied')
+  }
 
   const approval = await prisma.approval.create({
     data: {
@@ -113,7 +171,7 @@ export async function getApprovalByIdAction(id: string) {
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
 
   const approval = await prisma.approval.findFirst({
-    where: { id, ...companyFilter },
+    where: { id, ...companyFilter, deletedAt: null },
     include: {
       site: { select: { name: true, location: true } },
       requestedBy: { select: { name: true, email: true, role: true, avatar: true } },
@@ -133,33 +191,15 @@ export async function getApprovalByIdAction(id: string) {
 
   if (!approval) throw new Error('Approval not found or access denied')
 
-  let entityData = null
-  if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
-    entityData = await prisma.expense.findUnique({
-      where: { id: approval.entityId },
-      include: { billAttachments: true },
-    })
-  } else if (approval.entityType === 'DPR') {
-    entityData = await prisma.dailyProgressReport.findUnique({
-      where: { id: approval.entityId },
-    })
-  } else if (approval.entityType === 'MATERIAL_REQUEST') {
-    entityData = await prisma.material.findUnique({
-      where: { id: approval.entityId },
-    })
-  } else if (approval.entityType === 'SALARY_RUN') {
-    entityData = await prisma.salaryRun.findUnique({
-      where: { id: approval.entityId },
-      include: { items: true },
-    })
-  } else if (approval.entityType === 'DOCUMENT') {
-    entityData = await prisma.document.findUnique({
-      where: { id: approval.entityId },
-    })
-  }
+  const entityData = await findLinkedApprovalEntity(approval.entityType, approval.entityId, {
+    companyId: approval.companyId,
+    siteId: approval.siteId,
+  })
 
   return { approval, entityData }
 }
+
+const OPEN_APPROVAL_STATUSES: ApprovalStatus[] = ['PENDING', 'SUBMITTED', 'PENDING_REVIEW']
 
 function verifyCanApproveEntity(role: string, entityType: string) {
   if (role === 'SUPER_ADMIN' || role === 'COMPANY_ADMIN') return true
@@ -188,7 +228,7 @@ function verifyCanApproveEntity(role: string, entityType: string) {
 export async function approveApprovalAction(id: string, note?: string, confirmationText?: string) {
   const user = await requireUser()
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
-  const approval = await prisma.approval.findFirst({ where: { id, ...companyFilter } })
+  const approval = await prisma.approval.findFirst({ where: { id, ...companyFilter, deletedAt: null } })
   if (!approval) throw new Error('Approval not found')
   if ((confirmationText ?? '').trim() !== 'APPROVE') {
     throw new Error('Approval confirmation text must exactly match APPROVE')
@@ -201,14 +241,23 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
     throw new Error(`Forbidden: Role ${user.role} is not authorized to approve ${approval.entityType}`)
   }
 
-  const updated = await prisma.approval.update({
-    where: { id },
+  const transition = await prisma.approval.updateMany({
+    where: {
+      id,
+      companyId: approval.companyId,
+      deletedAt: null,
+      currentStatus: { in: OPEN_APPROVAL_STATUSES },
+    },
     data: {
       currentStatus: 'APPROVED',
       approvedById: user.id,
       approvedAt: new Date(),
     },
   })
+  if (transition.count !== 1) {
+    throw new Error('Approval is no longer processable and cannot be approved')
+  }
+  const updated = { id, currentStatus: 'APPROVED' as ApprovalStatus }
 
   await prisma.approvalTimeline.create({
     data: {
@@ -234,20 +283,34 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
   })
 
   if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
-    const exp = await prisma.expense.findUnique({ where: { id: approval.entityId } })
-    if (exp) {
-      await prisma.expense.update({
-        where: { id: exp.id },
-        data: { approvalStatus: 'APPROVED', approvedById: user.id, approvedAt: new Date() },
-      })
-      if (exp.siteId) {
+    const linked = await prisma.expense.updateMany({
+      where: {
+        id: approval.entityId,
+        companyId: approval.companyId,
+        deletedAt: null,
+        ...(approval.siteId ? { siteId: approval.siteId } : {}),
+      },
+      data: { approvalStatus: 'APPROVED', approvedById: user.id, approvedAt: new Date() },
+    })
+    if (linked?.count === 1) {
+      const siteId = approval.siteId
+        ?? (await prisma.expense.findFirst({
+          where: { id: approval.entityId, companyId: approval.companyId, deletedAt: null },
+          select: { siteId: true },
+        }))?.siteId
+        ?? null
+      if (siteId) {
         const { syncSiteBudget } = await import('@/lib/budget')
-        await syncSiteBudget(exp.siteId)
+        await syncSiteBudget(siteId)
       }
     }
   } else if (approval.entityType === 'SALARY_RUN') {
     await prisma.salaryRun.updateMany({
-      where: { id: approval.entityId },
+      where: {
+        id: approval.entityId,
+        companyId: approval.companyId,
+        ...(approval.siteId ? { siteId: approval.siteId } : {}),
+      },
       data: { status: 'APPROVED' },
     })
   }
@@ -266,15 +329,20 @@ export async function rejectApprovalAction(id: string, reason: string) {
   }
 
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
-  const approval = await prisma.approval.findFirst({ where: { id, ...companyFilter } })
+  const approval = await prisma.approval.findFirst({ where: { id, ...companyFilter, deletedAt: null } })
   if (!approval) throw new Error('Approval not found')
 
   if (!verifyCanApproveEntity(user.role, approval.entityType)) {
     throw new Error(`Forbidden: Role ${user.role} is not authorized to reject ${approval.entityType}`)
   }
 
-  const updated = await prisma.approval.update({
-    where: { id },
+  const transition = await prisma.approval.updateMany({
+    where: {
+      id,
+      companyId: approval.companyId,
+      deletedAt: null,
+      currentStatus: { in: OPEN_APPROVAL_STATUSES },
+    },
     data: {
       currentStatus: 'REJECTED',
       rejectedById: user.id,
@@ -282,6 +350,10 @@ export async function rejectApprovalAction(id: string, reason: string) {
       rejectionReason: reason,
     },
   })
+  if (transition.count !== 1) {
+    throw new Error('Approval is no longer processable and cannot be rejected')
+  }
+  const updated = { id, currentStatus: 'REJECTED' as ApprovalStatus }
 
   await prisma.approvalTimeline.create({
     data: {
@@ -308,7 +380,12 @@ export async function rejectApprovalAction(id: string, reason: string) {
 
   if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
     await prisma.expense.updateMany({
-      where: { id: approval.entityId },
+      where: {
+        id: approval.entityId,
+        companyId: approval.companyId,
+        deletedAt: null,
+        ...(approval.siteId ? { siteId: approval.siteId } : {}),
+      },
       data: { approvalStatus: 'REJECTED', rejectedById: user.id, rejectedAt: new Date(), rejectionNote: reason },
     })
   }
@@ -403,7 +480,10 @@ export async function addApprovalCommentAction(approvalId: string, comment: stri
   const user = await requireUser()
   if (!comment || comment.trim().length < 1) throw new Error('Comment cannot be empty')
 
-  const approval = await prisma.approval.findUnique({ where: { id: approvalId }, select: { companyId: true } })
+  const approvalWhere = user.role === 'SUPER_ADMIN'
+    ? { id: approvalId, deletedAt: null }
+    : { id: approvalId, companyId: user.companyId!, deletedAt: null }
+  const approval = await prisma.approval.findFirst({ where: approvalWhere, select: { companyId: true } })
   if (!approval) throw new Error('Approval not found')
 
   const created = await prisma.approvalComment.create({
