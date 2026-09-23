@@ -20,6 +20,88 @@ import type { ApprovalEntityType, ApprovalPriority, ApprovalStatus, Prisma, Sala
  */
 const REJECTED_SALARY_RUN_STATUS: SalaryRunStatus = 'DRAFT'
 
+/** Human label for an entity type, e.g. MATERIAL_REQUEST -> "material request". */
+function approvalEntityLabel(entityType: ApprovalEntityType) {
+  return entityType.toLowerCase().replace(/_/g, ' ')
+}
+
+/** The stored binding of an approval row and what it claims to point at. */
+type LinkedApprovalEntityRef = {
+  companyId: string
+  siteId: string | null
+  entityType: ApprovalEntityType
+  entityId: string
+}
+
+/**
+ * Re-resolves the linked entity on the transaction client under the approval's exact
+ * binding: always by company, and by site for every type except the company-level
+ * PURCHASE_ORDER. Only the id is selected — this is an existence check that decides
+ * whether a transition may happen at all, not a read of entity data.
+ *
+ * Returns null whenever the entity cannot be reached inside that scope, including for an
+ * entity type that no delegate owns, so an unmapped or retired type fails closed.
+ */
+async function resolveLinkedApprovalEntityInTenant(
+  tx: Prisma.TransactionClient,
+  approval: LinkedApprovalEntityRef
+) {
+  let siteScope: { siteId?: string } = {}
+  if (approvalRequiresSite(approval.entityType)) {
+    // assertApprovalSiteBinding already refused a site-bound approval that carries no
+    // site; refusing again here makes the company-wide widening structurally
+    // impossible rather than merely unreachable.
+    if (!approval.siteId) return null
+    siteScope = { siteId: approval.siteId }
+  }
+
+  const scope = { id: approval.entityId, companyId: approval.companyId, ...siteScope }
+  const select = { id: true }
+
+  switch (approval.entityType) {
+    case 'EXPENSE':
+    case 'BILL':
+      return tx.expense.findFirst({ where: { ...scope, deletedAt: null }, select })
+    case 'DPR':
+      return tx.dailyProgressReport.findFirst({ where: scope, select })
+    case 'MATERIAL_REQUEST':
+      return tx.material.findFirst({ where: scope, select })
+    case 'SALARY_RUN':
+      return tx.salaryRun.findFirst({ where: scope, select })
+    case 'DOCUMENT':
+      return tx.document.findFirst({ where: scope, select })
+    case 'PURCHASE_ORDER':
+      return tx.purchaseOrder.findFirst({ where: scope, select })
+    default:
+      return null
+  }
+}
+
+/**
+ * Gate every transition shares: the entity an approval points at is only trusted once it
+ * has been resolved inside the approval tenant, in the same transaction, *before* the
+ * conditional transition and its timeline entry.
+ *
+ * `createApprovalAction` validates the entity when the request is raised, but a row that
+ * predates that rule — or that was inserted straight into the database — was never
+ * validated at all. Without this, only EXPENSE/BILL and SALARY_RUN were re-checked by
+ * their linked status write, and a DPR, material request, document or purchase order
+ * that is missing, owned by another company or sitting on another site of the same
+ * company still produced a transition, a timeline entry and an audit record.
+ */
+async function assertLinkedApprovalEntityInTenant(
+  tx: Prisma.TransactionClient,
+  approval: LinkedApprovalEntityRef,
+  verb: string
+) {
+  const linked = await resolveLinkedApprovalEntityInTenant(tx, approval)
+  if (!linked) {
+    throw new Error(
+      `Linked ${approvalEntityLabel(approval.entityType)} not found in the approval tenant and cannot be ${verb}`
+    )
+  }
+}
+
 /**
  * Resolves the entity an approval points at strictly inside the approval tenant:
  * always by company, and by site whenever the approval/request is site bound.
@@ -269,6 +351,8 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
   // one unit of work: a linked row that cannot be reached inside the approval tenant
   // rolls the approval back to its open status instead of leaving the two out of sync.
   const budgetSiteId = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await assertLinkedApprovalEntityInTenant(tx, approval, 'approved')
+
     const transition = await tx.approval.updateMany({
       where: {
         id,
@@ -341,7 +425,7 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
     action: 'APPROVE',
     module: approval.entityType,
     recordId: approval.entityId,
-    description: `${user.name ?? user.email} approved ${approval.entityType.toLowerCase().replace(/_/g, ' ')} request "${approval.title}"`,
+    description: `${user.name ?? user.email} approved ${approvalEntityLabel(approval.entityType)} request "${approval.title}"`,
     before: { status: approval.currentStatus },
     after: { status: 'APPROVED', note },
   })
@@ -378,6 +462,8 @@ export async function rejectApprovalAction(id: string, reason: string) {
   // Same unit of work as approval: transition, timeline and the linked entity move
   // together or not at all.
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await assertLinkedApprovalEntityInTenant(tx, approval, 'rejected')
+
     const transition = await tx.approval.updateMany({
       where: {
         id,
@@ -448,7 +534,7 @@ export async function rejectApprovalAction(id: string, reason: string) {
     action: 'REJECT',
     module: approval.entityType,
     recordId: approval.entityId,
-    description: `${user.name ?? user.email} rejected ${approval.entityType.toLowerCase().replace(/_/g, ' ')} request "${approval.title}"`,
+    description: `${user.name ?? user.email} rejected ${approvalEntityLabel(approval.entityType)} request "${approval.title}"`,
     before: { status: approval.currentStatus },
     after: { status: 'REJECTED', reason },
   })
@@ -485,6 +571,8 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
   // inside the approval tenant rolls the approval back to APPROVED instead of leaving a
   // PAID request pointing at an unpaid record.
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await assertLinkedApprovalEntityInTenant(tx, approval, 'marked paid')
+
     const transition = await tx.approval.updateMany({
       where: {
         id,
@@ -554,7 +642,7 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
     action: 'PAID',
     module: approval.entityType,
     recordId: approval.entityId,
-    description: `${user.name ?? user.email} marked ${approval.entityType.toLowerCase().replace(/_/g, ' ')} request "${approval.title}" as paid/disbursed`,
+    description: `${user.name ?? user.email} marked ${approvalEntityLabel(approval.entityType)} request "${approval.title}" as paid/disbursed`,
     before: { status: approval.currentStatus },
     after: { status: 'PAID', paymentData: paymentData ?? null },
   })

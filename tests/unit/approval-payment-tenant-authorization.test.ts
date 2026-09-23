@@ -5,8 +5,8 @@ const mocks = vi.hoisted(() => {
     $transaction: vi.fn(),
     approval: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     approvalTimeline: { create: vi.fn() },
-    expense: { updateMany: vi.fn() },
-    salaryRun: { updateMany: vi.fn() },
+    expense: { findFirst: vi.fn(), updateMany: vi.fn() },
+    salaryRun: { findFirst: vi.fn(), updateMany: vi.fn() },
   }
 
   // The disbursement writes now run on an interactive transaction client. Its delegates
@@ -18,8 +18,14 @@ const mocks = vi.hoisted(() => {
       updateMany: vi.fn((args: unknown) => prisma.approval.updateMany(args)),
     },
     approvalTimeline: { create: vi.fn((args: unknown) => prisma.approvalTimeline.create(args)) },
-    expense: { updateMany: vi.fn((args: unknown) => prisma.expense.updateMany(args)) },
-    salaryRun: { updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)) },
+    expense: {
+      findFirst: vi.fn((args: unknown) => prisma.expense.findFirst(args)),
+      updateMany: vi.fn((args: unknown) => prisma.expense.updateMany(args)),
+    },
+    salaryRun: {
+      findFirst: vi.fn((args: unknown) => prisma.salaryRun.findFirst(args)),
+      updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)),
+    },
   }
 
   return {
@@ -57,6 +63,10 @@ beforeEach(() => {
   mocks.prisma.approvalTimeline.create.mockResolvedValue({ id: 'timeline_1' })
   mocks.prisma.expense.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
+  // The disbursement re-resolves the linked entity on the transaction client before it
+  // transitions, so the happy path has to find it inside the approval tenant and site.
+  mocks.prisma.expense.findFirst.mockResolvedValue({ id: 'expense_1' })
+  mocks.prisma.salaryRun.findFirst.mockResolvedValue({ id: 'salary_1' })
 })
 
 describe('markApprovalPaidAction tenant authorization', () => {

@@ -17,20 +17,26 @@ const mocks = vi.hoisted(() => {
     $transaction: vi.fn(),
     approval: { findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     approvalTimeline: { create: vi.fn() },
-    expense: { updateMany: vi.fn() },
-    salaryRun: { updateMany: vi.fn() },
+    expense: { findFirst: vi.fn(), updateMany: vi.fn() },
+    salaryRun: { findFirst: vi.fn(), updateMany: vi.fn() },
   }
 
-  // Delegates on the interactive client forward to the shared spies, so a write issued
-  // on the global client instead of `tx` never reaches `mocks.tx`.
+  // Delegates on the interactive client forward to the shared spies, so a read or write
+  // issued on the global client instead of `tx` never reaches `mocks.tx`.
   const tx = {
     approval: {
       update: vi.fn((args: unknown) => prisma.approval.update(args)),
       updateMany: vi.fn((args: unknown) => prisma.approval.updateMany(args)),
     },
     approvalTimeline: { create: vi.fn((args: unknown) => prisma.approvalTimeline.create(args)) },
-    expense: { updateMany: vi.fn((args: unknown) => prisma.expense.updateMany(args)) },
-    salaryRun: { updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)) },
+    expense: {
+      findFirst: vi.fn((args: unknown) => prisma.expense.findFirst(args)),
+      updateMany: vi.fn((args: unknown) => prisma.expense.updateMany(args)),
+    },
+    salaryRun: {
+      findFirst: vi.fn((args: unknown) => prisma.salaryRun.findFirst(args)),
+      updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)),
+    },
   }
 
   return {
@@ -88,6 +94,9 @@ beforeEach(() => {
   mocks.prisma.approvalTimeline.create.mockResolvedValue({ id: 'timeline_1' })
   mocks.prisma.expense.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
+  // Disbursement re-resolves the linked record inside the transaction before it moves.
+  mocks.prisma.expense.findFirst.mockResolvedValue({ id: 'expense_1' })
+  mocks.prisma.salaryRun.findFirst.mockResolvedValue({ id: 'salary_1' })
 })
 
 describe('markApprovalPaidAction runs disbursement as one unit of work', () => {

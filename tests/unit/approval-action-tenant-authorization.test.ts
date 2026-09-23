@@ -29,7 +29,16 @@ const mocks = vi.hoisted(() => {
       update: vi.fn((args: unknown) => prisma.expense.update(args)),
       updateMany: vi.fn((args: unknown) => prisma.expense.updateMany(args)),
     },
-    salaryRun: { updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)) },
+    salaryRun: {
+      findFirst: vi.fn((args: unknown) => prisma.salaryRun.findFirst(args)),
+      updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)),
+    },
+    // Every transition re-resolves its linked entity on the transaction client, so the
+    // read-only delegates have to exist on `tx` too.
+    dailyProgressReport: { findFirst: vi.fn((args: unknown) => prisma.dailyProgressReport.findFirst(args)) },
+    material: { findFirst: vi.fn((args: unknown) => prisma.material.findFirst(args)) },
+    document: { findFirst: vi.fn((args: unknown) => prisma.document.findFirst(args)) },
+    purchaseOrder: { findFirst: vi.fn((args: unknown) => prisma.purchaseOrder.findFirst(args)) },
   }
 
   return {
@@ -83,6 +92,14 @@ beforeEach(() => {
   mocks.prisma.approval.update.mockResolvedValue({ id: 'approval_1' })
   mocks.prisma.expense.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
+  // Each transition resolves its linked entity inside the transaction before it moves,
+  // so every delegate resolves by default and only the case under test can refuse.
+  mocks.prisma.expense.findFirst.mockResolvedValue({ id: 'expense_1' })
+  mocks.prisma.salaryRun.findFirst.mockResolvedValue({ id: 'salary_1' })
+  mocks.prisma.dailyProgressReport.findFirst.mockResolvedValue({ id: 'dpr_1' })
+  mocks.prisma.material.findFirst.mockResolvedValue({ id: 'material_1' })
+  mocks.prisma.document.findFirst.mockResolvedValue({ id: 'document_1' })
+  mocks.prisma.purchaseOrder.findFirst.mockResolvedValue({ id: 'po_1' })
 })
 
 describe('createApprovalAction entity tenant binding', () => {
