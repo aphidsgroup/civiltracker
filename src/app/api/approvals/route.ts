@@ -1,106 +1,79 @@
-import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import type { ApprovalEntityType, ApprovalPriority, ApprovalStatus } from '@prisma/client'
-import { ensureCompanyContext, requireApiPermission } from '@/lib/auth/require-api-permission'
+import { createApprovalAction, getApprovalsAction } from '@/actions/approvals'
+import { approvalApiError } from '@/lib/approvals/api-errors'
+import { requireApprovalApiUser } from '@/lib/approvals/api-guard'
+import type { ApprovalEntityType, ApprovalPriority } from '@prisma/client'
 
-function validateApprovalEntityType(entityType: ApprovalEntityType, userRole: string): boolean {
-  if (userRole === 'SUPER_ADMIN' || userRole === 'COMPANY_ADMIN') return true
-
-  return ['EXPENSE', 'BILL', 'SALARY_RUN', 'DPR', 'MATERIAL_REQUEST', 'PURCHASE_ORDER', 'VARIATION', 'DOCUMENT'].includes(entityType)
+type CreateApprovalPayload = {
+  entityType?: ApprovalEntityType
+  entityId?: string
+  title?: string
+  amount?: number | null
+  description?: string | null
+  priority?: ApprovalPriority
+  siteId?: string | null
+  approvalType?: string
 }
 
+/**
+ * The REST surface is a transport for the hardened approval workflow, not a second
+ * implementation of it. Both handlers delegate to the actions, so the site binding,
+ * tenant-scoped entity resolution and fail-closed reads cannot drift apart from the
+ * server actions the UI uses.
+ */
 export async function GET(request: Request) {
-  const authResult = await requireApiPermission('approvals.view', 'APPROVALS')
-  if (authResult instanceof NextResponse) return authResult
+  try {
+    await requireApprovalApiUser('approvals.view')
 
-  const companyContextError = ensureCompanyContext(authResult)
-  if (companyContextError) return companyContextError
+    const { searchParams } = new URL(request.url)
 
-  const { searchParams } = new URL(request.url)
-  const status = searchParams.get('status')
-  const entityType = searchParams.get('entityType')
+    // The action composes the well-formed-site predicate itself, so a malformed legacy
+    // row is excluded by the query rather than filtered out after the fact.
+    const approvals = await getApprovalsAction({
+      status: searchParams.get('status') ?? undefined,
+      entityType: searchParams.get('entityType') ?? undefined,
+      search: searchParams.get('search') ?? undefined,
+    })
 
-  const companyFilter = authResult.role === 'SUPER_ADMIN' ? {} : { companyId: authResult.companyId }
-  const where: Record<string, unknown> = { ...companyFilter, deletedAt: null }
-
-  if (status && status !== 'ALL') where.currentStatus = status as ApprovalStatus
-  if (entityType && entityType !== 'ALL') where.entityType = entityType as ApprovalEntityType
-
-  const approvals = await prisma.approval.findMany({
-    where,
-    include: {
-      site: { select: { name: true } },
-      requestedBy: { select: { name: true, email: true, avatar: true } },
-      approvedBy: { select: { name: true } },
-      rejectedBy: { select: { name: true } },
-    },
-    orderBy: { submittedAt: 'desc' },
-  })
-
-  return NextResponse.json({ success: true, data: approvals })
+    return NextResponse.json({ success: true, data: approvals })
+  } catch (error) {
+    return approvalApiError(error)
+  }
 }
 
 export async function POST(request: Request) {
-  const authResult = await requireApiPermission('approvals.view', 'APPROVALS')
-  if (authResult instanceof NextResponse) return authResult
+  try {
+    await requireApprovalApiUser('approvals.view')
 
-  const companyContextError = ensureCompanyContext(authResult)
-  if (companyContextError) return companyContextError
+    let body: CreateApprovalPayload
+    try {
+      body = ((await request.json()) ?? {}) as CreateApprovalPayload
+    } catch {
+      return NextResponse.json({ error: 'Malformed request body' }, { status: 400 })
+    }
 
-  const body = await request.json()
-  const { entityType, entityId, title, amount, description, priority, siteId } = body
+    const { entityType, entityId, title, amount, description, priority, siteId, approvalType } = body
 
-  if (!entityType || !entityId || !title) {
-    return NextResponse.json({ error: 'Missing mandatory fields' }, { status: 400 })
-  }
+    if (!entityType || !entityId || !title) {
+      return NextResponse.json({ error: 'Missing mandatory fields' }, { status: 400 })
+    }
 
-  if (!validateApprovalEntityType(entityType as ApprovalEntityType, authResult.role)) {
-    return NextResponse.json({ error: 'Unsupported approval entity type for this role' }, { status: 403 })
-  }
-
-  const site = siteId
-    ? await prisma.site.findFirst({
-        where: {
-          id: siteId,
-          ...(authResult.role === 'SUPER_ADMIN' ? {} : { companyId: authResult.companyId }),
-          deletedAt: null,
-        },
-        select: { id: true, companyId: true },
-      })
-    : null
-
-  if (siteId && !site) {
-    return NextResponse.json({ error: 'Forbidden: Site not found or access denied' }, { status: 404 })
-  }
-
-  const companyId = site?.companyId ?? authResult.companyId
-  if (!companyId) return NextResponse.json({ error: 'No company context' }, { status: 403 })
-
-  const approval = await prisma.approval.create({
-    data: {
-      companyId,
-      siteId: site?.id ?? null,
-      entityType: entityType as ApprovalEntityType,
+    // Every remaining rule — the unsupported VARIATION workflow, the mandatory site for a
+    // site-bound entity type, the site/company check and the linked entity lookup scoped
+    // to that exact company and site — belongs to the action.
+    const approval = await createApprovalAction({
+      siteId: siteId ?? null,
+      entityType,
       entityId,
       title,
-      amount: amount ? amount : null,
-      description: description || null,
-      priority: (priority as ApprovalPriority) || 'NORMAL',
-      requestedById: authResult.id,
-      currentStatus: 'PENDING',
-    },
-  })
+      amount: amount ?? null,
+      description: description ?? null,
+      priority: priority || 'NORMAL',
+      approvalType,
+    })
 
-  await prisma.approvalTimeline.create({
-    data: {
-      companyId,
-      approvalId: approval.id,
-      actorUserId: authResult.id,
-      action: 'SUBMITTED',
-      toStatus: 'PENDING',
-      note: 'API request submitted',
-    },
-  })
-
-  return NextResponse.json({ success: true, data: approval })
+    return NextResponse.json({ success: true, data: approval })
+  } catch (error) {
+    return approvalApiError(error)
+  }
 }

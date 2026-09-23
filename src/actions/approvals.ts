@@ -5,6 +5,11 @@ import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/audit'
+import {
+  approvalRequiresSite,
+  assertApprovalSiteBinding,
+  WELL_FORMED_APPROVAL_SITE_FILTER,
+} from '@/lib/approvals/site-binding'
 import type { ApprovalEntityType, ApprovalPriority, ApprovalStatus, Prisma, SalaryRunStatus } from '@prisma/client'
 
 /**
@@ -14,41 +19,6 @@ import type { ApprovalEntityType, ApprovalPriority, ApprovalStatus, Prisma, Sala
  * rejected approval never leaves its salary run sitting on an approved/payable status.
  */
 const REJECTED_SALARY_RUN_STATUS: SalaryRunStatus = 'DRAFT'
-
-/**
- * PURCHASE_ORDER is the only deliberately company-level approval entity. Every other
- * entity type keeps its records under a single site, so its approval must carry that
- * site: without one the entity lookup and every linked write silently widen to a
- * company-only match that resolves a record on any site of the company.
- */
-const COMPANY_LEVEL_ENTITY_TYPES: ReadonlySet<ApprovalEntityType> = new Set<ApprovalEntityType>([
-  'PURCHASE_ORDER',
-])
-
-function approvalRequiresSite(entityType: ApprovalEntityType) {
-  return !COMPANY_LEVEL_ENTITY_TYPES.has(entityType)
-}
-
-/**
- * Fail-closed guard for approval rows that already exist in the database. Requests
- * created today are site bound at creation, but rows written before that rule — or
- * written straight to the database — can still carry siteId = null on a site-bound
- * entity type, which turns every read and transition below into a company-wide match.
- * Every path that resolves or mutates a linked entity calls this first, so the row is
- * refused before entity resolution, transition, timeline, audit, budget sync or any
- * linked write.
- */
-function assertApprovalSiteBinding(approval: {
-  id: string
-  entityType: ApprovalEntityType
-  siteId: string | null
-}) {
-  if (approval.siteId) return
-  if (!approvalRequiresSite(approval.entityType)) return
-  throw new Error(
-    `Forbidden: ${approval.entityType} approval ${approval.id} carries no site binding and cannot be read or actioned`
-  )
-}
 
 /**
  * Resolves the entity an approval points at strictly inside the approval tenant:
@@ -184,9 +154,12 @@ export async function getApprovalsAction(filter?: {
   const user = await requireUser()
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
 
+  // Malformed legacy rows are excluded by the query itself: they must not be listed,
+  // because every downstream action on them is refused anyway.
   const where: Record<string, unknown> = {
     ...companyFilter,
     deletedAt: null,
+    ...WELL_FORMED_APPROVAL_SITE_FILTER,
   }
 
   if (filter?.status && filter.status !== 'ALL') {
@@ -507,36 +480,74 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
     throw new Error('Disbursement confirmation text must exactly match PAID')
   }
 
-  const transition = await prisma.approval.updateMany({
-    where: {
-      id,
-      companyId: approval.companyId,
-      deletedAt: null,
-      currentStatus: 'APPROVED',
-    },
-    data: {
-      currentStatus: 'PAID',
-      closedAt: new Date(),
-    },
+  // Disbursement moves money, so the conditional transition, its timeline entry and the
+  // linked entity mutation are one unit of work: a linked row that cannot be reached
+  // inside the approval tenant rolls the approval back to APPROVED instead of leaving a
+  // PAID request pointing at an unpaid record.
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const transition = await tx.approval.updateMany({
+      where: {
+        id,
+        companyId: approval.companyId,
+        deletedAt: null,
+        currentStatus: 'APPROVED',
+      },
+      data: {
+        currentStatus: 'PAID',
+        closedAt: new Date(),
+      },
+    })
+    if (transition.count !== 1) {
+      throw new Error('Approval is no longer approved and cannot be marked paid')
+    }
+
+    await tx.approvalTimeline.create({
+      data: {
+        companyId: approval.companyId,
+        approvalId: id,
+        actorUserId: user.id,
+        action: 'PAID',
+        fromStatus: approval.currentStatus,
+        toStatus: 'PAID',
+        note: paymentData?.note || `Disbursed via ${paymentData?.mode || 'Bank Transfer'} (Ref: ${paymentData?.ref || 'N/A'})`,
+        metadataJson: paymentData || {},
+      },
+    })
+
+    // The site guard above already refused a site-bound approval without a site, so
+    // every linked write below is unconditionally scoped to the approval site.
+    if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
+      const linked = await tx.expense.updateMany({
+        where: {
+          id: approval.entityId,
+          companyId: approval.companyId,
+          deletedAt: null,
+          ...(approval.siteId ? { siteId: approval.siteId } : {}),
+        },
+        data: { approvalStatus: 'PAID' },
+      })
+      if (linked.count !== 1) {
+        throw new Error('Linked expense not found in the approval tenant and cannot be marked paid')
+      }
+    } else if (approval.entityType === 'SALARY_RUN') {
+      const linked = await tx.salaryRun.updateMany({
+        where: {
+          id: approval.entityId,
+          companyId: approval.companyId,
+          siteId: approval.siteId,
+        },
+        data: { status: 'PAID' },
+      })
+      if (linked.count !== 1) {
+        throw new Error('Linked salary run not found in the approval tenant and cannot be marked paid')
+      }
+    }
   })
-  if (transition.count !== 1) {
-    throw new Error('Approval is no longer approved and cannot be marked paid')
-  }
+
   const updated = { id }
 
-  await prisma.approvalTimeline.create({
-    data: {
-      companyId: approval.companyId,
-      approvalId: id,
-      actorUserId: user.id,
-      action: 'PAID',
-      fromStatus: approval.currentStatus,
-      toStatus: 'PAID',
-      note: paymentData?.note || `Disbursed via ${paymentData?.mode || 'Bank Transfer'} (Ref: ${paymentData?.ref || 'N/A'})`,
-      metadataJson: paymentData || {},
-    },
-  })
-
+  // Audit and revalidation are external effects: they only describe a disbursement that
+  // actually committed.
   await logActivity({
     userId: user.id,
     companyId: approval.companyId,
@@ -547,29 +558,6 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
     before: { status: approval.currentStatus },
     after: { status: 'PAID', paymentData: paymentData ?? null },
   })
-
-  // The site guard above already refused a site-bound approval without a site, so
-  // every linked write below is unconditionally scoped to the approval site.
-  if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
-    await prisma.expense.updateMany({
-      where: {
-        id: approval.entityId,
-        companyId: approval.companyId,
-        deletedAt: null,
-        ...(approval.siteId ? { siteId: approval.siteId } : {}),
-      },
-      data: { approvalStatus: 'PAID' },
-    })
-  } else if (approval.entityType === 'SALARY_RUN') {
-    await prisma.salaryRun.updateMany({
-      where: {
-        id: approval.entityId,
-        companyId: approval.companyId,
-        siteId: approval.siteId,
-      },
-      data: { status: 'PAID' },
-    })
-  }
 
   revalidatePath('/approvals')
   revalidatePath(`/approvals/${id}`)
@@ -609,24 +597,27 @@ export async function addApprovalCommentAction(approvalId: string, comment: stri
 export async function getApprovalStatsAction() {
   const user = await requireUser()
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
+  // A malformed legacy row can never be actioned, so it must not be counted or summed
+  // into a figure that invites someone to action it.
+  const scope = { ...companyFilter, deletedAt: null, ...WELL_FORMED_APPROVAL_SITE_FILTER }
 
   const pending = await prisma.approval.count({
-    where: { ...companyFilter, currentStatus: { in: ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'] }, deletedAt: null },
+    where: { ...scope, currentStatus: { in: ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'] } },
   })
 
   const urgent = await prisma.approval.count({
-    where: { ...companyFilter, currentStatus: { in: ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'] }, priority: 'URGENT', deletedAt: null },
+    where: { ...scope, currentStatus: { in: ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'] }, priority: 'URGENT' },
   })
 
   const sevenDaysAgo = new Date()
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
   const approvedWeek = await prisma.approval.count({
-    where: { ...companyFilter, currentStatus: { in: ['APPROVED', 'PAID'] }, approvedAt: { gte: sevenDaysAgo }, deletedAt: null },
+    where: { ...scope, currentStatus: { in: ['APPROVED', 'PAID'] }, approvedAt: { gte: sevenDaysAgo } },
   })
 
   const pendingAmountAgg = await prisma.approval.aggregate({
-    where: { ...companyFilter, currentStatus: { in: ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'] }, deletedAt: null },
+    where: { ...scope, currentStatus: { in: ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'] } },
     _sum: { amount: true },
   })
 
