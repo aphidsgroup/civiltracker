@@ -31,7 +31,16 @@ const mocks = vi.hoisted(() => {
       update: vi.fn((args: unknown) => prisma.expense.update(args)),
       updateMany: vi.fn((args: unknown) => prisma.expense.updateMany(args)),
     },
-    salaryRun: { updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)) },
+    salaryRun: {
+      findFirst: vi.fn((args: unknown) => prisma.salaryRun.findFirst(args)),
+      updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)),
+    },
+    dailyProgressReport: { findFirst: vi.fn((args: unknown) => prisma.dailyProgressReport.findFirst(args)) },
+    material: { findFirst: vi.fn((args: unknown) => prisma.material.findFirst(args)) },
+    document: { findFirst: vi.fn((args: unknown) => prisma.document.findFirst(args)) },
+    // The company-level PURCHASE_ORDER flows are the only ones that reach the in-transaction
+    // re-resolve here; every site-bound type is refused before the transaction opens.
+    purchaseOrder: { findFirst: vi.fn((args: unknown) => prisma.purchaseOrder.findFirst(args)) },
   }
 
   return {

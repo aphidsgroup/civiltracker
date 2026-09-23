@@ -31,15 +31,27 @@ const mocks = vi.hoisted(() => {
   }
 
   // The interactive transaction client forwards to the shared delegates, so a write
-  // issued on the global client instead of `tx` leaves `mocks.tx` untouched.
+  // issued on the global client instead of `tx` leaves `mocks.tx` untouched. The read
+  // delegates are here because the transition re-resolves the linked entity inside the
+  // transaction before it writes anything.
   const tx = {
     approval: {
       update: vi.fn((args: unknown) => prisma.approval.update(args)),
       updateMany: vi.fn((args: unknown) => prisma.approval.updateMany(args)),
     },
     approvalTimeline: { create: vi.fn((args: unknown) => prisma.approvalTimeline.create(args)) },
-    expense: { updateMany: vi.fn((args: unknown) => prisma.expense.updateMany(args)) },
-    salaryRun: { updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)) },
+    expense: {
+      findFirst: vi.fn((args: unknown) => prisma.expense.findFirst(args)),
+      updateMany: vi.fn((args: unknown) => prisma.expense.updateMany(args)),
+    },
+    salaryRun: {
+      findFirst: vi.fn((args: unknown) => prisma.salaryRun.findFirst(args)),
+      updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)),
+    },
+    dailyProgressReport: { findFirst: vi.fn((args: unknown) => prisma.dailyProgressReport.findFirst(args)) },
+    material: { findFirst: vi.fn((args: unknown) => prisma.material.findFirst(args)) },
+    document: { findFirst: vi.fn((args: unknown) => prisma.document.findFirst(args)) },
+    purchaseOrder: { findFirst: vi.fn((args: unknown) => prisma.purchaseOrder.findFirst(args)) },
   }
 
   return {
@@ -133,9 +145,14 @@ beforeEach(() => {
   mocks.prisma.expense.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.site.findFirst.mockResolvedValue({ id: 'site_1', companyId: 'company_1' })
+  // Linked entities resolve by default so the happy paths reach the transition; a test
+  // that needs an unreachable entity overrides the delegate it cares about.
   mocks.prisma.expense.findFirst.mockResolvedValue({ id: 'expense_1', billAttachments: [] })
   mocks.prisma.salaryRun.findFirst.mockResolvedValue({ id: 'salary_1', items: [] })
   mocks.prisma.purchaseOrder.findFirst.mockResolvedValue({ id: 'po_1', companyId: 'company_1' })
+  mocks.prisma.dailyProgressReport.findFirst.mockResolvedValue({ id: 'dpr_1' })
+  mocks.prisma.material.findFirst.mockResolvedValue({ id: 'material_1' })
+  mocks.prisma.document.findFirst.mockResolvedValue({ id: 'document_1' })
 })
 
 describe('POST /api/approvals validates like the hardened create action', () => {

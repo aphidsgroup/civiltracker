@@ -26,7 +26,10 @@ const mocks = vi.hoisted(() => {
       update: vi.fn((args: unknown) => prisma.expense.update(args)),
       updateMany: vi.fn((args: unknown) => prisma.expense.updateMany(args)),
     },
-    salaryRun: { updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)) },
+    salaryRun: {
+      findFirst: vi.fn((args: unknown) => prisma.salaryRun.findFirst(args)),
+      updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)),
+    },
   }
 
   return {
@@ -62,6 +65,12 @@ beforeEach(() => {
   mocks.prisma.approval.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.expense.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
+  // The rejection re-resolves the linked run on the transaction client before it writes.
+  // It resolves by default so that the only thing failing these flows is the scoped
+  // `updateMany` a test primes with a zero row count.
+  mocks.prisma.salaryRun.findFirst.mockImplementation(
+    async ({ where }: { where: { id: string } }) => ({ id: where.id })
+  )
   mocks.prisma.approval.findFirst.mockResolvedValue({
     id: 'approval_salary',
     companyId: 'company_1',
