@@ -31,7 +31,11 @@ export function approvalApiError(error: unknown): NextResponse {
   if (/^forbidden/i.test(message) || /is not authorized/i.test(message)) {
     return NextResponse.json({ error: message }, { status: 403 })
   }
-  if (/already processed|no longer/i.test(message)) {
+  // `Conflict:` is the prefixed vocabulary for a refusal to guess — an expense linked to
+  // several open approval requests. It is matched alongside the action phrasing so such a
+  // refusal is reported as the conflict it is rather than collapsing onto a generic 500;
+  // it is a classification only, and the refusal itself still happens before any write.
+  if (/^conflict/i.test(message) || /already processed|no longer/i.test(message)) {
     return NextResponse.json({ error: message }, { status: 409 })
   }
   if (/^unsupported/i.test(message) || /is mandatory|must exactly match|cannot be empty/i.test(message)) {

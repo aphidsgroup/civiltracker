@@ -17,15 +17,22 @@ const APPROVALS_MODULE = 'APPROVALS'
  *
  * This is only the surface gate: tenant scope, site binding and the per-entity approve
  * permission stay inside the hardened approval actions.
+ *
+ * `moduleName` lets a handler that lives outside `/api/approvals` — the legacy bills
+ * endpoints under `/api/expenses` — keep gating on the module it has always gated on
+ * while still sharing this guard.
  */
-export async function requireApprovalApiUser(permission: Permission): Promise<SessionUser> {
+export async function requireApprovalApiUser(
+  permission: Permission,
+  moduleName: string = APPROVALS_MODULE
+): Promise<SessionUser> {
   const user = await requireUser()
 
   if (!hasPermission(user.role, permission)) {
     throw new Error(`Forbidden: Missing required permission "${permission}"`)
   }
 
-  await requireModuleEnabled(APPROVALS_MODULE)
+  await requireModuleEnabled(moduleName)
 
   return user
 }

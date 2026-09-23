@@ -1,58 +1,40 @@
-import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { hasPermission } from '@/lib/permissions'
-import { Role } from '@prisma/client'
-import { ensureCompanyContext, requireApiPermission } from '@/lib/auth/require-api-permission'
+import { rejectApprovalAction } from '@/actions/approvals'
+import { approvalApiError } from '@/lib/approvals/api-errors'
+import { requireApprovalApiUser } from '@/lib/approvals/api-guard'
+import { resolveExpenseApprovalId } from '@/lib/approvals/expense-approval-link'
+
+/**
+ * Legacy bills endpoint, the rejection counterpart of the approve handler: the approval id
+ * is derived from a company- and site-exact lookup for the expense, and the transition,
+ * the linked expense write, the timeline entry and the audit record all stay inside the
+ * hardened action.
+ */
+
+/** The rationale this endpoint has always recorded when the caller supplies none. */
+const LEGACY_REJECTION_REASON = 'Rejected via Bills page'
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const authResult = await requireApiPermission('expenses.reject', 'EXPENSES')
-  if (authResult instanceof NextResponse) return authResult
 
-  const companyContextError = ensureCompanyContext(authResult)
-  if (companyContextError) return companyContextError
-
-  if (!hasPermission(authResult.role as Role, 'expenses.reject')) {
-    return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
-  }
-
-  const companyFilter = authResult.role === 'SUPER_ADMIN' ? {} : { companyId: authResult.companyId }
-
-  const expense = await prisma.expense.findFirst({
-    where: { id, ...companyFilter },
-  })
-
-  if (!expense) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  const now = new Date()
-
-  // Update the expense status
-  await prisma.expense.update({
-    where: { id },
-    data: {
-      approvalStatus: 'REJECTED',
-      rejectedById: authResult.id,
-      rejectedAt: now,
-    },
-  })
-
-  // Update any linked approval records (using raw SQL to avoid Prisma relation constraint)
   try {
-    await prisma.$executeRaw`
-      UPDATE "Approval"
-      SET "currentStatus" = 'REJECTED',
-          "rejectedById" = ${authResult.id},
-          "rejectedAt" = ${now},
-          "rejectionReason" = 'Rejected via Bills page'
-      WHERE "entityId" = ${id}
-        AND "entityType" IN ('EXPENSE', 'BILL')
-    `
-  } catch {
-    // Non-critical: approval record update failure doesn't block expense rejection
-  }
+    const user = await requireApprovalApiUser('expenses.reject', 'EXPENSES')
 
-  return NextResponse.json({ success: true })
+    // The bills UI posts without a body, so an unparseable request is not a failure.
+    let reason = LEGACY_REJECTION_REASON
+    try {
+      const body = await request.json()
+      if (typeof body?.reason === 'string' && body.reason.trim()) reason = body.reason
+    } catch {}
+
+    const approvalId = await resolveExpenseApprovalId(id, user)
+    await rejectApprovalAction(approvalId, reason)
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    return approvalApiError(error)
+  }
 }
