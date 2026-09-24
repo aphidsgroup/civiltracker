@@ -52,6 +52,9 @@ vi.mock('@/lib/budget', () => ({ syncSiteBudget: mocks.syncSiteBudget }))
 
 const { rejectApprovalAction } = await import('@/actions/approvals')
 
+/** The approval's own site, loaded with it: live and owned by the approval company. */
+const LIVE_SAME_COMPANY_SITE = { companyId: 'company_1', deletedAt: null }
+
 /** The five members of SalaryRunStatus in prisma/schema.prisma. */
 const SALARY_RUN_STATUSES = ['DRAFT', 'SUBMITTED', 'VERIFIED', 'APPROVED', 'PAID']
 
@@ -75,6 +78,7 @@ beforeEach(() => {
     id: 'approval_salary',
     companyId: 'company_1',
     siteId: 'site_1',
+    site: LIVE_SAME_COMPANY_SITE,
     currentStatus: 'PENDING',
     entityType: 'SALARY_RUN',
     entityId: 'salary_1',
@@ -145,6 +149,7 @@ describe('rejectApprovalAction linked SALARY_RUN integrity', () => {
       id: 'approval_salary',
       companyId: 'company_1',
       siteId: 'site_1',
+      site: LIVE_SAME_COMPANY_SITE,
       currentStatus: 'SUBMITTED',
       entityType: 'SALARY_RUN',
       entityId: 'salary_on_site_2',

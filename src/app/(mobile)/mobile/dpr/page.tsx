@@ -1,24 +1,26 @@
-import { auth } from '@/lib/auth'
+import { requireUser } from '@/lib/auth/require-user'
+import { getRoleRedirect, hasPermission } from '@/lib/permissions'
 import { createDpr } from '@/actions/dpr'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { ClipboardList, Send } from 'lucide-react'
+import { ClipboardList } from 'lucide-react'
 import DprFormClient from './DprFormClient'
 
 export default async function MobileDprPage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
-  const session = await auth()
-  if (!session?.user) redirect('/login')
-
-  const companyId = session.user.companyId
-  if (!companyId) redirect('/login')
+  // Live principal, never the JWT claims; revoked members throw here, before any read.
+  const user = await requireUser()
+  // SUPER_ADMIN has no company context and `createDpr` refuses it anyway.
+  if (user.role === 'SUPER_ADMIN') redirect('/super-admin/dashboard')
+  if (!user.companyId) redirect('/login')
+  if (!hasPermission(user.role, 'dpr.create')) redirect(getRoleRedirect(user.role))
 
   const { siteId } = await searchParams
 
   const sites = await prisma.site.findMany({
-    where: { companyId, deletedAt: null },
+    where: { companyId: user.companyId, deletedAt: null, status: 'ACTIVE' },
     select: { id: true, name: true }
   })
+  const defaultSiteId = sites.some((site) => site.id === siteId) ? siteId : undefined
 
   async function submitDpr(formData: FormData) {
     'use server'
@@ -35,7 +37,7 @@ export default async function MobileDprPage({ searchParams }: { searchParams: Pr
         <h1 className="text-lg font-bold text-gray-900">Submit Daily Progress</h1>
       </div>
       
-      <DprFormClient sites={sites} defaultSiteId={siteId} submitAction={submitDpr} />
+      <DprFormClient sites={sites} defaultSiteId={defaultSiteId} submitAction={submitDpr} />
     </div>
   )
 }

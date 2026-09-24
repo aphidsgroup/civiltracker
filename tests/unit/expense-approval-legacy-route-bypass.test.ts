@@ -95,11 +95,11 @@ const COMPANY_ADMIN = {
 
 const OPEN_STATUSES = ['PENDING', 'SUBMITTED', 'PENDING_REVIEW']
 
-/** Company-level row with no site, or a row whose site is live. */
+/** Company-level row with no site, or a row whose site is live and owned by the approval company. */
 const SITE_SCOPE_PREDICATE = {
   OR: [
     { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
-    { site: { is: { deletedAt: null } } },
+    { site: { is: { deletedAt: null, companyId: 'company_1' } } },
   ],
 }
 
@@ -123,7 +123,7 @@ function expenseRow(overrides: Record<string, unknown> = {}) {
 }
 
 function approvalRow(overrides: Record<string, unknown> = {}) {
-  return {
+  const row = {
     id: 'approval_1',
     companyId: 'company_1',
     siteId: 'site_1',
@@ -133,6 +133,9 @@ function approvalRow(overrides: Record<string, unknown> = {}) {
     title: 'Site bill',
     ...overrides,
   }
+  // The approval's own site, loaded with it: live and owned by the approval company
+  // unless a test overrides `site` explicitly.
+  return { site: row.siteId ? { companyId: row.companyId, deletedAt: null } : null, ...row }
 }
 
 /** No expense row, approval row, timeline row or audit trail may be written. */

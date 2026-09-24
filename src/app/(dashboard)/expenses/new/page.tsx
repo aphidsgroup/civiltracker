@@ -1,57 +1,26 @@
-import { auth } from '@/lib/auth'
+import { requireUser } from '@/lib/auth/require-user'
+import { getRoleRedirect, hasPermission } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { EXPENSE_CATEGORIES, PAYMENT_MODES } from '@/lib/constants'
-import { ExpenseCategory, PaymentMode } from '@prisma/client'
+import { createExpenseFromFormAction } from '@/actions/expense'
 import { Check } from 'lucide-react'
 
 export default async function NewExpensePage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  // Live principal, never the JWT claims; revoked members throw here.
+  const user = await requireUser()
+  if (user.role === 'SUPER_ADMIN') redirect('/super-admin/dashboard')
+  if (!user.companyId) redirect('/login')
+  // Recording an expense raises an approval, so both grants are required up front.
+  if (!hasPermission(user.role, 'expenses.create') || !hasPermission(user.role, 'approvals.view')) {
+    redirect(getRoleRedirect(user.role))
+  }
 
   const sites = await prisma.site.findMany({
-    where: { companyId: session.user.companyId, deletedAt: null },
+    where: { companyId: user.companyId, deletedAt: null, status: 'ACTIVE' },
     orderBy: { name: 'asc' }
   })
-
-  async function createExpense(formData: FormData) {
-    'use server'
-    const session = await auth()
-    if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-    const siteId = formData.get('siteId') as string
-    const category = formData.get('category') as ExpenseCategory
-    const paymentMode = formData.get('paymentMode') as PaymentMode
-    const amount = Number(formData.get('amount'))
-    const description = formData.get('description') as string
-    const date = new Date(formData.get('date') as string)
-    const paidTo = formData.get('paidTo') as string
-    
-    // Create the expense
-    await prisma.expense.create({
-      data: {
-        companyId: session.user.companyId,
-        siteId,
-        createdById: session.user.id,
-        category,
-        paymentMode,
-        amount,
-        description,
-        billDate: date,
-        paidTo,
-        approvalStatus: 'PENDING',
-      }
-    })
-
-    // Also update site spent amount
-    await prisma.site.update({
-      where: { id: siteId },
-      data: { spent: { increment: amount } }
-    })
-
-    redirect('/dashboard') // In reality should redirect to /expenses which doesn't exist yet
-  }
 
   return (
     <>
@@ -60,7 +29,7 @@ export default async function NewExpensePage() {
       </div>
       
       <div className="max-w-2xl">
-        <form action={createExpense} className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+        <form action={createExpenseFromFormAction}className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex flex-col md:col-span-2">
               <label className="text-xs font-bold text-slate-500 mb-1.5">Project site</label>

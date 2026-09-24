@@ -5,7 +5,8 @@ import { requireUser } from '@/lib/auth/require-user'
 import { hasPermission } from '@/lib/permissions'
 import { filterApprovalsWithLinkedEntity } from '@/lib/approvals/detail'
 import type { LinkedApprovalRef } from '@/lib/approvals/detail'
-import { APPROVAL_SITE_SCOPE_FILTER } from '@/lib/approvals/site-binding'
+import { APPROVAL_SITE_BINDING_SELECT, APPROVAL_SITE_SCOPE_FILTER } from '@/lib/approvals/site-binding'
+import type { SessionUser } from '@/types'
 
 /** Statuses an approval can still be actioned from. */
 export const OPEN_APPROVAL_STATUSES: ApprovalStatus[] = ['PENDING', 'SUBMITTED', 'PENDING_REVIEW']
@@ -27,31 +28,19 @@ export const VALID_APPROVAL_BINDING_SELECT = {
   siteId: true,
   entityType: true,
   entityId: true,
-  site: { select: { companyId: true, deletedAt: true } },
+  site: APPROVAL_SITE_BINDING_SELECT,
 } satisfies Prisma.ApprovalSelect
 
-export type ValidApprovalCandidate = LinkedApprovalRef & {
-  site: { companyId: string; deletedAt: Date | null } | null
-}
-
-/**
- * True when the site an approval is pinned to exists, is live and belongs to the
- * approval's own company. A row pinned to another tenant's site is refused here even
- * when its linked entity claims the approval company, because the entity check alone
- * matches on (company, site) columns that were written together.
- */
-function hasSameTenantLiveSite(approval: ValidApprovalCandidate) {
-  if (!approval.siteId) return true
-  return Boolean(approval.site && !approval.site.deletedAt && approval.site.companyId === approval.companyId)
-}
+export type ValidApprovalCandidate = LinkedApprovalRef
 
 /**
  * Keeps only the approvals an approver could actually action: a well-formed site
  * binding on a live site of the approval's own tenant, and a linked entity that resolves
- * under that exact binding. Input order is preserved.
+ * under that exact binding. Both rules live in `filterApprovalsWithLinkedEntity`, so this
+ * and the approval actions cannot drift apart. Input order is preserved.
  */
 export async function filterValidApprovals<T extends ValidApprovalCandidate>(approvals: T[]): Promise<T[]> {
-  return filterApprovalsWithLinkedEntity(approvals.filter(hasSameTenantLiveSite))
+  return filterApprovalsWithLinkedEntity(approvals)
 }
 
 /**
@@ -94,6 +83,26 @@ export async function sumValidOpenApprovalAmountsBySite(
   }
 
   return totals
+}
+
+/**
+ * The pending-approval figure of one site's overview, or `null` when the viewer may not
+ * see it. `user` must be the live `requireUser` principal.
+ *
+ * The permission is checked before any query, so a role without `approvals.view` learns
+ * neither the figure nor whether one exists. A tenant principal only ever gets a figure
+ * for a site of its own company; a SUPER_ADMIN gets it for any site. The count is keyed
+ * to the site's own company, so an approval stamped with another company but pinned to
+ * this site is never counted here.
+ */
+export async function countSitePendingApprovalsForViewer(
+  user: SessionUser,
+  site: { id: string; companyId: string }
+): Promise<number | null> {
+  if (!hasPermission(user.role, 'approvals.view')) return null
+  if (user.role !== 'SUPER_ADMIN' && site.companyId !== user.companyId) return null
+
+  return countValidApprovals({ companyId: site.companyId, siteId: site.id, currentStatus: 'PENDING' })
 }
 
 /**

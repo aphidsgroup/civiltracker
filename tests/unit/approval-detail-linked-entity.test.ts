@@ -100,7 +100,8 @@ function approvalRow(entityType: string, overrides: Record<string, unknown> = {}
     title: 'SECRET_TITLE',
     description: 'SECRET_DESCRIPTION',
     amount: 5000,
-    site: { name: 'Site One', location: 'Chennai' },
+    // The approval's own site: live and owned by the approval company.
+    site: { name: 'Site One', location: 'Chennai', companyId: 'company_1', deletedAt: null },
     requestedBy: { name: 'Requester', email: 'req@acme.test', role: 'SITE_ENGINEER', avatar: null },
     comments: [{ id: 'comment_1', comment: 'SECRET_COMMENT', user: { name: 'Req', avatar: null, role: 'SITE_ENGINEER' } }],
     timelines: [{ id: 'timeline_1', note: 'SECRET_TIMELINE', actor: { name: 'Req', role: 'SITE_ENGINEER' } }],
@@ -205,7 +206,7 @@ describe('getApprovalByIdAction refuses an approval whose linked entity is unrea
   }
 
   it('refuses a PURCHASE_ORDER approval whose order belongs to another company', async () => {
-    mocks.prisma.approval.findFirst.mockResolvedValue(approvalRow('PURCHASE_ORDER', { siteId: null }))
+    mocks.prisma.approval.findFirst.mockResolvedValue(approvalRow('PURCHASE_ORDER', { siteId: null, site: null }))
     seedEntity('purchaseOrder', entityRecord({ companyId: 'company_2', siteId: undefined }))
 
     await expect(getApprovalByIdAction('approval_1')).rejects.toThrow(GENERIC_DENIAL)
@@ -264,7 +265,7 @@ describe('GET /api/approvals/[id] refuses an approval whose linked entity is unr
   }
 
   it('answers a generic 404 for a PURCHASE_ORDER approval whose order belongs to another company', async () => {
-    mocks.prisma.approval.findFirst.mockResolvedValue(approvalRow('PURCHASE_ORDER', { siteId: null }))
+    mocks.prisma.approval.findFirst.mockResolvedValue(approvalRow('PURCHASE_ORDER', { siteId: null, site: null }))
     seedEntity('purchaseOrder', entityRecord({ companyId: 'company_2', siteId: undefined }))
 
     const { status, body } = await readDetailRoute()

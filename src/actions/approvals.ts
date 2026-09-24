@@ -12,14 +12,17 @@ import {
   resolveEntityBoundApprovalDetail,
 } from '@/lib/approvals/detail'
 import {
-  APPROVAL_SITE_SCOPE_FILTER,
+  APPROVAL_SITE_BINDING_SELECT,
   approvalRequiresSite,
+  approvalSiteScopeFilter,
   assertApprovalSiteBinding,
+  hasExactApprovalSiteBinding,
 } from '@/lib/approvals/site-binding'
 import { requireApprovalSubmitter, submitApprovalRequest } from '@/lib/approvals/submit'
 import { OPEN_APPROVAL_STATUSES } from '@/lib/approvals/valid-reads'
 import type { ApprovalRequestInput } from '@/lib/approvals/submit'
 import type { ApprovalEntityType, ApprovalStatus, Prisma, SalaryRunStatus } from '@prisma/client'
+import type { SessionUser } from '@/types'
 
 /**
  * SalaryRunStatus is DRAFT | SUBMITTED | VERIFIED | APPROVED | PAID — there is no
@@ -40,6 +43,38 @@ type LinkedApprovalEntityRef = {
   siteId: string | null
   entityType: ApprovalEntityType
   entityId: string
+}
+
+/**
+ * The company an approval query may be pinned to: the principal's own for a tenant
+ * member, none for a SUPER_ADMIN whose reads span every company. With a company the
+ * site scope is exact at query level; without one every row still has to pass
+ * `hasExactApprovalSiteBinding`, which each read applies regardless of principal.
+ */
+function approvalQueryCompanyId(user: SessionUser) {
+  return user.role === 'SUPER_ADMIN' ? null : user.companyId!
+}
+
+function approvalQueryScope(user: SessionUser): Prisma.ApprovalWhereInput {
+  const companyId = approvalQueryCompanyId(user)
+  return { ...(companyId ? { companyId } : {}), deletedAt: null, ...approvalSiteScopeFilter(companyId) }
+}
+
+/**
+ * Loads the approval a transition acts on, for the transition to refuse unless the row
+ * is well-formed and sits on a live site of its own company. A cross-bound row answers
+ * exactly like a missing one, before any permission, entity, transition, timeline or
+ * audit step.
+ */
+async function findActionableApproval(user: SessionUser, id: string) {
+  const approval = await prisma.approval.findFirst({
+    where: { id, ...approvalQueryScope(user) },
+    include: { site: APPROVAL_SITE_BINDING_SELECT },
+  })
+  if (!approval) throw new Error('Approval not found')
+  assertApprovalSiteBinding(approval)
+  if (!hasExactApprovalSiteBinding(approval)) throw new Error('Approval not found')
+  return approval
 }
 
 /**
@@ -127,16 +162,11 @@ export async function getApprovalsAction(filter?: {
   search?: string
 }) {
   const user = await requireApprovalReader()
-  const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
 
-  // Malformed legacy rows and rows bound to a soft-deleted site are excluded by the
-  // query itself: they must not be listed, because every downstream action on them is
-  // refused anyway.
-  const where: Record<string, unknown> = {
-    ...companyFilter,
-    deletedAt: null,
-    ...APPROVAL_SITE_SCOPE_FILTER,
-  }
+  // Malformed legacy rows and rows bound to a soft-deleted or another tenant's site are
+  // excluded by the query itself: they must not be listed, because every downstream
+  // action on them is refused anyway.
+  const where: Record<string, unknown> = { ...approvalQueryScope(user) }
 
   if (filter?.status && filter.status !== 'ALL') {
     where.currentStatus = filter.status as ApprovalStatus
@@ -151,7 +181,7 @@ export async function getApprovalsAction(filter?: {
   const approvals = await prisma.approval.findMany({
     where,
     include: {
-      site: { select: { name: true } },
+      site: { select: { name: true, companyId: true, deletedAt: true } },
       requestedBy: { select: { name: true, email: true, avatar: true } },
       approvedBy: { select: { name: true } },
       rejectedBy: { select: { name: true } },
@@ -161,9 +191,10 @@ export async function getApprovalsAction(filter?: {
     take: 100,
   })
 
-  // The linked entity is polymorphic, so its binding cannot be part of the query above;
-  // a row whose entity is missing, cross-company or on another site is dropped here with
-  // one batched lookup per entity type.
+  // Neither the approval → site → company binding (for a SUPER_ADMIN) nor the
+  // polymorphic linked entity can be expressed in the query above; a cross-bound row,
+  // and a row whose entity is missing, cross-company or on another site, is dropped here
+  // with one batched lookup per entity type.
   return filterApprovalsWithLinkedEntity(approvals)
 }
 
@@ -203,12 +234,7 @@ function verifyCanApproveEntity(role: string, entityType: string) {
 
 export async function approveApprovalAction(id: string, note?: string, confirmationText?: string) {
   const user = await requireUser()
-  const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
-  const approval = await prisma.approval.findFirst({
-    where: { id, ...companyFilter, deletedAt: null, ...APPROVAL_SITE_SCOPE_FILTER },
-  })
-  if (!approval) throw new Error('Approval not found')
-  assertApprovalSiteBinding(approval)
+  const approval = await findActionableApproval(user, id)
   if ((confirmationText ?? '').trim() !== 'APPROVE') {
     throw new Error('Approval confirmation text must exactly match APPROVE')
   }
@@ -226,15 +252,16 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
   const budgetSiteId = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await assertLinkedApprovalEntityInTenant(tx, approval, 'approved')
 
-    // The live-site predicate rides on the conditional write itself, so a site deleted
-    // after the read above still stops the transition before any timeline or linked write.
+    // The exact site predicate rides on the conditional write itself, so a site deleted
+    // or re-pointed at another tenant after the read above still stops the transition
+    // before any timeline or linked write.
     const transition = await tx.approval.updateMany({
       where: {
         id,
         companyId: approval.companyId,
         deletedAt: null,
         currentStatus: { in: OPEN_APPROVAL_STATUSES },
-        ...APPROVAL_SITE_SCOPE_FILTER,
+        ...approvalSiteScopeFilter(approval.companyId),
       },
       data: {
         currentStatus: 'APPROVED',
@@ -326,12 +353,7 @@ export async function rejectApprovalAction(id: string, reason: string) {
     throw new Error('Rejection reason is mandatory (minimum 3 characters)')
   }
 
-  const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
-  const approval = await prisma.approval.findFirst({
-    where: { id, ...companyFilter, deletedAt: null, ...APPROVAL_SITE_SCOPE_FILTER },
-  })
-  if (!approval) throw new Error('Approval not found')
-  assertApprovalSiteBinding(approval)
+  const approval = await findActionableApproval(user, id)
 
   if (!verifyCanApproveEntity(user.role, approval.entityType)) {
     throw new Error(`Forbidden: Role ${user.role} is not authorized to reject ${approval.entityType}`)
@@ -348,7 +370,7 @@ export async function rejectApprovalAction(id: string, reason: string) {
         companyId: approval.companyId,
         deletedAt: null,
         currentStatus: { in: OPEN_APPROVAL_STATUSES },
-        ...APPROVAL_SITE_SCOPE_FILTER,
+        ...approvalSiteScopeFilter(approval.companyId),
       },
       data: {
         currentStatus: 'REJECTED',
@@ -432,12 +454,7 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
     throw new Error('Forbidden: You are not authorized to disburse payments')
   }
 
-  const approvalWhere = user.role === 'SUPER_ADMIN'
-    ? { id, deletedAt: null, ...APPROVAL_SITE_SCOPE_FILTER }
-    : { id, companyId: user.companyId!, deletedAt: null, ...APPROVAL_SITE_SCOPE_FILTER }
-  const approval = await prisma.approval.findFirst({ where: approvalWhere })
-  if (!approval) throw new Error('Approval not found')
-  assertApprovalSiteBinding(approval)
+  const approval = await findActionableApproval(user, id)
   if (approval.currentStatus !== 'APPROVED') {
     throw new Error('Only approved requests can be marked paid')
   }
@@ -458,7 +475,7 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
         companyId: approval.companyId,
         deletedAt: null,
         currentStatus: 'APPROVED',
-        ...APPROVAL_SITE_SCOPE_FILTER,
+        ...approvalSiteScopeFilter(approval.companyId),
       },
       data: {
         currentStatus: 'PAID',
@@ -564,7 +581,6 @@ export async function addApprovalCommentAction(approvalId: string, comment: stri
 
 export async function getApprovalStatsAction() {
   const user = await requireApprovalReader()
-  const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
 
   const sevenDaysAgo = new Date()
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
@@ -577,9 +593,7 @@ export async function getApprovalStatsAction() {
   // one batched lookup per entity type.
   const rows = await prisma.approval.findMany({
     where: {
-      ...companyFilter,
-      deletedAt: null,
-      ...APPROVAL_SITE_SCOPE_FILTER,
+      ...approvalQueryScope(user),
       AND: [
         {
           OR: [
@@ -599,9 +613,10 @@ export async function getApprovalStatsAction() {
       priority: true,
       amount: true,
       approvedAt: true,
+      site: APPROVAL_SITE_BINDING_SELECT,
     },
   })
-  const counted = await filterApprovalsWithLinkedEntity(rows)
+  const counted = await filterApprovalsWithLinkedEntity(rows.filter(hasExactApprovalSiteBinding))
 
   const open = counted.filter((row) => OPEN_APPROVAL_STATUSES.includes(row.currentStatus))
   const approvedWeek = counted.filter(

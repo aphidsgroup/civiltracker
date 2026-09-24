@@ -169,8 +169,12 @@ describe('approval surfaces use the valid-read helpers', () => {
 
   it('site overview counts pending approvals through the valid-read helper, scoped to the site tenant', async () => {
     const source = await readFile(path.resolve('src/app/(dashboard)/sites/[id]/page.tsx'), 'utf8')
+    const helperSource = await readFile(path.resolve('src/lib/approvals/valid-reads.ts'), 'utf8')
 
-    expect(source).toMatch(
+    // The page delegates to the permission-gated viewer helper, which in turn counts
+    // through countValidApprovals keyed to the site's own tenant.
+    expect(source).toMatch(/countSitePendingApprovalsForViewer\(\s*user,\s*site\s*\)/)
+    expect(helperSource).toMatch(
       /countValidApprovals\(\{\s*companyId:\s*site\.companyId,\s*siteId:\s*site\.id,\s*currentStatus:\s*'PENDING'/
     )
     expect(source).not.toMatch(/prisma\.approval\./)

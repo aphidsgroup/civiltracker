@@ -19,11 +19,11 @@ vi.mock('@/lib/audit', () => ({ logActivity: vi.fn() }))
 
 const { addApprovalCommentAction } = await import('@/actions/approvals')
 
-/** Company-level row with no site, or a row whose site is live. */
+/** Company-level row with no site, or a row whose site is live and owned by the caller's company. */
 const SITE_SCOPE_PREDICATE = {
   OR: [
     { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
-    { site: { is: { deletedAt: null } } },
+    { site: { is: { deletedAt: null, companyId: 'company_1' } } },
   ],
 }
 

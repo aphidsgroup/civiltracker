@@ -46,13 +46,24 @@ vi.mock('@/lib/audit', () => ({ logActivity: mocks.logActivity }))
 
 const { markApprovalPaidAction } = await import('@/actions/approvals')
 
-/** Company-level row with no site, or a row whose site is live. */
-const SITE_SCOPE_PREDICATE = {
-  OR: [
-    { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
-    { site: { is: { deletedAt: null } } },
-  ],
+/** Company-level row with no site, or a row whose site is live and owned by `companyId`. */
+function sitePredicate(companyId?: string) {
+  return {
+    OR: [
+      { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
+      { site: { is: companyId ? { deletedAt: null, companyId } : { deletedAt: null } } },
+    ],
+  }
 }
+const SITE_SCOPE_PREDICATE = sitePredicate('company_1')
+/** A SUPER_ADMIN read carries no company, so the query only prefilters live sites. */
+const LIVE_SITE_PREFILTER = sitePredicate()
+
+/** The site binding the action loads alongside the approval. */
+const SITE_BINDING_INCLUDE = { site: { select: { companyId: true, deletedAt: true } } }
+
+/** The approval's own site: live and owned by the approval company. */
+const LIVE_SAME_COMPANY_SITE = { companyId: 'company_1', deletedAt: null }
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -62,8 +73,8 @@ beforeEach(() => {
     async (run: (client: typeof mocks.tx) => unknown) => run(mocks.tx)
   )
   // EXPENSE is site bound, so a well formed approval for one always carries its site.
-  mocks.prisma.approval.findUnique.mockResolvedValue({ id: 'approval_1', companyId: 'company_1', siteId: 'site_1', currentStatus: 'APPROVED', entityType: 'EXPENSE', entityId: 'expense_1', title: 'Expense' })
-  mocks.prisma.approval.findFirst.mockResolvedValue({ id: 'approval_1', companyId: 'company_1', siteId: 'site_1', currentStatus: 'APPROVED', entityType: 'EXPENSE', entityId: 'expense_1', title: 'Expense' })
+  mocks.prisma.approval.findUnique.mockResolvedValue({ id: 'approval_1', companyId: 'company_1', siteId: 'site_1', site: LIVE_SAME_COMPANY_SITE, currentStatus: 'APPROVED', entityType: 'EXPENSE', entityId: 'expense_1', title: 'Expense' })
+  mocks.prisma.approval.findFirst.mockResolvedValue({ id: 'approval_1', companyId: 'company_1', siteId: 'site_1', site: LIVE_SAME_COMPANY_SITE, currentStatus: 'APPROVED', entityType: 'EXPENSE', entityId: 'expense_1', title: 'Expense' })
   mocks.prisma.approval.update.mockResolvedValue({ id: 'approval_1' })
   mocks.prisma.approval.updateMany.mockResolvedValue({ count: 1 })
   // The action now requires each write inside the transaction to reach exactly one row,
@@ -83,6 +94,7 @@ describe('markApprovalPaidAction tenant authorization', () => {
 
     expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({
       where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, ...SITE_SCOPE_PREDICATE },
+      include: SITE_BINDING_INCLUDE,
     })
     expect(mocks.tx.approval.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, currentStatus: 'APPROVED', ...SITE_SCOPE_PREDICATE },
@@ -97,7 +109,14 @@ describe('markApprovalPaidAction tenant authorization', () => {
 
     await markApprovalPaidAction('approval_1', undefined, 'PAID')
 
-    expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({ where: { id: 'approval_1', deletedAt: null, ...SITE_SCOPE_PREDICATE } })
+    expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({
+      where: { id: 'approval_1', deletedAt: null, ...LIVE_SITE_PREFILTER },
+      include: SITE_BINDING_INCLUDE,
+    })
+    // The transition itself stays pinned to the approval's own company and its sites.
+    expect(mocks.tx.approval.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, currentStatus: 'APPROVED', ...SITE_SCOPE_PREDICATE },
+    }))
   })
 
   it('scopes linked expense and salary mutations to the fetched approval company and site', async () => {
@@ -107,7 +126,7 @@ describe('markApprovalPaidAction tenant authorization', () => {
     }))
     expect(mocks.prisma.expense.updateMany).toHaveBeenCalledTimes(1)
 
-    mocks.prisma.approval.findFirst.mockResolvedValue({ id: 'approval_2', companyId: 'company_1', siteId: 'site_1', currentStatus: 'APPROVED', entityType: 'SALARY_RUN', entityId: 'salary_1', title: 'Salary' })
+    mocks.prisma.approval.findFirst.mockResolvedValue({ id: 'approval_2', companyId: 'company_1', siteId: 'site_1', site: LIVE_SAME_COMPANY_SITE, currentStatus: 'APPROVED', entityType: 'SALARY_RUN', entityId: 'salary_1', title: 'Salary' })
     await markApprovalPaidAction('approval_2', undefined, 'PAID')
     expect(mocks.tx.salaryRun.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'salary_1', companyId: 'company_1', siteId: 'site_1' },
@@ -118,7 +137,7 @@ describe('markApprovalPaidAction tenant authorization', () => {
   // A site-bound approval with no site would disburse against a record on any site of
   // the company, so it must be refused before the PAID transition.
   it.each(['EXPENSE', 'SALARY_RUN'])('refuses to disburse a site-null %s approval', async (entityType) => {
-    mocks.prisma.approval.findFirst.mockResolvedValue({ id: 'legacy_1', companyId: 'company_1', siteId: null, currentStatus: 'APPROVED', entityType, entityId: 'entity_1', title: 'Legacy request' })
+    mocks.prisma.approval.findFirst.mockResolvedValue({ id: 'legacy_1', companyId: 'company_1', siteId: null, site: null, currentStatus: 'APPROVED', entityType, entityId: 'entity_1', title: 'Legacy request' })
 
     await expect(markApprovalPaidAction('legacy_1', undefined, 'PAID')).rejects.toThrow(/site/i)
     // Refused before the transition means no transaction is opened at all.
@@ -132,7 +151,7 @@ describe('markApprovalPaidAction tenant authorization', () => {
   })
 
   it('rejects a non-approved approval without any mutation', async () => {
-    mocks.prisma.approval.findFirst.mockResolvedValue({ id: 'pending_1', companyId: 'company_1', siteId: 'site_1', currentStatus: 'PENDING', entityType: 'EXPENSE', entityId: 'expense_1', title: 'Pending expense' })
+    mocks.prisma.approval.findFirst.mockResolvedValue({ id: 'pending_1', companyId: 'company_1', siteId: 'site_1', site: LIVE_SAME_COMPANY_SITE, currentStatus: 'PENDING', entityType: 'EXPENSE', entityId: 'expense_1', title: 'Pending expense' })
 
     await expect(markApprovalPaidAction('pending_1', undefined, 'PAID')).rejects.toThrow(/only approved requests can be marked paid/i)
     expect(mocks.prisma.approval.update).not.toHaveBeenCalled()
@@ -144,7 +163,7 @@ describe('markApprovalPaidAction tenant authorization', () => {
   })
 
   it.each(['REJECTED', 'PAID'])('rejects %s approvals without any mutation', async (currentStatus) => {
-    mocks.prisma.approval.findFirst.mockResolvedValue({ id: `${currentStatus}_1`, companyId: 'company_1', siteId: 'site_1', currentStatus, entityType: 'EXPENSE', entityId: 'expense_1', title: 'Closed expense' })
+    mocks.prisma.approval.findFirst.mockResolvedValue({ id: `${currentStatus}_1`, companyId: 'company_1', siteId: 'site_1', site: LIVE_SAME_COMPANY_SITE, currentStatus, entityType: 'EXPENSE', entityId: 'expense_1', title: 'Closed expense' })
 
     await expect(markApprovalPaidAction(`${currentStatus}_1`, undefined, 'PAID')).rejects.toThrow(/only approved requests can be marked paid/i)
     expect(mocks.prisma.approval.update).not.toHaveBeenCalled()

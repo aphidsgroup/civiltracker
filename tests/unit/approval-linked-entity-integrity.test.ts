@@ -119,7 +119,7 @@ const TRANSITIONS = [
 ] as const
 
 function approvalRow(overrides: Record<string, unknown> = {}) {
-  return {
+  const row = {
     id: 'approval_1',
     companyId: 'company_1',
     siteId: 'site_1',
@@ -129,6 +129,10 @@ function approvalRow(overrides: Record<string, unknown> = {}) {
     title: 'Linked request',
     ...overrides,
   }
+  // The approval's own site, loaded with it: live and owned by the approval company, so
+  // the linked entity re-resolution is what these tests exercise. A site-less row has no
+  // site relation at all.
+  return { site: row.siteId ? { companyId: row.companyId, deletedAt: null } : null, ...row }
 }
 
 /** A refused transition may leave nothing at all behind. */

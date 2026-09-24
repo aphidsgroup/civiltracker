@@ -57,11 +57,11 @@ vi.mock('@/lib/audit', () => ({ logActivity: mocks.logActivity }))
 
 const { markApprovalPaidAction } = await import('@/actions/approvals')
 
-/** Company-level row with no site, or a row whose site is live. */
+/** Company-level row with no site, or a row whose site is live and owned by the approval company. */
 const SITE_SCOPE_PREDICATE = {
   OR: [
     { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
-    { site: { is: { deletedAt: null } } },
+    { site: { is: { deletedAt: null, companyId: 'company_1' } } },
   ],
 }
 
@@ -70,6 +70,8 @@ function approvedRow(overrides: Record<string, unknown> = {}) {
     id: 'approval_1',
     companyId: 'company_1',
     siteId: 'site_1',
+    // The approval's own site, loaded with it: live and owned by the approval company.
+    site: { companyId: 'company_1', deletedAt: null },
     currentStatus: 'APPROVED',
     entityType: 'EXPENSE',
     entityId: 'expense_1',

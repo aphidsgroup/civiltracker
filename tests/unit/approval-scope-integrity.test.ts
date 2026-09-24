@@ -137,7 +137,7 @@ const ENTITIES: Record<string, Row[]> = {
 }
 
 function approval(id: string, overrides: Row = {}): Row {
-  return {
+  const row: Row = {
     id,
     companyId: 'company_1',
     siteId: 'site_1',
@@ -152,6 +152,9 @@ function approval(id: string, overrides: Row = {}): Row {
     deletedAt: null,
     ...overrides,
   }
+  // The in-memory delegate returns rows as stored, so each row embeds the site it is
+  // pinned to, the way the production `include`/`select` of the site binding would load it.
+  return { ...row, site: SITES.find((site) => site.id === row.siteId) ?? null }
 }
 
 const NOW = new Date()
@@ -566,9 +569,13 @@ describe('approvals bound to a soft-deleted site fail closed everywhere', () => 
     async (_verb, run, status) => {
       mocks.requireUser.mockResolvedValue(principal('COMPANY_ADMIN'))
       // The pre-transaction read raced ahead of the site deletion; the conditional
-      // transition itself must carry the live-site predicate.
+      // transition itself must carry the live-site predicate. The stale snapshot therefore
+      // still carries its site as it was at read time: live and owned by the approval company.
       const stale = APPROVALS.find((row) => row.siteId === 'site_dead' && row.currentStatus === status)!
-      mocks.prisma.approval.findFirst.mockResolvedValueOnce({ ...stale })
+      mocks.prisma.approval.findFirst.mockResolvedValueOnce({
+        ...stale,
+        site: { ...(stale.site as Row), deletedAt: null },
+      })
 
       await expect(run()).rejects.toThrow(/no longer/i)
 

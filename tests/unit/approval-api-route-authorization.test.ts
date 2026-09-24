@@ -92,13 +92,16 @@ const COMPANY_ADMIN = {
 
 const OPEN_STATUSES = ['PENDING', 'SUBMITTED', 'PENDING_REVIEW']
 
-/** Company-level row with no site, or a row whose site is live. */
+/** Company-level row with no site, or a row whose site is live and owned by the caller's company. */
 const SITE_SCOPE_PREDICATE = {
   OR: [
     { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
-    { site: { is: { deletedAt: null } } },
+    { site: { is: { deletedAt: null, companyId: 'company_1' } } },
   ],
 }
+
+/** The approval's own site: live and owned by the approval company. */
+const LIVE_SAME_COMPANY_SITE = { companyId: 'company_1', deletedAt: null }
 
 function postRequest(url: string, body: unknown) {
   return new Request(url, {
@@ -113,7 +116,7 @@ function routeParams(id: string) {
 }
 
 function approvalRow(overrides: Record<string, unknown> = {}) {
-  return {
+  const row = {
     id: 'approval_1',
     companyId: 'company_1',
     siteId: 'site_1',
@@ -123,6 +126,9 @@ function approvalRow(overrides: Record<string, unknown> = {}) {
     title: 'Site expense',
     ...overrides,
   }
+  // A row pinned to a site loads that site with it: live and same-company unless a test
+  // overrides `site` explicitly. A site-less row has no site relation at all.
+  return { site: row.siteId ? LIVE_SAME_COMPANY_SITE : null, ...row }
 }
 
 /** No approval row, timeline row, linked row or audit trail may be written. */

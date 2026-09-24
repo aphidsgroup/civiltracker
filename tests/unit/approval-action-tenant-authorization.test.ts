@@ -69,13 +69,19 @@ const {
 
 const OPEN_STATUSES = ['PENDING', 'SUBMITTED', 'PENDING_REVIEW']
 
-/** Company-level row with no site, or a row whose site is live. */
+/** Company-level row with no site, or a row whose site is live and owned by the caller's company. */
 const SITE_SCOPE_PREDICATE = {
   OR: [
     { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
-    { site: { is: { deletedAt: null } } },
+    { site: { is: { deletedAt: null, companyId: 'company_1' } } },
   ],
 }
+
+/** The site binding a transition loads alongside the approval. */
+const SITE_BINDING_INCLUDE = { site: { select: { companyId: true, deletedAt: true } } }
+
+/** The approval's own site: live and owned by the approval company. */
+const LIVE_SAME_COMPANY_SITE = { companyId: 'company_1', deletedAt: null }
 
 function expectNoApprovalMutations() {
   expect(mocks.prisma.approval.create).not.toHaveBeenCalled()
@@ -252,6 +258,7 @@ describe('getApprovalByIdAction tenant scoping', () => {
       id: 'approval_1',
       companyId: 'company_1',
       siteId: 'site_1',
+      site: LIVE_SAME_COMPANY_SITE,
       entityType: 'EXPENSE',
       entityId: 'expense_1',
     })
@@ -309,6 +316,7 @@ describe('approveApprovalAction atomic tenant bound transition', () => {
       id: 'approval_1',
       companyId: 'company_1',
       siteId: 'site_1',
+      site: LIVE_SAME_COMPANY_SITE,
       currentStatus: 'PENDING',
       entityType: 'EXPENSE',
       entityId: 'expense_1',
@@ -322,6 +330,7 @@ describe('approveApprovalAction atomic tenant bound transition', () => {
 
     expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({
       where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, ...SITE_SCOPE_PREDICATE },
+      include: SITE_BINDING_INCLUDE,
     })
   })
 
@@ -370,6 +379,7 @@ describe('approveApprovalAction atomic tenant bound transition', () => {
       id: 'approval_2',
       companyId: 'company_1',
       siteId: 'site_1',
+      site: LIVE_SAME_COMPANY_SITE,
       currentStatus: 'SUBMITTED',
       entityType: 'SALARY_RUN',
       entityId: 'salary_1',
@@ -400,6 +410,7 @@ describe('rejectApprovalAction atomic tenant bound transition', () => {
       id: 'approval_1',
       companyId: 'company_1',
       siteId: 'site_1',
+      site: LIVE_SAME_COMPANY_SITE,
       currentStatus: 'PENDING',
       entityType: 'EXPENSE',
       entityId: 'expense_1',
@@ -412,6 +423,7 @@ describe('rejectApprovalAction atomic tenant bound transition', () => {
 
     expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({
       where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, ...SITE_SCOPE_PREDICATE },
+      include: SITE_BINDING_INCLUDE,
     })
   })
 
@@ -467,6 +479,7 @@ describe('linked entity writes are atomic with the approval transition', () => {
       id: 'approval_1',
       companyId: 'company_1',
       siteId: 'site_1',
+      site: LIVE_SAME_COMPANY_SITE,
       currentStatus: 'PENDING',
       entityType: 'EXPENSE',
       entityId: 'expense_1',
@@ -513,6 +526,7 @@ describe('linked entity writes are atomic with the approval transition', () => {
       id: 'approval_2',
       companyId: 'company_1',
       siteId: 'site_1',
+      site: LIVE_SAME_COMPANY_SITE,
       currentStatus: 'SUBMITTED',
       entityType: 'SALARY_RUN',
       entityId: 'salary_1',

@@ -93,15 +93,29 @@ function expectNoApprovalReads() {
 }
 
 /**
- * The site-scope predicate every list/count/detail read composes: a company-level row
- * with no site, or a row whose site is live.
+ * The site-scope predicate every tenant list/count/detail read composes: a company-level
+ * row with no site, or a row whose site is live and owned by the caller's company.
  */
 const WELL_FORMED_SITE_PREDICATE = {
+  OR: [
+    { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
+    { site: { is: { deletedAt: null, companyId: 'company_1' } } },
+  ],
+}
+
+/**
+ * A SUPER_ADMIN read carries no company, so its query only prefilters live sites; the
+ * exact same-company binding is then proven in memory on the loaded `site`.
+ */
+const LIVE_SITE_PREFILTER = {
   OR: [
     { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
     { site: { is: { deletedAt: null } } },
   ],
 }
+
+/** The approval's own site, loaded with it: live and owned by the approval company. */
+const LIVE_SAME_COMPANY_SITE = { companyId: 'company_1', deletedAt: null }
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -113,6 +127,7 @@ beforeEach(() => {
     id: 'approval_1',
     companyId: 'company_1',
     siteId: 'site_1',
+    site: LIVE_SAME_COMPANY_SITE,
     entityType: 'EXPENSE',
     entityId: 'expense_1',
     currentStatus: 'PENDING',
@@ -170,7 +185,7 @@ describe('getApprovalsAction requires approvals.view', () => {
 
     const where = mocks.prisma.approval.findMany.mock.calls[0][0].where
     expect(where).not.toHaveProperty('companyId')
-    expect(where).toMatchObject({ deletedAt: null, ...WELL_FORMED_SITE_PREDICATE })
+    expect(where).toMatchObject({ deletedAt: null, ...LIVE_SITE_PREFILTER })
   })
 })
 
@@ -193,6 +208,7 @@ describe('getApprovalStatsAction requires approvals.view', () => {
       const row = {
         companyId: 'company_1',
         siteId: 'site_1',
+        site: LIVE_SAME_COMPANY_SITE,
         entityType: 'EXPENSE',
         currentStatus: 'PENDING',
         priority: 'URGENT',
@@ -229,7 +245,7 @@ describe('getApprovalStatsAction requires approvals.view', () => {
 
     const where = mocks.prisma.approval.findMany.mock.calls[0][0].where
     expect(where).not.toHaveProperty('companyId')
-    expect(where).toMatchObject({ deletedAt: null, ...WELL_FORMED_SITE_PREDICATE })
+    expect(where).toMatchObject({ deletedAt: null, ...LIVE_SITE_PREFILTER })
   })
 })
 
@@ -278,7 +294,7 @@ describe('getApprovalByIdAction requires approvals.view', () => {
     await getApprovalByIdAction('approval_1')
 
     expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'approval_1', deletedAt: null, ...WELL_FORMED_SITE_PREDICATE } })
+      expect.objectContaining({ where: { id: 'approval_1', deletedAt: null, ...LIVE_SITE_PREFILTER } })
     )
   })
 
@@ -289,6 +305,7 @@ describe('getApprovalByIdAction requires approvals.view', () => {
       id: 'legacy_approval',
       companyId: 'company_1',
       siteId: null,
+      site: null,
       entityType: 'EXPENSE',
       entityId: 'expense_1',
       currentStatus: 'PENDING',

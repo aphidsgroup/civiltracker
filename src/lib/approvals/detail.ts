@@ -1,10 +1,11 @@
 import prisma from '@/lib/prisma'
 import {
-  APPROVAL_SITE_SCOPE_FILTER,
   approvalRequiresSite,
+  approvalSiteScopeFilter,
+  hasExactApprovalSiteBinding,
   hasValidApprovalSiteBinding,
 } from '@/lib/approvals/site-binding'
-import type { ApprovalSiteBinding } from '@/lib/approvals/site-binding'
+import type { ApprovalBoundSite, ApprovalSiteBinding } from '@/lib/approvals/site-binding'
 import type { ApprovalEntityType } from '@prisma/client'
 import type { SessionUser } from '@/types'
 
@@ -60,13 +61,17 @@ export async function findLinkedApprovalEntity(
   }
 }
 
-/** The stored binding of an approval row and what it claims to point at. */
+/**
+ * The stored binding of an approval row, the site it is pinned to (selected with
+ * `APPROVAL_SITE_BINDING_SELECT`) and what it claims to point at.
+ */
 export type LinkedApprovalRef = {
   id: string
   companyId: string
   siteId: string | null
   entityType: ApprovalEntityType
   entityId: string
+  site: ApprovalBoundSite | null
 }
 
 type LinkedEntityRef = { id: string; companyId: string; siteId?: string | null }
@@ -109,9 +114,17 @@ function linkKey(entityType: ApprovalEntityType, entityId: string, companyId: st
 }
 
 /**
- * Keeps only the approvals whose linked entity resolves under the approval's exact
- * binding — the same rule `resolveEntityBoundApprovalDetail` applies to a single row:
- * its company always, its site for every type except the company-level PURCHASE_ORDER.
+ * Keeps only the approvals whose own site binding is exact and whose linked entity
+ * resolves under that binding — the same rules `resolveEntityBoundApprovalDetail`
+ * applies to a single row: the approval must sit on a live site of its own company (or
+ * be a site-less company-level row), and the entity must match its company always and
+ * its site for every type except the company-level PURCHASE_ORDER.
+ *
+ * The approval binding is checked first, and on its own: an approval stamped company A
+ * but pinned to a site of company B can carry an entity stamped (A, B) as well, so the
+ * entity match alone would admit it. Because the entity must then equal the approval's
+ * (company, site) and that site is proven to belong to the company, the entity is on a
+ * live site of its own company too.
  *
  * `Approval.entityId` is polymorphic, so there is no Prisma relation to filter through
  * and the check cannot live in the approval query itself. Instead the candidates are
@@ -122,7 +135,7 @@ function linkKey(entityType: ApprovalEntityType, entityId: string, companyId: st
  */
 export async function filterApprovalsWithLinkedEntity<T extends LinkedApprovalRef>(approvals: T[]): Promise<T[]> {
   const candidates = approvals.filter(
-    (approval) => hasValidApprovalSiteBinding(approval) && approval.entityId && approval.companyId
+    (approval) => hasExactApprovalSiteBinding(approval) && approval.entityId && approval.companyId
   )
 
   const byType = new Map<ApprovalEntityType, T[]>()
@@ -160,20 +173,21 @@ export async function filterApprovalsWithLinkedEntity<T extends LinkedApprovalRe
 }
 
 async function findApprovalDetailRow(user: SessionUser, id: string) {
-  const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
+  const companyId = user.role === 'SUPER_ADMIN' ? null : user.companyId!
 
   return prisma.approval.findFirst({
     where: {
       id,
-      ...companyFilter,
+      ...(companyId ? { companyId } : {}),
       deletedAt: null,
-      // A site-bound approval without a site, or one bound to a soft-deleted site, is
-      // excluded by the query itself: it can never be actioned, so it must not be
-      // detailed either.
-      ...APPROVAL_SITE_SCOPE_FILTER,
+      // A site-bound approval without a site, or one bound to a soft-deleted site or to
+      // another tenant's site, is excluded by the query itself: it can never be
+      // actioned, so it must not be detailed either. A SUPER_ADMIN read carries no
+      // company here and relies on the exact binding check below.
+      ...approvalSiteScopeFilter(companyId),
     },
     include: {
-      site: { select: { name: true, location: true } },
+      site: { select: { name: true, location: true, companyId: true, deletedAt: true } },
       requestedBy: { select: { name: true, email: true, role: true, avatar: true } },
       reviewedBy: { select: { name: true } },
       approvedBy: { select: { name: true } },
@@ -211,6 +225,9 @@ export type ApprovalDetailResolution =
  * or sitting on another site of the same company is `not_found`, so its title,
  * description, comments, timeline and attachments never leave this function.
  *
+ * Before any entity lookup the approval itself must sit on a live site of its own
+ * company (or be a site-less company-level row); a cross-bound row is `not_found`.
+ *
  * A malformed site binding is reported separately only so the action can keep its
  * existing refusal; no entity lookup is attempted for it.
  */
@@ -227,6 +244,10 @@ export async function resolveEntityBoundApprovalDetail(
       binding: { id: approval.id, entityType: approval.entityType, siteId: approval.siteId },
     }
   }
+
+  // A row pinned to a site that is not a live site of its own company answers exactly
+  // like a missing one, and its linked entity is never looked up.
+  if (!hasExactApprovalSiteBinding(approval)) return { status: 'not_found' }
 
   // Structurally refuses the company-wide widening rather than relying on the binding
   // check above: a site-bound type is only ever looked up on the approval site.

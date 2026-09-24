@@ -1,6 +1,7 @@
-import { auth } from '@/lib/auth'
+import { requireUser } from '@/lib/auth/require-user'
+import { getRoleRedirect, hasPermission } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
-import { countValidApprovals } from '@/lib/approvals/valid-reads'
+import { countSitePendingApprovalsForViewer } from '@/lib/approvals/valid-reads'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 
@@ -11,12 +12,16 @@ export default async function SiteOverviewPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  // Live principal, never the JWT claims; revoked members throw here, before any read.
+  const user = await requireUser()
+  // This is a tenant page and a SUPER_ADMIN carries no company context.
+  if (user.role === 'SUPER_ADMIN') redirect('/super-admin/dashboard')
+  if (!user.companyId) redirect('/login')
+  if (!hasPermission(user.role, 'sites.view')) redirect(getRoleRedirect(user.role))
   const { id } = await params
 
-  const site = await prisma.site.findUnique({
-    where: { id, companyId: session.user.companyId, deletedAt: null },
+  const site = await prisma.site.findFirst({
+    where: { id, companyId: user.companyId, deletedAt: null },
     include: {
       dprs: { orderBy: { date: 'desc' }, take: 1, include: { createdBy: true } },
     }
@@ -69,13 +74,10 @@ export default async function SiteOverviewPage({
   })
   const calculatedSpent = Number(approvedExpenses._sum.amount || 0)
 
-  // Soft-deleted, malformed, orphaned and cross-tenant rows can never be actioned, so
-  // they are not counted as waiting.
-  const pendingApprovalsCount = await countValidApprovals({
-    companyId: site.companyId,
-    siteId: site.id,
-    currentStatus: 'PENDING',
-  })
+  // Null — and no approval query at all — for a role without approvals.view. Soft-deleted,
+  // malformed, orphaned and cross-tenant rows can never be actioned, so they are not
+  // counted as waiting.
+  const pendingApprovalsCount = await countSitePendingApprovalsForViewer(user, site)
 
   const budget = Number(site.budget) || 0
   const latestDpr = site.dprs[0]
@@ -95,10 +97,12 @@ export default async function SiteOverviewPage({
           <div className="text-2xl font-bold text-slate-900">{totalOnsite}</div>
           <div className="text-xs text-slate-500 mt-1">Labour present today ({presentCount} Own + {contractorLabourCount} Cont.)</div>
         </div>
-        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-          <div className="text-2xl font-bold text-amber-600">{pendingApprovalsCount}</div>
-          <div className="text-xs text-slate-500 mt-1">Pending approvals</div>
-        </div>
+        {pendingApprovalsCount !== null && (
+          <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+            <div className="text-2xl font-bold text-amber-600">{pendingApprovalsCount}</div>
+            <div className="text-xs text-slate-500 mt-1">Pending approvals</div>
+          </div>
+        )}
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
