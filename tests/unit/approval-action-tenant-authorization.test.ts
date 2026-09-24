@@ -221,7 +221,14 @@ describe('getApprovalByIdAction tenant scoping', () => {
     await expect(getApprovalByIdAction('approval_1')).rejects.toThrow(/not found or access denied/i)
 
     expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'approval_1', companyId: 'company_1', deletedAt: null } })
+      expect.objectContaining({
+        where: {
+          id: 'approval_1',
+          companyId: 'company_1',
+          deletedAt: null,
+          OR: [{ siteId: { not: null } }, { entityType: { in: ['PURCHASE_ORDER'] } }],
+        },
+      })
     )
   })
 

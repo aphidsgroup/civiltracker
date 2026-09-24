@@ -252,7 +252,7 @@ describe('getApprovalByIdAction requires approvals.view', () => {
 
       expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'approval_1', companyId: 'company_1', deletedAt: null },
+          where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, ...WELL_FORMED_SITE_PREDICATE },
         })
       )
       expect(result.entityData).toEqual({ id: 'expense_1', billAttachments: [] })
@@ -265,7 +265,7 @@ describe('getApprovalByIdAction requires approvals.view', () => {
     await getApprovalByIdAction('approval_1')
 
     expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'approval_1', deletedAt: null } })
+      expect.objectContaining({ where: { id: 'approval_1', deletedAt: null, ...WELL_FORMED_SITE_PREDICATE } })
     )
   })
 

@@ -7,6 +7,11 @@ import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/audit'
 import { requireApprovalReader } from '@/lib/approvals/read-guard'
 import {
+  APPROVAL_DETAIL_NOT_FOUND,
+  findLinkedApprovalEntity,
+  resolveEntityBoundApprovalDetail,
+} from '@/lib/approvals/detail'
+import {
   approvalRequiresSite,
   assertApprovalSiteBinding,
   WELL_FORMED_APPROVAL_SITE_FILTER,
@@ -100,52 +105,6 @@ async function assertLinkedApprovalEntityInTenant(
     throw new Error(
       `Linked ${approvalEntityLabel(approval.entityType)} not found in the approval tenant and cannot be ${verb}`
     )
-  }
-}
-
-/**
- * Resolves the entity an approval points at strictly inside the approval tenant:
- * always by company, and by site whenever the approval/request is site bound.
- * Returns null when the entity does not exist inside that scope.
- */
-async function findLinkedApprovalEntity(
-  entityType: ApprovalEntityType,
-  entityId: string,
-  scope: { companyId: string; siteId?: string | null }
-) {
-  const tenantScope = { id: entityId, companyId: scope.companyId }
-  const siteScope = scope.siteId ? { siteId: scope.siteId } : {}
-
-  switch (entityType) {
-    case 'EXPENSE':
-    case 'BILL':
-      return prisma.expense.findFirst({
-        where: { ...tenantScope, deletedAt: null, ...siteScope },
-        include: { billAttachments: true },
-      })
-    case 'DPR':
-      return prisma.dailyProgressReport.findFirst({
-        where: { ...tenantScope, ...siteScope },
-      })
-    case 'MATERIAL_REQUEST':
-      return prisma.material.findFirst({
-        where: { ...tenantScope, ...siteScope },
-      })
-    case 'SALARY_RUN':
-      return prisma.salaryRun.findFirst({
-        where: { ...tenantScope, ...siteScope },
-        include: { items: true },
-      })
-    case 'DOCUMENT':
-      return prisma.document.findFirst({
-        where: { ...tenantScope, ...siteScope },
-      })
-    case 'PURCHASE_ORDER':
-      return prisma.purchaseOrder.findFirst({
-        where: tenantScope,
-      })
-    default:
-      return null
   }
 }
 
@@ -273,36 +232,12 @@ export async function getApprovalsAction(filter?: {
 
 export async function getApprovalByIdAction(id: string) {
   const user = await requireApprovalReader()
-  const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
 
-  const approval = await prisma.approval.findFirst({
-    where: { id, ...companyFilter, deletedAt: null },
-    include: {
-      site: { select: { name: true, location: true } },
-      requestedBy: { select: { name: true, email: true, role: true, avatar: true } },
-      reviewedBy: { select: { name: true } },
-      approvedBy: { select: { name: true } },
-      rejectedBy: { select: { name: true } },
-      comments: {
-        include: { user: { select: { name: true, avatar: true, role: true } } },
-        orderBy: { createdAt: 'asc' },
-      },
-      timelines: {
-        include: { actor: { select: { name: true, role: true } } },
-        orderBy: { createdAt: 'desc' },
-      },
-    },
-  })
+  const detail = await resolveEntityBoundApprovalDetail(user, id)
+  if (detail.status === 'malformed') assertApprovalSiteBinding(detail.binding)
+  if (detail.status !== 'found') throw new Error(APPROVAL_DETAIL_NOT_FOUND)
 
-  if (!approval) throw new Error('Approval not found or access denied')
-  assertApprovalSiteBinding(approval)
-
-  const entityData = await findLinkedApprovalEntity(approval.entityType, approval.entityId, {
-    companyId: approval.companyId,
-    siteId: approval.siteId,
-  })
-
-  return { approval, entityData }
+  return { approval: detail.approval, entityData: detail.entityData }
 }
 
 const OPEN_APPROVAL_STATUSES: ApprovalStatus[] = ['PENDING', 'SUBMITTED', 'PENDING_REVIEW']
