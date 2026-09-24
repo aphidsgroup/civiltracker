@@ -68,7 +68,8 @@ const LIVE_SAME_COMPANY_SITE = { companyId: 'company_1', deletedAt: null }
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireUser.mockResolvedValue({ id: 'accountant_1', name: 'Accountant', email: 'a@acme.test', role: 'ACCOUNTANT', companyId: 'company_1' })
-  mocks.hasPermission.mockReturnValue(false)
+  // Disbursement is authorized by the explicit permission, never by the role name.
+  mocks.hasPermission.mockImplementation((_role: unknown, permission: string) => permission === 'payments.manage')
   mocks.prisma.$transaction.mockImplementation(
     async (run: (client: typeof mocks.tx) => unknown) => run(mocks.tx)
   )

@@ -1,5 +1,5 @@
-import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { exitDeniedPage, liveCompanySiteWhere, parsePageSize, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { FileText, Image as ImageIcon, Users, IndianRupee, Clock, CheckSquare } from 'lucide-react'
 import Link from 'next/link'
 
@@ -57,62 +57,72 @@ export default async function MobileActivityPage({
 }: {
   searchParams: Promise<{ type?: string, limit?: string }>
 }) {
-  const session = await auth()
-  const companyId = session?.user?.companyId
-  const userId = session?.user?.id
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'sites.view', module: 'SITES' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/mobile/activity')
+  const { user, companyId, can, moduleEnabled } = gate.access
 
   const { type, limit } = await searchParams
-  const take = parseInt(limit || '50')
+  const take = parsePageSize(limit)
 
-  const member = await prisma.companyMember.findFirst({ where: { userId, companyId } })
+  // Feeds the live role may read; one it may not is neither offered nor queried.
+  const allowed: Record<Exclude<ActivityType, 'ATTENDANCE_CON'>, boolean> = {
+    ATTENDANCE: (can('labour.view') || can('attendance.mark')) && moduleEnabled('LABOUR'),
+    EXPENSE: can('expenses.view') && moduleEnabled('EXPENSES'),
+    DPR: can('dpr.view') && moduleEnabled('DPR'),
+    PHOTO: true,
+    CHECKLIST: true,
+  }
+
+  const member = await prisma.companyMember.findFirst({ where: { userId: user.id, companyId, isActive: true }, select: { siteIds: true } })
   const siteIds = member?.siteIds ?? []
+  const liveSite = liveCompanySiteWhere(companyId)
   const activeSite = siteIds.length > 0
-    ? await prisma.site.findFirst({ where: { id: { in: siteIds }, companyId } })
-    : await prisma.site.findFirst({ where: { companyId }, orderBy: { createdAt: 'desc' } })
+    ? await prisma.site.findFirst({ where: { id: { in: siteIds }, ...liveSite } })
+    : await prisma.site.findFirst({ where: liveSite, orderBy: { createdAt: 'desc' } })
 
   const siteId = activeSite?.id
 
   const activities: Activity[] = []
 
-  const fetchExpenses = !type || type === 'EXPENSE'
-  const fetchDpr = !type || type === 'DPR'
-  const fetchAttendance = !type || type === 'ATTENDANCE'
+  const fetchExpenses = allowed.EXPENSE && (!type || type === 'EXPENSE')
+  const fetchDpr = allowed.DPR && (!type || type === 'DPR')
+  const fetchAttendance = allowed.ATTENDANCE && (!type || type === 'ATTENDANCE')
   const fetchPhotos = !type || type === 'PHOTO'
   const fetchChecklist = !type || type === 'CHECKLIST'
 
   if (siteId) {
     const [expenses, dprs, attendance, contractorAttendances, photos, checklistLogs] = await Promise.all([
-      fetchExpenses ? prisma.expense.findMany({ 
-        where: { siteId }, 
+      fetchExpenses ? prisma.expense.findMany({
+        where: { siteId, companyId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
         take,
-        include: { createdBy: true } 
+        include: { createdBy: true }
       }) : Promise.resolve([]),
-      fetchDpr ? prisma.dailyProgressReport.findMany({ 
-        where: { siteId }, 
+      fetchDpr ? prisma.dailyProgressReport.findMany({
+        where: { siteId, companyId },
         orderBy: { createdAt: 'desc' },
         take,
-        include: { createdBy: true } 
+        include: { createdBy: true }
       }) : Promise.resolve([]),
-      fetchAttendance ? prisma.labourAttendance.findMany({ 
-        where: { labour: { siteId } }, 
+      fetchAttendance ? prisma.labourAttendance.findMany({
+        where: { siteId, labour: { siteId, companyId } },
         orderBy: { date: 'desc' },
         take,
-        include: { labour: true } 
+        include: { labour: true }
       }) : Promise.resolve([]),
-      fetchAttendance ? prisma.contractorAttendance.findMany({ 
-        where: { siteId }, 
+      fetchAttendance ? prisma.contractorAttendance.findMany({
+        where: { siteId, companyId },
         orderBy: { date: 'desc' },
         take,
-        include: { subcontractor: true } 
+        include: { subcontractor: true }
       }) : Promise.resolve([]),
-      fetchPhotos ? prisma.sitePhoto.findMany({ 
-        where: { siteId }, 
+      fetchPhotos ? prisma.sitePhoto.findMany({
+        where: { siteId, companyId },
         orderBy: { createdAt: 'desc' },
         take,
       }) : Promise.resolve([]),
       fetchChecklist ? prisma.auditLog.findMany({
-        where: { recordId: siteId, module: 'CHECKLIST', action: 'TICK' },
+        where: { companyId, recordId: siteId, module: 'CHECKLIST', action: 'TICK' },
         orderBy: { createdAt: 'desc' },
         take,
         include: { user: { select: { name: true } } }
@@ -202,7 +212,7 @@ export default async function MobileActivityPage({
     { id: 'DPR', label: 'DPRs' },
     { id: 'PHOTO', label: 'Photos' },
     { id: 'CHECKLIST', label: 'Checklists' },
-  ]
+  ].filter(f => !f.id || allowed[f.id as keyof typeof allowed])
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-4 sm:p-6 pb-28 select-none">

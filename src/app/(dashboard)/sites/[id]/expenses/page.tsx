@@ -1,6 +1,6 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
+import { exitDeniedPage, liveCompanySiteWhere, parsePageSize, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import ResponsiveTable from '@/components/responsive/ResponsiveTable'
@@ -10,12 +10,18 @@ import { Plus } from 'lucide-react'
 export const dynamic = 'force-dynamic'
 
 export default async function SiteExpensesPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ limit?: string }> }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
-  const { id: siteId } = await params
+  const { id } = await params
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'expenses.view', module: 'EXPENSES' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}/expenses`)
+  const { companyId } = gate.access
   const { limit } = await searchParams
-  const take = limit ? parseInt(limit, 10) : 50
+  const take = parsePageSize(limit)
+
+  // The page reads nothing until the id names a live site of exactly this company; the
+  // layout's own lookup renders in parallel and is not a guard for this page.
+  const site = await prisma.site.findFirst({ where: { id, ...liveCompanySiteWhere(companyId) }, select: { id: true } })
+  if (!site) redirect('/sites')
+  const siteId = site.id
 
   const expenses = await prisma.expense.findMany({
     where: { companyId, siteId, deletedAt: null },

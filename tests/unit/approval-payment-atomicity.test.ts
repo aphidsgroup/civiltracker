@@ -95,7 +95,8 @@ beforeEach(() => {
     role: 'ACCOUNTANT',
     companyId: 'company_1',
   })
-  mocks.hasPermission.mockReturnValue(false)
+  // Disbursement is authorized by the explicit permission, never by the role name.
+  mocks.hasPermission.mockImplementation((_role: unknown, permission: string) => permission === 'payments.manage')
   mocks.prisma.$transaction.mockImplementation(
     async (run: (client: typeof mocks.tx) => unknown) => run(mocks.tx)
   )

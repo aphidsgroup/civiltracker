@@ -1,33 +1,40 @@
-import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import { FileText, Download, BarChart2 } from 'lucide-react'
 
 export default async function MobileReports() {
-  const session = await auth()
-  const companyId = session?.user?.companyId
-  const userId = session?.user?.id
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'reports.view', module: 'REPORTS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/mobile/reports')
+  const { user, companyId, can } = gate.access
 
-  // Fetch active site (similar to home page)
-  const member = await prisma.companyMember.findFirst({
-    where: { userId, companyId },
-  })
+  // The expense and budget figures are finance reports; nothing about the site's money is
+  // read for a role that holds only reports.view.
+  const showFinance = can('reports.finance')
+
+  // Fetch active site (similar to home page), from the live membership and live sites only
+  const member = showFinance
+    ? await prisma.companyMember.findFirst({ where: { userId: user.id, companyId, isActive: true }, select: { siteIds: true } })
+    : null
   const siteIds = member?.siteIds ?? []
-  const activeSite = siteIds.length > 0
-    ? await prisma.site.findFirst({ where: { id: { in: siteIds }, companyId } })
-    : await prisma.site.findFirst({ where: { companyId }, orderBy: { createdAt: 'desc' } })
+  const liveSite = liveCompanySiteWhere(companyId)
+  const activeSite = !showFinance
+    ? null
+    : siteIds.length > 0
+      ? await prisma.site.findFirst({ where: { id: { in: siteIds }, ...liveSite } })
+      : await prisma.site.findFirst({ where: liveSite, orderBy: { createdAt: 'desc' } })
 
   const siteId = activeSite?.id
 
   // Get current month start
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  
+
   const monthName = now.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 
   // Aggregate this month's expenses
   const monthExpenseAgg = siteId ? await prisma.expense.aggregate({
-    where: { siteId, createdAt: { gte: startOfMonth } },
+    where: { siteId, companyId, deletedAt: null, createdAt: { gte: startOfMonth } },
     _sum: { amount: true }
   }) : { _sum: { amount: 0 } }
 
@@ -62,7 +69,7 @@ export default async function MobileReports() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-3.5 mb-8">
+      {showFinance && <div className="grid grid-cols-2 gap-3.5 mb-8">
         <div className="bg-white rounded-[20px] p-4 border border-slate-100 shadow-sm flex flex-col justify-center h-[90px]">
           <div className="text-[22px] font-black text-[#0f172a] tracking-tight mb-1">
             ₹{amountLakhs} L
@@ -80,7 +87,7 @@ export default async function MobileReports() {
             Budget used
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Generate Report Section */}
       <div className="flex justify-between items-center mb-4 px-1">

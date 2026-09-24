@@ -65,10 +65,19 @@ function approvalQueryScope(user: SessionUser): Prisma.ApprovalWhereInput {
  * is well-formed and sits on a live site of its own company. A cross-bound row answers
  * exactly like a missing one, before any permission, entity, transition, timeline or
  * audit step.
+ *
+ * `entityTypes` is the set the caller may action, decided from the live role before this
+ * query runs. A row of any other type is excluded by the query itself, so it answers
+ * exactly like a missing id instead of revealing that it exists. The full set adds no
+ * predicate.
  */
-async function findActionableApproval(user: SessionUser, id: string) {
+async function findActionableApproval(user: SessionUser, id: string, entityTypes: ApprovalEntityType[]) {
   const approval = await prisma.approval.findFirst({
-    where: { id, ...approvalQueryScope(user) },
+    where: {
+      id,
+      ...approvalQueryScope(user),
+      ...(entityTypes.length < APPROVAL_ENTITY_TYPES.length ? { entityType: { in: entityTypes } } : {}),
+    },
     include: { site: APPROVAL_SITE_BINDING_SELECT },
   })
   if (!approval) throw new Error('Approval not found')
@@ -232,9 +241,46 @@ function verifyCanApproveEntity(role: string, entityType: string) {
   }
 }
 
+const APPROVAL_ENTITY_TYPES: ApprovalEntityType[] = [
+  'EXPENSE',
+  'BILL',
+  'SALARY_RUN',
+  'MATERIAL_REQUEST',
+  'PURCHASE_ORDER',
+  'DPR',
+  'VARIATION',
+  'DOCUMENT',
+]
+
+/**
+ * The entity types the live role may approve or reject. A Server Action is a public POST
+ * endpoint, so this is decided before any approval query: a role that may action nothing
+ * is refused without a lookup, and every other role only ever loads rows it may action.
+ */
+function requireApprovableEntityTypes(user: SessionUser, verb: 'approve' | 'reject') {
+  const entityTypes = APPROVAL_ENTITY_TYPES.filter((entityType) => verifyCanApproveEntity(user.role, entityType))
+  if (entityTypes.length === 0) {
+    throw new Error(`Forbidden: Role ${user.role} is not authorized to ${verb} approval requests`)
+  }
+  return entityTypes
+}
+
+/**
+ * The entity types the live role may disburse: every type with `payments.manage`, only
+ * payroll with `salary.markPaid`. Decided before any approval query, like the approve
+ * gate.
+ */
+function requireDisbursableEntityTypes(user: SessionUser) {
+  if (user.role === 'SUPER_ADMIN' || user.role === 'COMPANY_ADMIN') return APPROVAL_ENTITY_TYPES
+  if (hasPermission(user.role, 'payments.manage')) return APPROVAL_ENTITY_TYPES
+  if (hasPermission(user.role, 'salary.markPaid')) return ['SALARY_RUN'] as ApprovalEntityType[]
+  throw new Error('Forbidden: You are not authorized to disburse payments')
+}
+
 export async function approveApprovalAction(id: string, note?: string, confirmationText?: string) {
   const user = await requireUser()
-  const approval = await findActionableApproval(user, id)
+  const entityTypes = requireApprovableEntityTypes(user, 'approve')
+  const approval = await findActionableApproval(user, id, entityTypes)
   if ((confirmationText ?? '').trim() !== 'APPROVE') {
     throw new Error('Approval confirmation text must exactly match APPROVE')
   }
@@ -353,7 +399,8 @@ export async function rejectApprovalAction(id: string, reason: string) {
     throw new Error('Rejection reason is mandatory (minimum 3 characters)')
   }
 
-  const approval = await findActionableApproval(user, id)
+  const entityTypes = requireApprovableEntityTypes(user, 'reject')
+  const approval = await findActionableApproval(user, id, entityTypes)
 
   if (!verifyCanApproveEntity(user.role, approval.entityType)) {
     throw new Error(`Forbidden: Role ${user.role} is not authorized to reject ${approval.entityType}`)
@@ -449,12 +496,8 @@ export async function rejectApprovalAction(id: string, reason: string) {
 
 export async function markApprovalPaidAction(id: string, paymentData?: { mode?: string; ref?: string; note?: string }, confirmationText?: string) {
   const user = await requireUser()
-  const canManagePay = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'ACCOUNTANT'].includes(user.role) || hasPermission(user.role as never, 'salary.markPaid') || hasPermission(user.role as never, 'payments.manage')
-  if (!canManagePay) {
-    throw new Error('Forbidden: You are not authorized to disburse payments')
-  }
-
-  const approval = await findActionableApproval(user, id)
+  const entityTypes = requireDisbursableEntityTypes(user)
+  const approval = await findActionableApproval(user, id, entityTypes)
   if (approval.currentStatus !== 'APPROVED') {
     throw new Error('Only approved requests can be marked paid')
   }
