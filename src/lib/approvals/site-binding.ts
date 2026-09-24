@@ -47,15 +47,23 @@ export function assertApprovalSiteBinding(approval: ApprovalSiteBinding) {
 }
 
 /**
- * Query-level counterpart of the guard above: every list, detail and count read
- * composes this predicate so a malformed row is never returned, detailed or counted,
- * rather than being fetched and then discarded.
+ * Query-level counterpart of the guard above, and the single live-site rule: every
+ * list, count, detail, comment and transition query composes this predicate, so a row
+ * is only ever admitted when
+ *
+ *  - it is a company-level entity type carrying no site at all, or
+ *  - the site it carries still exists and is not soft deleted.
+ *
+ * A malformed site-null row on a site-bound type matches neither branch, and neither
+ * does an approval — PURCHASE_ORDER included — pinned to a deleted site. Both are
+ * excluded by the query rather than fetched and then discarded. Both branches are
+ * positive conditions, so a NULL `siteId` cannot slip through SQL three-valued logic.
  *
  * Treated as immutable — it is spread into a `where`, never mutated in place.
  */
-export const WELL_FORMED_APPROVAL_SITE_FILTER: Prisma.ApprovalWhereInput = {
+export const APPROVAL_SITE_SCOPE_FILTER: Prisma.ApprovalWhereInput = {
   OR: [
-    { siteId: { not: null } },
-    { entityType: { in: COMPANY_LEVEL_APPROVAL_ENTITY_TYPES } },
+    { siteId: null, entityType: { in: COMPANY_LEVEL_APPROVAL_ENTITY_TYPES } },
+    { site: { is: { deletedAt: null } } },
   ],
 }

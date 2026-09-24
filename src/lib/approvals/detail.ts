@@ -1,8 +1,8 @@
 import prisma from '@/lib/prisma'
 import {
+  APPROVAL_SITE_SCOPE_FILTER,
   approvalRequiresSite,
   hasValidApprovalSiteBinding,
-  WELL_FORMED_APPROVAL_SITE_FILTER,
 } from '@/lib/approvals/site-binding'
 import type { ApprovalSiteBinding } from '@/lib/approvals/site-binding'
 import type { ApprovalEntityType } from '@prisma/client'
@@ -60,6 +60,105 @@ export async function findLinkedApprovalEntity(
   }
 }
 
+/** The stored binding of an approval row and what it claims to point at. */
+export type LinkedApprovalRef = {
+  id: string
+  companyId: string
+  siteId: string | null
+  entityType: ApprovalEntityType
+  entityId: string
+}
+
+type LinkedEntityRef = { id: string; companyId: string; siteId?: string | null }
+
+/**
+ * Batched counterpart of `findLinkedApprovalEntity`: one query per entity type, never
+ * one per approval. Only the binding columns are selected — this decides which rows are
+ * admitted, it never reads entity data.
+ */
+function findLinkedEntityRefs(
+  entityType: ApprovalEntityType,
+  entityIds: string[],
+  companyIds: string[]
+): Promise<LinkedEntityRef[]> {
+  const where = { id: { in: entityIds }, companyId: { in: companyIds } }
+  const select = { id: true, companyId: true, siteId: true }
+
+  switch (entityType) {
+    case 'EXPENSE':
+    case 'BILL':
+      return prisma.expense.findMany({ where: { ...where, deletedAt: null }, select })
+    case 'DPR':
+      return prisma.dailyProgressReport.findMany({ where, select })
+    case 'MATERIAL_REQUEST':
+      return prisma.material.findMany({ where, select })
+    case 'SALARY_RUN':
+      return prisma.salaryRun.findMany({ where, select })
+    case 'DOCUMENT':
+      return prisma.document.findMany({ where, select })
+    case 'PURCHASE_ORDER':
+      // Company-level by design: a purchase order carries no site.
+      return prisma.purchaseOrder.findMany({ where, select: { id: true, companyId: true } })
+    default:
+      return Promise.resolve([])
+  }
+}
+
+function linkKey(entityType: ApprovalEntityType, entityId: string, companyId: string, siteId: string | null) {
+  return JSON.stringify([entityType, entityId, companyId, siteId])
+}
+
+/**
+ * Keeps only the approvals whose linked entity resolves under the approval's exact
+ * binding — the same rule `resolveEntityBoundApprovalDetail` applies to a single row:
+ * its company always, its site for every type except the company-level PURCHASE_ORDER.
+ *
+ * `Approval.entityId` is polymorphic, so there is no Prisma relation to filter through
+ * and the check cannot live in the approval query itself. Instead the candidates are
+ * grouped by type and each group is resolved with a single `findMany`, then matched on
+ * (type, id, company, site) in memory. A missing, cross-company, wrong-site or
+ * soft-deleted entity — and an entity type no delegate owns — never matches, so such a
+ * row is neither listed nor counted. Input order is preserved.
+ */
+export async function filterApprovalsWithLinkedEntity<T extends LinkedApprovalRef>(approvals: T[]): Promise<T[]> {
+  const candidates = approvals.filter(
+    (approval) => hasValidApprovalSiteBinding(approval) && approval.entityId && approval.companyId
+  )
+
+  const byType = new Map<ApprovalEntityType, T[]>()
+  for (const approval of candidates) {
+    const group = byType.get(approval.entityType) ?? []
+    group.push(approval)
+    byType.set(approval.entityType, group)
+  }
+
+  const reachable = new Set<string>()
+  await Promise.all(
+    [...byType].map(async ([entityType, group]) => {
+      const entityIds = [...new Set(group.map((approval) => approval.entityId))]
+      const companyIds = [...new Set(group.map((approval) => approval.companyId))]
+      const requiresSite = approvalRequiresSite(entityType)
+
+      for (const entity of await findLinkedEntityRefs(entityType, entityIds, companyIds)) {
+        // An entity without a site can never satisfy a site-bound approval.
+        if (requiresSite && !entity.siteId) continue
+        reachable.add(linkKey(entityType, entity.id, entity.companyId, requiresSite ? entity.siteId! : null))
+      }
+    })
+  )
+
+  return candidates.filter((approval) =>
+    reachable.has(
+      linkKey(
+        approval.entityType,
+        approval.entityId,
+        approval.companyId,
+        approvalRequiresSite(approval.entityType) ? approval.siteId : null
+      )
+    )
+  )
+}
+
 async function findApprovalDetailRow(user: SessionUser, id: string) {
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
 
@@ -68,9 +167,10 @@ async function findApprovalDetailRow(user: SessionUser, id: string) {
       id,
       ...companyFilter,
       deletedAt: null,
-      // A site-bound approval without a site is excluded by the query itself: it can
-      // never be actioned, so it must not be detailed either.
-      ...WELL_FORMED_APPROVAL_SITE_FILTER,
+      // A site-bound approval without a site, or one bound to a soft-deleted site, is
+      // excluded by the query itself: it can never be actioned, so it must not be
+      // detailed either.
+      ...APPROVAL_SITE_SCOPE_FILTER,
     },
     include: {
       site: { select: { name: true, location: true } },

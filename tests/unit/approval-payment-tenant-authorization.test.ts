@@ -46,6 +46,14 @@ vi.mock('@/lib/audit', () => ({ logActivity: mocks.logActivity }))
 
 const { markApprovalPaidAction } = await import('@/actions/approvals')
 
+/** Company-level row with no site, or a row whose site is live. */
+const SITE_SCOPE_PREDICATE = {
+  OR: [
+    { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
+    { site: { is: { deletedAt: null } } },
+  ],
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireUser.mockResolvedValue({ id: 'accountant_1', name: 'Accountant', email: 'a@acme.test', role: 'ACCOUNTANT', companyId: 'company_1' })
@@ -73,9 +81,11 @@ describe('markApprovalPaidAction tenant authorization', () => {
   it('scopes an approval lookup to the live caller company before payment mutation', async () => {
     await markApprovalPaidAction('approval_1', undefined, 'PAID')
 
-    expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({ where: { id: 'approval_1', companyId: 'company_1', deletedAt: null } })
+    expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({
+      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, ...SITE_SCOPE_PREDICATE },
+    })
     expect(mocks.tx.approval.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, currentStatus: 'APPROVED' },
+      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, currentStatus: 'APPROVED', ...SITE_SCOPE_PREDICATE },
     }))
     // The company predicate has to be carried by the transactional write itself, not by
     // a second unscoped write on the global client.
@@ -87,7 +97,7 @@ describe('markApprovalPaidAction tenant authorization', () => {
 
     await markApprovalPaidAction('approval_1', undefined, 'PAID')
 
-    expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({ where: { id: 'approval_1', deletedAt: null } })
+    expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({ where: { id: 'approval_1', deletedAt: null, ...SITE_SCOPE_PREDICATE } })
   })
 
   it('scopes linked expense and salary mutations to the fetched approval company and site', async () => {

@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => {
     approvalTimeline: { create: vi.fn() },
     approvalComment: { create: vi.fn() },
     site: { findFirst: vi.fn() },
-    expense: { findFirst: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
+    expense: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
     salaryRun: { findFirst: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
     dailyProgressReport: { findFirst: vi.fn(), findUnique: vi.fn() },
     material: { findFirst: vi.fn(), findUnique: vi.fn() },
@@ -92,9 +92,15 @@ function expectNoApprovalReads() {
   expect(mocks.prisma.purchaseOrder.findFirst).not.toHaveBeenCalled()
 }
 
-/** The site-binding predicate every well-formed list/count read composes. */
+/**
+ * The site-scope predicate every list/count/detail read composes: a company-level row
+ * with no site, or a row whose site is live.
+ */
 const WELL_FORMED_SITE_PREDICATE = {
-  OR: [{ siteId: { not: null } }, { entityType: { in: ['PURCHASE_ORDER'] } }],
+  OR: [
+    { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
+    { site: { is: { deletedAt: null } } },
+  ],
 }
 
 beforeEach(() => {
@@ -184,20 +190,27 @@ describe('getApprovalStatsAction requires approvals.view', () => {
     'still returns pipeline figures for an authorized %s, scoped to its own tenant',
     async (role) => {
       mocks.requireUser.mockResolvedValue(principal(role))
-      mocks.prisma.approval.count.mockResolvedValue(3)
-      mocks.prisma.approval.aggregate.mockResolvedValue({ _sum: { amount: 1250 } })
+      const row = {
+        companyId: 'company_1',
+        siteId: 'site_1',
+        entityType: 'EXPENSE',
+        currentStatus: 'PENDING',
+        priority: 'URGENT',
+        approvedAt: null,
+      }
+      mocks.prisma.approval.findMany.mockResolvedValue([
+        { ...row, id: 'approval_1', entityId: 'expense_1', amount: 1000 },
+        { ...row, id: 'approval_2', entityId: 'expense_2', amount: 250 },
+        { ...row, id: 'approval_3', entityId: 'expense_3', amount: 0, priority: 'NORMAL' },
+      ])
+      mocks.prisma.expense.findMany.mockResolvedValue(
+        ['expense_1', 'expense_2', 'expense_3'].map((id) => ({ id, companyId: 'company_1', siteId: 'site_1' }))
+      )
 
       const stats = await getApprovalStatsAction()
 
-      expect(stats).toEqual({ pending: 3, urgent: 3, approvedWeek: 3, pendingAmount: 1250 })
-      for (const call of mocks.prisma.approval.count.mock.calls) {
-        expect(call[0].where).toMatchObject({
-          companyId: 'company_1',
-          deletedAt: null,
-          ...WELL_FORMED_SITE_PREDICATE,
-        })
-      }
-      expect(mocks.prisma.approval.aggregate).toHaveBeenCalledWith(
+      expect(stats).toEqual({ pending: 3, urgent: 2, approvedWeek: 0, pendingAmount: 1250 })
+      expect(mocks.prisma.approval.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             companyId: 'company_1',
@@ -214,9 +227,9 @@ describe('getApprovalStatsAction requires approvals.view', () => {
 
     await getApprovalStatsAction()
 
-    for (const call of mocks.prisma.approval.count.mock.calls) {
-      expect(call[0].where).not.toHaveProperty('companyId')
-    }
+    const where = mocks.prisma.approval.findMany.mock.calls[0][0].where
+    expect(where).not.toHaveProperty('companyId')
+    expect(where).toMatchObject({ deletedAt: null, ...WELL_FORMED_SITE_PREDICATE })
   })
 })
 

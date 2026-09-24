@@ -68,6 +68,14 @@ const {
 
 const OPEN_STATUSES = ['PENDING', 'SUBMITTED', 'PENDING_REVIEW']
 
+/** Company-level row with no site, or a row whose site is live. */
+const SITE_SCOPE_PREDICATE = {
+  OR: [
+    { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
+    { site: { is: { deletedAt: null } } },
+  ],
+}
+
 function expectNoApprovalMutations() {
   expect(mocks.prisma.approval.create).not.toHaveBeenCalled()
   expect(mocks.prisma.approval.update).not.toHaveBeenCalled()
@@ -103,6 +111,12 @@ beforeEach(() => {
 })
 
 describe('createApprovalAction entity tenant binding', () => {
+  // The COMPANY_ADMIN principal holds approvals.view and every submit permission, so the
+  // create gate lets it through and tenant binding is what is under test here.
+  beforeEach(() => {
+    mocks.hasPermission.mockReturnValue(true)
+  })
+
   it('rejects an entity that is not bound to the resolved company, before any write', async () => {
     mocks.prisma.expense.findFirst.mockResolvedValue(null)
 
@@ -226,7 +240,7 @@ describe('getApprovalByIdAction tenant scoping', () => {
           id: 'approval_1',
           companyId: 'company_1',
           deletedAt: null,
-          OR: [{ siteId: { not: null } }, { entityType: { in: ['PURCHASE_ORDER'] } }],
+          ...SITE_SCOPE_PREDICATE,
         },
       })
     )
@@ -306,7 +320,7 @@ describe('approveApprovalAction atomic tenant bound transition', () => {
     await approveApprovalAction('approval_1', undefined, 'APPROVE')
 
     expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({
-      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null },
+      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, ...SITE_SCOPE_PREDICATE },
     })
   })
 
@@ -321,6 +335,7 @@ describe('approveApprovalAction atomic tenant bound transition', () => {
           companyId: 'company_1',
           deletedAt: null,
           currentStatus: { in: OPEN_STATUSES },
+          ...SITE_SCOPE_PREDICATE,
         },
       })
     )
@@ -395,7 +410,7 @@ describe('rejectApprovalAction atomic tenant bound transition', () => {
     await rejectApprovalAction('approval_1', 'Not budgeted')
 
     expect(mocks.prisma.approval.findFirst).toHaveBeenCalledWith({
-      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null },
+      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, ...SITE_SCOPE_PREDICATE },
     })
   })
 
@@ -410,6 +425,7 @@ describe('rejectApprovalAction atomic tenant bound transition', () => {
           companyId: 'company_1',
           deletedAt: null,
           currentStatus: { in: OPEN_STATUSES },
+          ...SITE_SCOPE_PREDICATE,
         },
       })
     )

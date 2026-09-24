@@ -57,6 +57,14 @@ vi.mock('@/lib/audit', () => ({ logActivity: mocks.logActivity }))
 
 const { markApprovalPaidAction } = await import('@/actions/approvals')
 
+/** Company-level row with no site, or a row whose site is live. */
+const SITE_SCOPE_PREDICATE = {
+  OR: [
+    { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
+    { site: { is: { deletedAt: null } } },
+  ],
+}
+
 function approvedRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'approval_1',
@@ -106,7 +114,13 @@ describe('markApprovalPaidAction runs disbursement as one unit of work', () => {
     expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
     expect(mocks.tx.approval.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, currentStatus: 'APPROVED' },
+        where: {
+          id: 'approval_1',
+          companyId: 'company_1',
+          deletedAt: null,
+          currentStatus: 'APPROVED',
+          ...SITE_SCOPE_PREDICATE,
+        },
       })
     )
     expect(mocks.tx.approvalTimeline.create).toHaveBeenCalledTimes(1)

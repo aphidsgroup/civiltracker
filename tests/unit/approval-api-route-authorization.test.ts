@@ -91,6 +91,14 @@ const COMPANY_ADMIN = {
 
 const OPEN_STATUSES = ['PENDING', 'SUBMITTED', 'PENDING_REVIEW']
 
+/** Company-level row with no site, or a row whose site is live. */
+const SITE_SCOPE_PREDICATE = {
+  OR: [
+    { siteId: null, entityType: { in: ['PURCHASE_ORDER'] } },
+    { site: { is: { deletedAt: null } } },
+  ],
+}
+
 function postRequest(url: string, body: unknown) {
   return new Request(url, {
     method: 'POST',
@@ -275,7 +283,7 @@ describe('approval API reads fail closed on malformed legacy rows', () => {
         where: expect.objectContaining({
           companyId: 'company_1',
           deletedAt: null,
-          OR: [{ siteId: { not: null } }, { entityType: { in: ['PURCHASE_ORDER'] } }],
+          ...SITE_SCOPE_PREDICATE,
         }),
       })
     )
@@ -290,7 +298,7 @@ describe('approval API reads fail closed on malformed legacy rows', () => {
           id: 'approval_1',
           companyId: 'company_1',
           deletedAt: null,
-          OR: [{ siteId: { not: null } }, { entityType: { in: ['PURCHASE_ORDER'] } }],
+          ...SITE_SCOPE_PREDICATE,
         }),
       })
     )
@@ -353,6 +361,7 @@ describe('POST /api/approvals/[id]/approve uses the hardened transition', () => 
           companyId: 'company_1',
           deletedAt: null,
           currentStatus: { in: OPEN_STATUSES },
+          ...SITE_SCOPE_PREDICATE,
         },
       })
     )
@@ -456,6 +465,7 @@ describe('POST /api/approvals/[id]/reject uses the hardened transition', () => {
           companyId: 'company_1',
           deletedAt: null,
           currentStatus: { in: OPEN_STATUSES },
+          ...SITE_SCOPE_PREDICATE,
         },
       })
     )

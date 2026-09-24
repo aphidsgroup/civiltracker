@@ -1,6 +1,6 @@
 'use server'
 
-import { createApprovalAction } from '@/actions/approvals'
+import { submitApprovalRequest } from '@/lib/approvals/submit'
 import { requireUser } from '@/lib/auth/require-user'
 import { hasPermission } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
@@ -41,7 +41,10 @@ export async function createDpr(formData: FormData) {
     },
   })
 
-  await createApprovalAction({
+  // Raised through the internal submitter, not the public action: `dpr.create` above is
+  // what authorizes this flow, and a SUPERVISOR — who files DPRs but holds no
+  // approvals.view — must still be able to submit the report it just created.
+  await submitApprovalRequest(user, {
     siteId: site.id,
     entityType: 'DPR',
     entityId: dpr.id,
