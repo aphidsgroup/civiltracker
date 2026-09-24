@@ -16,6 +16,7 @@ import { APPROVALS, SITES, approvalStore, entityStores } from './support/approva
 const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(),
   prisma: {
+    company: { findFirst: vi.fn() },
     site: { findMany: vi.fn() },
     client: { findMany: vi.fn() },
     approval: { findMany: vi.fn() },
@@ -56,6 +57,7 @@ beforeEach(() => {
     role: 'COMPANY_ADMIN',
     companyId: 'company_1',
   })
+  mocks.prisma.company.findFirst.mockResolvedValue({ modulesJson: null })
   mocks.prisma.site.findMany.mockResolvedValue([reportSite('site_1'), reportSite('site_2')])
   mocks.prisma.client.findMany.mockResolvedValue([])
   mocks.prisma.approval.findMany.mockImplementation(approvalStore().findMany)

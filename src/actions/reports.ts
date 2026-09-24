@@ -3,29 +3,51 @@
 import { prisma } from '@/lib/prisma'
 import { requireUser } from '@/lib/auth/require-user'
 import { hasPermission } from '@/lib/permissions'
+import { resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { hasCostRisk, isSiteOverBudget, calculateProfitForecast } from '@/lib/reports/calculations'
 import { sumValidOpenApprovalAmountsBySite } from '@/lib/approvals/valid-reads'
 import { Prisma } from '@prisma/client'
 
+/**
+ * The founder financial overview. It is a finance report, so `reports.view` alone does
+ * not open it: the live role needs `reports.finance` and the company the REPORTS module.
+ * SUPER_ADMIN carries no company and is refused before any read, never querying with an
+ * undefined company. Salary rows, receivables and profitability are each read and
+ * returned only under their own permission, and come back null otherwise.
+ */
 export async function getFounderDashboardStats() {
-  const user = await requireUser()
-  const companyId = user.companyId!
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'reports.finance', module: 'REPORTS' }] })
+  if (gate.status === 'denied') throw new Error('FORBIDDEN: Financial reports are not available')
+  const { companyId, can, moduleEnabled } = gate.access
 
-  if (user.role !== 'SUPER_ADMIN') {
-    if (!hasPermission(user.role, 'reports.view')) throw new Error('Unauthorized')
+  const show = {
+    salary: can('salary.view') && moduleEnabled('LABOUR'),
+    vendorPayable: can('reports.vendorPayable'),
+    clientReceivable: can('reports.clientReceivable'),
+    profitability: can('reports.profitability'),
   }
 
-  const sites = await prisma.site.findMany({
-    where: { companyId, deletedAt: null },
+  // Explicit branches keep Prisma's include typing: salary rows are only
+  // queried under salary.view.
+  const siteWhere = { companyId, deletedAt: null }
+  const expensesInclude = { where: { deletedAt: null } }
+  const salarySites = show.salary
+    ? await prisma.site.findMany({
+        where: siteWhere,
+        include: {
+          expenses: expensesInclude,
+          labour: { include: { salaryItems: true } },
+        }
+      })
+    : null
+  const sites = salarySites ?? await prisma.site.findMany({
+    where: siteWhere,
     include: {
-      expenses: {
-        where: { deletedAt: null }
-      },
-      labour: {
-        include: { salaryItems: true }
-      },
+      expenses: expensesInclude,
     }
   })
+  // Salary rows keyed by site; empty unless the salary branch loaded them.
+  const labourBySite = new Map((salarySites ?? []).map(s => [s.id, s.labour]))
 
   // Pending approval money only counts rows an approver could action: never a
   // malformed, orphaned, cross-bound or deleted-site approval.
@@ -70,8 +92,9 @@ export async function getFounderDashboardStats() {
       }
     }
 
-    // Calculate Labour
-    for (const lab of site.labour) {
+    // Calculate Labour — salary rows are only loaded under salary.view.
+    const labour = labourBySite.get(site.id) ?? []
+    for (const lab of labour) {
       for (const item of lab.salaryItems) {
         if (item.status === 'PAID') {
           siteSpend = siteSpend.add(item.netPayable)
@@ -99,10 +122,10 @@ export async function getFounderDashboardStats() {
     }
   }
 
-  // Client Receivables
-  const clients = await prisma.client.findMany({
-    where: { companyId }
-  })
+  // Client Receivables — the client ledger is read only for a figure the role may see.
+  const clients = show.clientReceivable || show.profitability
+    ? await prisma.client.findMany({ where: { companyId } })
+    : []
   for (const client of clients) {
     clientReceivable = clientReceivable.add(client.amountDue || 0)
   }
@@ -123,13 +146,13 @@ export async function getFounderDashboardStats() {
     pendingApprovalAmount: pendingApprovalAmount.toNumber(),
     approvedExpenseAmount: approvedExpenseAmount.toNumber(),
     paidAmount: paidAmount.toNumber(),
-    vendorPayable: vendorPayable.toNumber(),
-    clientReceivable: clientReceivable.toNumber(),
-    salaryPayable: salaryPayable.toNumber(),
+    vendorPayable: show.vendorPayable ? vendorPayable.toNumber() : null,
+    clientReceivable: show.clientReceivable ? clientReceivable.toNumber() : null,
+    salaryPayable: show.salary ? salaryPayable.toNumber() : null,
     materialCost: materialCost.toNumber(),
-    labourCost: labourCost.toNumber(),
-    profitForecastAmount: profitForecast.amount.toNumber(),
-    profitMarginPercent: profitForecast.marginPercent,
+    labourCost: show.salary ? labourCost.toNumber() : null,
+    profitForecastAmount: show.profitability ? profitForecast.amount.toNumber() : null,
+    profitMarginPercent: show.profitability ? profitForecast.marginPercent : null,
     overBudgetSites,
     delayedSitesWithCostRisk
   }

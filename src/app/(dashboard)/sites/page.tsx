@@ -1,6 +1,5 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
 import { MapPin, HardHat, CreditCard, Clock } from 'lucide-react'
@@ -9,9 +8,9 @@ import { SiteCardActions } from '@/components/client/SiteActions'
 export const dynamic = 'force-dynamic'
 
 export default async function SitesPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'sites.view', module: 'SITES' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/sites')
+  const { companyId } = gate.access
 
   const now = new Date()
   const fifteenDaysAgo = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000)

@@ -1,5 +1,5 @@
-import { requireUser } from '@/lib/auth/require-user'
 import prisma from '@/lib/prisma'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import { Building2, MapPin, Calendar, Receipt, FileUp, HardHat, FileCheck, Camera, ArrowLeft, ShieldAlert, IndianRupee, Wallet } from 'lucide-react'
 import { notFound } from 'next/navigation'
@@ -10,23 +10,27 @@ export const metadata = {
 }
 
 export default async function MobileSingleSitePage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser()
-  const resolvedParams = await params
-  const siteId = resolvedParams.id
+  const { id } = await params
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'sites.view', module: 'SITES' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/mobile/sites/${id}`)
+  const { companyId, can, moduleEnabled } = gate.access
 
-  const site = await prisma.site.findUnique({
-    where: { id: siteId, companyId: user.companyId, deletedAt: null },
-    include: {
-      labour: { where: { isActive: true }, select: { id: true } },
-      expenses: { take: 5, orderBy: { createdAt: 'desc' } }
-    }
+  // Sections are decided by the live role's permissions, never by its name.
+  const showFinance = can('expenses.view') && moduleEnabled('EXPENSES')
+  const showHeadcount = (can('labour.view') || can('attendance.mark')) && moduleEnabled('LABOUR')
+
+  const site = await prisma.site.findFirst({
+    where: { id, ...liveCompanySiteWhere(companyId) },
+    select: { id: true, name: true, status: true, contractType: true, location: true, budget: true, spent: true },
   })
 
   if (!site) {
     notFound()
   }
 
-  const isSiteEngineer = user.role === 'SITE_ENGINEER' || user.role === 'SUPERVISOR'
+  const headcount = showHeadcount
+    ? await prisma.labour.count({ where: { companyId, siteId: site.id, isActive: true } })
+    : null
 
   return (
     <div className="min-h-screen bg-slate-100 pb-28 select-none">
@@ -56,8 +60,8 @@ export default async function MobileSingleSitePage({ params }: { params: Promise
       </div>
 
       <div className="p-4 max-w-lg mx-auto space-y-5 -mt-2">
-        {/* HIDE financial details from Site Engineer */}
-        {!isSiteEngineer ? (
+        {/* Financial details only under expenses.view and the EXPENSES module */}
+        {showFinance ? (
           <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="text-xs font-black uppercase tracking-wider text-slate-400">Company Financial Ledger</div>
@@ -75,14 +79,14 @@ export default async function MobileSingleSitePage({ params }: { params: Promise
               </div>
             </div>
           </div>
-        ) : (
+        ) : headcount !== null && (
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-4 rounded-2xl flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 font-black shadow">
               <HardHat size={20} />
             </div>
             <div>
               <div className="text-xs font-black text-blue-900 uppercase tracking-wide">Site Engineer Deployment</div>
-              <div className="text-[11px] text-blue-700 font-medium">Headcount Today: {site.labour.length} Assigned Workers</div>
+              <div className="text-[11px] text-blue-700 font-medium">Headcount Today: {headcount} Assigned Workers</div>
             </div>
           </div>
         )}

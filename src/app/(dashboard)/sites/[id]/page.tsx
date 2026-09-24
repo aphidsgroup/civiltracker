@@ -1,5 +1,4 @@
-import { requireUser } from '@/lib/auth/require-user'
-import { getRoleRedirect, hasPermission } from '@/lib/permissions'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { prisma } from '@/lib/prisma'
 import { countSitePendingApprovalsForViewer } from '@/lib/approvals/valid-reads'
 import { redirect } from 'next/navigation'
@@ -12,16 +11,14 @@ export default async function SiteOverviewPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  // Live principal, never the JWT claims; revoked members throw here, before any read.
-  const user = await requireUser()
-  // This is a tenant page and a SUPER_ADMIN carries no company context.
-  if (user.role === 'SUPER_ADMIN') redirect('/super-admin/dashboard')
-  if (!user.companyId) redirect('/login')
-  if (!hasPermission(user.role, 'sites.view')) redirect(getRoleRedirect(user.role))
   const { id } = await params
+  // Live principal, permission and SITES module decide before any read.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'sites.view', module: 'SITES' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}`)
+  const { user } = gate.access
 
   const site = await prisma.site.findFirst({
-    where: { id, companyId: user.companyId, deletedAt: null },
+    where: { id, ...liveCompanySiteWhere(gate.access.companyId) },
     include: {
       dprs: { orderBy: { date: 'desc' }, take: 1, include: { createdBy: true } },
     }

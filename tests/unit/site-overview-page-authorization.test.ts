@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
     throw new Error(`NEXT_REDIRECT:${url}`)
   }),
   prisma: {
+    company: { findFirst: vi.fn() },
     site: { findFirst: vi.fn(), findUnique: vi.fn() },
     labourAttendance: { findMany: vi.fn() },
     contractorAttendance: { findMany: vi.fn() },
@@ -129,6 +130,8 @@ beforeEach(() => {
   mocks.auth.mockResolvedValue({ user: { id: 'user_1', companyId: 'company_1', role: 'COMPANY_ADMIN' } })
   mocks.requireUser.mockResolvedValue(principal('SITE_ENGINEER'))
 
+  // The page gate reads the live company's modules before any site read; SITES is enabled.
+  mocks.prisma.company.findFirst.mockResolvedValue({ modulesJson: { SITES: true } })
   mocks.prisma.site.findFirst.mockImplementation(inMemoryDelegate(SITES).findFirst)
   mocks.prisma.labourAttendance.findMany.mockResolvedValue([])
   mocks.prisma.contractorAttendance.findMany.mockResolvedValue([])

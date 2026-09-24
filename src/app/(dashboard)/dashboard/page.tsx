@@ -42,7 +42,12 @@ async function getDashboardData({ companyId, can, moduleEnabled }: TenantPageAcc
   }
 
   const liveSite = liveCompanySiteWhere(companyId)
-  const siteIds = await prisma.site.findMany({ where: liveSite, select: { id: true } }).then(s => s.map(x => x.id))
+  // Section permissions and modules are settled above; the live site ids are read only
+  // when a shown section binds to them, so a company with those modules off reads nothing.
+  const needsSiteIds = show.expenses || show.labour || show.materials
+  const siteIds = needsSiteIds
+    ? await prisma.site.findMany({ where: liveSite, select: { id: true } }).then(s => s.map(x => x.id))
+    : []
   const onLiveSite = { siteId: { in: siteIds } }
   const optionalLiveSite = { OR: [{ siteId: null }, { site: liveSite }] }
   const expenseWhere = { companyId, deletedAt: null, ...onLiveSite }
