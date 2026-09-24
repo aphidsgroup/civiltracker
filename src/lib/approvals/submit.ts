@@ -67,7 +67,7 @@ export async function findApprovalSubmitSite(user: SessionUser, siteId: string) 
       ...(user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }),
       deletedAt: null,
     },
-    select: { id: true, companyId: true },
+    select: { id: true, companyId: true, name: true },
   })
 }
 
@@ -79,7 +79,9 @@ type ApprovalWriteClient = Pick<Prisma.TransactionClient, 'approval' | 'approval
  * client, so the entity, the approval and the timeline commit or roll back together.
  *
  * The caller is responsible for having resolved `companyId`/`siteId` from a live, scoped
- * site and for `entityId` pointing at a record inside that exact scope.
+ * site and for `entityId` pointing at a record inside that exact scope. Pass the `tx` of
+ * the caller's `prisma.$transaction` — never open a nested transaction here, or the
+ * entity write would commit independently of the approval.
  */
 export async function createApprovalRequestRecord(
   client: ApprovalWriteClient,

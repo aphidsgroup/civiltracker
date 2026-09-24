@@ -1,19 +1,77 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  requireUser: vi.fn(),
-  submitApprovalRequest: vi.fn(),
-  prisma: {
-    site: { findFirst: vi.fn() },
-    dailyProgressReport: { create: vi.fn() },
-  },
-}))
+/**
+ * Direct-action cover for `createDpr`.
+ *
+ * The action used to create the DailyProgressReport on the global client and then raise
+ * its approval separately, so a failed linked-entity lookup, approval or timeline write
+ * left an orphan DPR behind. The transaction mock stages every write issued on `tx` and
+ * only commits it when the callback resolves.
+ */
+const mocks = vi.hoisted(() => {
+  const committed: Array<{ model: string; data: Record<string, unknown> }> = []
+  let staged: typeof committed = []
+
+  const prisma = {
+    $transaction: vi.fn(),
+    site: { findFirst: vi.fn(), findUnique: vi.fn() },
+    dailyProgressReport: { create: vi.fn(), findFirst: vi.fn() },
+    approval: { create: vi.fn() },
+    approvalTimeline: { create: vi.fn() },
+  }
+
+  const tx = {
+    dailyProgressReport: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        const row = { id: 'dpr_1', ...data }
+        staged.push({ model: 'dailyProgressReport', data: row })
+        return row
+      }),
+    },
+    approval: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        const row = { id: 'approval_1', ...data }
+        staged.push({ model: 'approval', data: row })
+        return row
+      }),
+    },
+    approvalTimeline: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        const row = { id: 'timeline_1', ...data }
+        staged.push({ model: 'approvalTimeline', data: row })
+        return row
+      }),
+    },
+  }
+
+  async function runTransaction(run: (client: typeof tx) => unknown) {
+    staged = []
+    try {
+      const result = await run(tx)
+      committed.push(...staged)
+      return result
+    } finally {
+      staged = []
+    }
+  }
+
+  return {
+    requireUser: vi.fn(),
+    revalidatePath: vi.fn(),
+    prisma,
+    tx,
+    committed,
+    runTransaction,
+  }
+})
 
 vi.mock('@/lib/auth/require-user', () => ({ requireUser: mocks.requireUser }))
-vi.mock('@/lib/approvals/submit', () => ({ submitApprovalRequest: mocks.submitApprovalRequest }))
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma, default: mocks.prisma }))
+vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
 const { createDpr } = await import('@/actions/dpr')
+
+const ENGINEER = { id: 'engineer_1', role: 'SITE_ENGINEER', companyId: 'company_1' }
 
 function form(siteId = 'site_1') {
   const data = new FormData()
@@ -24,11 +82,64 @@ function form(siteId = 'site_1') {
   return data
 }
 
+function expectNoReads() {
+  expect(mocks.prisma.site.findFirst).not.toHaveBeenCalled()
+  expect(mocks.prisma.site.findUnique).not.toHaveBeenCalled()
+  expect(mocks.prisma.dailyProgressReport.findFirst).not.toHaveBeenCalled()
+}
+
+/** The raw, non-transactional writes on the global client are what the orphan was. */
+function expectNoGlobalWrites() {
+  expect(mocks.prisma.dailyProgressReport.create).not.toHaveBeenCalled()
+  expect(mocks.prisma.approval.create).not.toHaveBeenCalled()
+  expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
+}
+
+function expectNoWrites() {
+  expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
+  expect(mocks.tx.dailyProgressReport.create).not.toHaveBeenCalled()
+  expect(mocks.tx.approval.create).not.toHaveBeenCalled()
+  expect(mocks.tx.approvalTimeline.create).not.toHaveBeenCalled()
+  expectNoGlobalWrites()
+  expect(mocks.committed).toEqual([])
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.requireUser.mockResolvedValue({ id: 'engineer_1', role: 'SITE_ENGINEER', companyId: 'company_1' })
-  mocks.prisma.site.findFirst.mockResolvedValue({ id: 'site_1' })
-  mocks.prisma.dailyProgressReport.create.mockResolvedValue({ id: 'dpr_1' })
+  mocks.committed.length = 0
+  mocks.requireUser.mockResolvedValue(ENGINEER)
+  mocks.prisma.$transaction.mockImplementation(mocks.runTransaction)
+  mocks.prisma.site.findFirst.mockImplementation(async (args: { where: Record<string, unknown> }) =>
+    args.where.id === 'site_1' && args.where.companyId === 'company_1' && args.where.deletedAt === null
+      ? { id: 'site_1' }
+      : null
+  )
+})
+
+describe('createDpr authorizes before any read or write', () => {
+  it('refuses an unauthenticated or stale principal before touching the database', async () => {
+    mocks.requireUser.mockRejectedValue(new Error('UNAUTHORIZED: Account is inactive'))
+
+    await expect(createDpr(form())).rejects.toThrow(/UNAUTHORIZED/)
+    expectNoReads()
+    expectNoWrites()
+  })
+
+  it('refuses a role without dpr.create before any read or write', async () => {
+    mocks.requireUser.mockResolvedValue({ id: 'vendor_1', role: 'VENDOR', companyId: 'company_1' })
+
+    await expect(createDpr(form())).rejects.toThrow(/dpr\.create/)
+    expectNoReads()
+    expectNoWrites()
+  })
+
+  it('refuses a principal with no company context before any read', async () => {
+    mocks.requireUser.mockResolvedValue({ id: 'root_1', role: 'SUPER_ADMIN', companyId: null })
+
+    await expect(createDpr(form())).rejects.toThrow(/company context/i)
+    expectNoReads()
+    expectNoWrites()
+  })
 })
 
 describe('createDpr tenant authorization', () => {
@@ -42,33 +153,91 @@ describe('createDpr tenant authorization', () => {
   })
 
   it('rejects a site outside the caller company without creating DPR or approval records', async () => {
-    mocks.prisma.site.findFirst.mockResolvedValue(null)
-
     await expect(createDpr(form('other_company_site'))).rejects.toThrow(/site not found or access denied/i)
-    expect(mocks.prisma.dailyProgressReport.create).not.toHaveBeenCalled()
-    expect(mocks.submitApprovalRequest).not.toHaveBeenCalled()
+    expectNoWrites()
   })
 
-  // The public createApprovalAction now requires approvals.view, which SUPERVISOR does
-  // not hold; the DPR flow is authorized by dpr.create and must keep submitting.
-  it('still raises the DPR approval for a SUPERVISOR through the internal submitter', async () => {
+  it('rejects a soft-deleted site without creating DPR or approval records', async () => {
+    // The row exists but is soft deleted: only a lookup that ignores deletedAt finds it.
+    mocks.prisma.site.findFirst.mockImplementation(async (args: { where: Record<string, unknown> }) =>
+      args.where.deletedAt === null ? null : { id: 'site_1', companyId: 'company_1', deletedAt: new Date() }
+    )
+
+    await expect(createDpr(form())).rejects.toThrow(/site not found or access denied/i)
+    expectNoWrites()
+  })
+})
+
+describe('createDpr writes DPR, approval and timeline atomically', () => {
+  // The public createApprovalAction requires approvals.view, which SUPERVISOR does not
+  // hold; the DPR flow is authorized by dpr.create and must keep submitting.
+  it('commits DPR, approval and timeline in one transaction for a SUPERVISOR', async () => {
     const supervisor = { id: 'supervisor_1', role: 'SUPERVISOR', companyId: 'company_1' }
     mocks.requireUser.mockResolvedValue(supervisor)
 
     await expect(createDpr(form())).resolves.toEqual({ success: true, dprId: 'dpr_1' })
 
-    expect(mocks.submitApprovalRequest).toHaveBeenCalledWith(
-      supervisor,
-      expect.objectContaining({ siteId: 'site_1', entityType: 'DPR', entityId: 'dpr_1' })
-    )
+    expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
+    expect(mocks.committed.map((row) => row.model)).toEqual(['dailyProgressReport', 'approval', 'approvalTimeline'])
+    expectNoGlobalWrites()
+    expect(mocks.tx.approval.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ requestedById: 'supervisor_1' }),
+    })
   })
 
-  it('refuses a role without dpr.create before any write or approval request', async () => {
-    mocks.requireUser.mockResolvedValue({ id: 'vendor_1', role: 'VENDOR', companyId: 'company_1' })
+  it('binds the DPR, approval and timeline to the exact company, site and DPR', async () => {
+    await createDpr(form())
 
-    await expect(createDpr(form())).rejects.toThrow(/dpr\.create/)
+    expect(mocks.tx.dailyProgressReport.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        companyId: 'company_1',
+        siteId: 'site_1',
+        workDone: 'Concrete poured',
+        labourCount: 5,
+        createdById: 'engineer_1',
+      }),
+    })
+    expect(mocks.tx.approval.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        companyId: 'company_1',
+        siteId: 'site_1',
+        entityType: 'DPR',
+        entityId: 'dpr_1',
+        priority: 'NORMAL',
+        approvalType: 'OPERATIONAL',
+        requestedById: 'engineer_1',
+        currentStatus: 'PENDING',
+      }),
+    })
+    expect(mocks.tx.approvalTimeline.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        companyId: 'company_1',
+        approvalId: 'approval_1',
+        actorUserId: 'engineer_1',
+        action: 'SUBMITTED',
+        toStatus: 'PENDING',
+      }),
+    })
+  })
 
-    expect(mocks.prisma.dailyProgressReport.create).not.toHaveBeenCalled()
-    expect(mocks.submitApprovalRequest).not.toHaveBeenCalled()
+  it('rolls back the DPR when the approval write fails', async () => {
+    mocks.tx.approval.create.mockRejectedValueOnce(new Error('approval insert failed'))
+
+    await expect(createDpr(form())).rejects.toThrow('approval insert failed')
+
+    expect(mocks.tx.dailyProgressReport.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.approvalTimeline.create).not.toHaveBeenCalled()
+    expect(mocks.committed).toEqual([])
+    expectNoGlobalWrites()
+  })
+
+  it('rolls back the DPR and approval when the timeline write fails', async () => {
+    mocks.tx.approvalTimeline.create.mockRejectedValueOnce(new Error('timeline insert failed'))
+
+    await expect(createDpr(form())).rejects.toThrow('timeline insert failed')
+
+    expect(mocks.tx.approval.create).toHaveBeenCalledTimes(1)
+    expect(mocks.committed).toEqual([])
+    expectNoGlobalWrites()
   })
 })
