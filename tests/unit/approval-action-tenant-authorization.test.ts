@@ -209,6 +209,12 @@ describe('createApprovalAction entity tenant binding', () => {
 })
 
 describe('getApprovalByIdAction tenant scoping', () => {
+  // The COMPANY_ADMIN principal holds approvals.view, so the read gate lets it through and
+  // tenant scoping is what is under test. Every other permission stays denied.
+  beforeEach(() => {
+    mocks.hasPermission.mockImplementation((_role: unknown, permission: string) => permission === 'approvals.view')
+  })
+
   it('excludes soft deleted approvals from the tenant scoped lookup', async () => {
     mocks.prisma.approval.findFirst.mockResolvedValue(null)
 

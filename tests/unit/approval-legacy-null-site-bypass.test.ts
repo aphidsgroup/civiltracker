@@ -127,6 +127,12 @@ beforeEach(() => {
 const SITE_BOUND_TYPES = ['EXPENSE', 'SALARY_RUN', 'BILL', 'DPR', 'MATERIAL_REQUEST', 'DOCUMENT', 'VARIATION'] as const
 
 describe('getApprovalByIdAction refuses a legacy approval that carries no site', () => {
+  // The COMPANY_ADMIN principal holds approvals.view, so the read gate lets it through and
+  // the site-binding guard is what is under test. Every other permission stays denied.
+  beforeEach(() => {
+    mocks.hasPermission.mockImplementation((_role: unknown, permission: string) => permission === 'approvals.view')
+  })
+
   it.each(['EXPENSE', 'SALARY_RUN'] as const)(
     'refuses to resolve a malformed site-null %s approval',
     async (entityType) => {

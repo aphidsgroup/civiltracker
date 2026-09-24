@@ -5,6 +5,7 @@ import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/audit'
+import { requireApprovalReader } from '@/lib/approvals/read-guard'
 import {
   approvalRequiresSite,
   assertApprovalSiteBinding,
@@ -233,7 +234,7 @@ export async function getApprovalsAction(filter?: {
   entityType?: string
   search?: string
 }) {
-  const user = await requireUser()
+  const user = await requireApprovalReader()
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
 
   // Malformed legacy rows are excluded by the query itself: they must not be listed,
@@ -271,7 +272,7 @@ export async function getApprovalsAction(filter?: {
 }
 
 export async function getApprovalByIdAction(id: string) {
-  const user = await requireUser()
+  const user = await requireApprovalReader()
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
 
   const approval = await prisma.approval.findFirst({
@@ -683,7 +684,7 @@ export async function addApprovalCommentAction(approvalId: string, comment: stri
 }
 
 export async function getApprovalStatsAction() {
-  const user = await requireUser()
+  const user = await requireApprovalReader()
   const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
   // A malformed legacy row can never be actioned, so it must not be counted or summed
   // into a figure that invites someone to action it.
