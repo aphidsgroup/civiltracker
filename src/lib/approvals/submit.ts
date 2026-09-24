@@ -168,11 +168,17 @@ export async function submitApprovalRequest(user: SessionUser, data: ApprovalReq
     throw new Error('Forbidden: Entity not found or access denied')
   }
 
-  const approval = await createApprovalRequestRecord(prisma, user, {
-    ...data,
-    companyId,
-    siteId: site?.id ?? null,
-  })
+  // The approval row and its SUBMITTED timeline entry commit together: a timeline
+  // failure must not leave a PENDING approval with no submission history behind it.
+  // This is the only transaction on this path; entity-creation flows that already hold
+  // one call `createApprovalRequestRecord` with their own `tx` instead.
+  const approval = await prisma.$transaction((tx: Prisma.TransactionClient) =>
+    createApprovalRequestRecord(tx, user, {
+      ...data,
+      companyId,
+      siteId: site?.id ?? null,
+    })
+  )
 
   revalidatePath('/approvals')
   revalidatePath('/mobile/approvals')

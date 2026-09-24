@@ -17,6 +17,7 @@ import {
   assertApprovalSiteBinding,
 } from '@/lib/approvals/site-binding'
 import { requireApprovalSubmitter, submitApprovalRequest } from '@/lib/approvals/submit'
+import { OPEN_APPROVAL_STATUSES } from '@/lib/approvals/valid-reads'
 import type { ApprovalRequestInput } from '@/lib/approvals/submit'
 import type { ApprovalEntityType, ApprovalStatus, Prisma, SalaryRunStatus } from '@prisma/client'
 
@@ -175,8 +176,6 @@ export async function getApprovalByIdAction(id: string) {
 
   return { approval: detail.approval, entityData: detail.entityData }
 }
-
-const OPEN_APPROVAL_STATUSES: ApprovalStatus[] = ['PENDING', 'SUBMITTED', 'PENDING_REVIEW']
 
 function verifyCanApproveEntity(role: string, entityType: string) {
   if (role === 'SUPER_ADMIN' || role === 'COMPANY_ADMIN') return true

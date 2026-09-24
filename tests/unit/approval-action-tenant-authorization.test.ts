@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
   // on the global client instead of `tx` leaves these spies untouched.
   const tx = {
     approval: {
+      create: vi.fn((args: unknown) => prisma.approval.create(args)),
       update: vi.fn((args: unknown) => prisma.approval.update(args)),
       updateMany: vi.fn((args: unknown) => prisma.approval.updateMany(args)),
     },

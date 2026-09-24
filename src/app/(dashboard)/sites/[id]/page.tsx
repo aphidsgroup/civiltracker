@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { countValidApprovals } from '@/lib/approvals/valid-reads'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 
@@ -68,8 +69,12 @@ export default async function SiteOverviewPage({
   })
   const calculatedSpent = Number(approvedExpenses._sum.amount || 0)
 
-  const pendingApprovalsCount = await prisma.approval.count({
-    where: { siteId: id, currentStatus: 'PENDING' }
+  // Soft-deleted, malformed, orphaned and cross-tenant rows can never be actioned, so
+  // they are not counted as waiting.
+  const pendingApprovalsCount = await countValidApprovals({
+    companyId: site.companyId,
+    siteId: site.id,
+    currentStatus: 'PENDING',
   })
 
   const budget = Number(site.budget) || 0

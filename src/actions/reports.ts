@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { requireUser } from '@/lib/auth/require-user'
 import { hasPermission } from '@/lib/permissions'
 import { hasCostRisk, isSiteOverBudget, calculateProfitForecast } from '@/lib/reports/calculations'
+import { sumValidOpenApprovalAmountsBySite } from '@/lib/approvals/valid-reads'
 import { Prisma } from '@prisma/client'
 
 export async function getFounderDashboardStats() {
@@ -23,11 +24,12 @@ export async function getFounderDashboardStats() {
       labour: {
         include: { salaryItems: true }
       },
-      approvals: {
-        where: { deletedAt: null }
-      }
     }
   })
+
+  // Pending approval money only counts rows an approver could action: never a
+  // malformed, orphaned, cross-bound or deleted-site approval.
+  const pendingBySite = await sumValidOpenApprovalAmountsBySite(sites)
 
   // Basic totals
   let totalBudget = new Prisma.Decimal(0)
@@ -86,11 +88,7 @@ export async function getFounderDashboardStats() {
     totalActualSpend = totalActualSpend.add(siteSpend)
 
     // Calculate Pending Approvals
-    for (const app of site.approvals) {
-      if ((app.currentStatus === 'PENDING' || app.currentStatus === 'PENDING_REVIEW' || app.currentStatus === 'SUBMITTED') && app.amount) {
-        pendingApprovalAmount = pendingApprovalAmount.add(app.amount)
-      }
-    }
+    pendingApprovalAmount = pendingApprovalAmount.add(pendingBySite.get(site.id) ?? 0)
 
     if (isSiteOverBudget(siteSpend, site.budget || 0)) {
       overBudgetSites++
@@ -151,14 +149,15 @@ export async function getSiteCostReport(filters: any) {
     include: {
       expenses: { where: { deletedAt: null } },
       labour: { include: { salaryItems: true } },
-      approvals: { where: { deletedAt: null } }
     }
   })
 
+  const pendingBySite = await sumValidOpenApprovalAmountsBySite(sites)
+
   return sites.map(s => {
     let spent = new Prisma.Decimal(0)
-    let pending = new Prisma.Decimal(0)
-    
+    const pending = pendingBySite.get(s.id) ?? new Prisma.Decimal(0)
+
     s.expenses.forEach(e => {
       if (['APPROVED', 'PAID'].includes(e.approvalStatus)) spent = spent.add(e.amount)
     })
@@ -167,12 +166,6 @@ export async function getSiteCostReport(filters: any) {
       l.salaryItems.forEach(si => {
         if (['APPROVED', 'PAID'].includes(si.status)) spent = spent.add(si.netPayable)
       })
-    })
-
-    s.approvals.forEach(a => {
-      if (['PENDING', 'PENDING_REVIEW', 'SUBMITTED'].includes(a.currentStatus) && a.amount) {
-        pending = pending.add(a.amount)
-      }
     })
 
     return {

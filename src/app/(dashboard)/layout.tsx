@@ -4,18 +4,17 @@ import DashboardSidebar from '@/components/layout/DashboardSidebar'
 import DashboardTopbar from '@/components/layout/DashboardTopbar'
 import ResponsiveShell from '@/components/responsive/ResponsiveShell'
 import { prisma } from '@/lib/prisma'
+import { getPendingApprovalBadgeCount } from '@/lib/approvals/valid-reads'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
   const companyId = session.user.companyId
-  const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : { companyId }
 
   const [pendingApprovalsCount, company] = await Promise.all([
-    prisma.approval.count({
-      where: { ...companyFilter, currentStatus: 'PENDING', deletedAt: null },
-    }),
+    // Live approvals.view and valid rows only; never the JWT role or a raw row count.
+    getPendingApprovalBadgeCount(),
     companyId ? prisma.company.findUnique({
       where: { id: companyId },
       select: { name: true, plan: true, city: true },

@@ -58,6 +58,7 @@ const mocks = vi.hoisted(() => {
   const tx = {
     site: { findFirst: vi.fn((args: unknown) => prisma.site.findFirst(args)) },
     approval: {
+      create: vi.fn((args: unknown) => prisma.approval.create(args)),
       findFirst: vi.fn((args: unknown) => prisma.approval.findFirst(args)),
       updateMany: vi.fn((args: unknown) => prisma.approval.updateMany(args)),
     },

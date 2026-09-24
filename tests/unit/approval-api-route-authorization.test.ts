@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => {
   // transaction before it writes anything.
   const tx = {
     approval: {
+      create: vi.fn((args: unknown) => prisma.approval.create(args)),
       update: vi.fn((args: unknown) => prisma.approval.update(args)),
       updateMany: vi.fn((args: unknown) => prisma.approval.updateMany(args)),
     },
