@@ -5,7 +5,7 @@ import type { Permission } from '@/lib/permissions'
 import { requireApprovalReader } from '@/lib/approvals/read-guard'
 import { findLinkedApprovalEntity } from '@/lib/approvals/detail'
 import { approvalRequiresSite } from '@/lib/approvals/site-binding'
-import type { ApprovalEntityType, ApprovalPriority } from '@prisma/client'
+import type { ApprovalEntityType, ApprovalPriority, Prisma } from '@prisma/client'
 import type { SessionUser } from '@/types'
 
 /**
@@ -40,13 +40,81 @@ const APPROVAL_SUBMIT_PERMISSIONS: Partial<Record<ApprovalEntityType, Permission
  */
 export async function requireApprovalSubmitter(entityType: ApprovalEntityType): Promise<SessionUser> {
   const user = await requireApprovalReader()
+  assertApprovalSubmitPermission(user, entityType)
+  return user
+}
 
+/**
+ * The entity-specific half of `requireApprovalSubmitter`, for entity-creation flows that
+ * already resolved a live principal through the permission that lets them create the
+ * entity. Pure: it issues no Prisma read, so it can run before any lookup.
+ */
+export function assertApprovalSubmitPermission(user: SessionUser, entityType: ApprovalEntityType) {
   const permission = APPROVAL_SUBMIT_PERMISSIONS[entityType]
   if (permission && !hasPermission(user.role, permission)) {
     throw new Error(`Forbidden: Missing required permission "${permission}"`)
   }
+}
 
-  return user
+/**
+ * Resolves the site an approval request is raised on: in the caller company (any company
+ * for a SUPER_ADMIN) and never soft deleted. Returns null when the site is out of reach.
+ */
+export async function findApprovalSubmitSite(user: SessionUser, siteId: string) {
+  return prisma.site.findFirst({
+    where: {
+      id: siteId,
+      ...(user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }),
+      deletedAt: null,
+    },
+    select: { id: true, companyId: true },
+  })
+}
+
+type ApprovalWriteClient = Pick<Prisma.TransactionClient, 'approval' | 'approvalTimeline'>
+
+/**
+ * Writes the approval row and its initial SUBMITTED timeline entry on `client`. Callers
+ * that create the linked entity in the same request pass their interactive transaction
+ * client, so the entity, the approval and the timeline commit or roll back together.
+ *
+ * The caller is responsible for having resolved `companyId`/`siteId` from a live, scoped
+ * site and for `entityId` pointing at a record inside that exact scope.
+ */
+export async function createApprovalRequestRecord(
+  client: ApprovalWriteClient,
+  user: SessionUser,
+  data: ApprovalRequestInput & { companyId: string; siteId: string | null }
+) {
+  const approval = await client.approval.create({
+    data: {
+      companyId: data.companyId,
+      siteId: data.siteId,
+      entityType: data.entityType,
+      entityId: data.entityId,
+      title: data.title,
+      amount: data.amount ? data.amount : null,
+      description: data.description || null,
+      priority: data.priority || 'NORMAL',
+      approvalType: data.approvalType || 'OPERATIONAL',
+      requestedById: user.id,
+      currentStatus: 'PENDING',
+      submittedAt: new Date(),
+    },
+  })
+
+  await client.approvalTimeline.create({
+    data: {
+      companyId: data.companyId,
+      approvalId: approval.id,
+      actorUserId: user.id,
+      action: 'SUBMITTED',
+      toStatus: 'PENDING',
+      note: 'Workflow approval requested',
+    },
+  })
+
+  return approval
 }
 
 export type ApprovalRequestInput = {
@@ -81,16 +149,7 @@ export async function submitApprovalRequest(user: SessionUser, data: ApprovalReq
 
   // A soft-deleted site is refused here for every type, a site-pinned PURCHASE_ORDER
   // included.
-  const site = data.siteId
-    ? await prisma.site.findFirst({
-        where: {
-          id: data.siteId,
-          ...(user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }),
-          deletedAt: null,
-        },
-        select: { id: true, companyId: true },
-      })
-    : null
+  const site = data.siteId ? await findApprovalSubmitSite(user, data.siteId) : null
 
   if (data.siteId && !site) {
     throw new Error('Forbidden: Site not found or access denied')
@@ -107,32 +166,10 @@ export async function submitApprovalRequest(user: SessionUser, data: ApprovalReq
     throw new Error('Forbidden: Entity not found or access denied')
   }
 
-  const approval = await prisma.approval.create({
-    data: {
-      companyId,
-      siteId: site?.id ?? null,
-      entityType: data.entityType,
-      entityId: data.entityId,
-      title: data.title,
-      amount: data.amount ? data.amount : null,
-      description: data.description || null,
-      priority: data.priority || 'NORMAL',
-      approvalType: data.approvalType || 'OPERATIONAL',
-      requestedById: user.id,
-      currentStatus: 'PENDING',
-      submittedAt: new Date(),
-    },
-  })
-
-  await prisma.approvalTimeline.create({
-    data: {
-      companyId,
-      approvalId: approval.id,
-      actorUserId: user.id,
-      action: 'SUBMITTED',
-      toStatus: 'PENDING',
-      note: 'Workflow approval requested',
-    },
+  const approval = await createApprovalRequestRecord(prisma, user, {
+    ...data,
+    companyId,
+    siteId: site?.id ?? null,
   })
 
   revalidatePath('/approvals')

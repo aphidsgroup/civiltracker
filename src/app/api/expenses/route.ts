@@ -1,7 +1,13 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { ensureCompanyContext, requireApiPermission } from '@/lib/auth/require-api-permission'
+import {
+  assertApprovalSubmitPermission,
+  createApprovalRequestRecord,
+  findApprovalSubmitSite,
+} from '@/lib/approvals/submit'
 
 const schema = z.object({
   siteId: z.string(),
@@ -44,52 +50,66 @@ export async function POST(request: Request) {
   const companyContextError = ensureCompanyContext(authResult)
   if (companyContextError) return companyContextError
 
+  // The expense is raised as a BILL approval, so the caller must also hold the BILL
+  // submit permission. Checked before any read.
+  try {
+    assertApprovalSubmitPermission(authResult, 'BILL')
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Forbidden'
+    return NextResponse.json({ error: message }, { status: 403 })
+  }
+
   const body = await request.json()
   const parsed = schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
   const data = parsed.data
 
-  const companyId = authResult.companyId!
-
-  const site = await prisma.site.findFirst({
-    where: { id: data.siteId, ...(authResult.role === 'SUPER_ADMIN' ? {} : { companyId }) }
-  })
+  // Live, in-tenant site only: a soft-deleted site is refused before any write.
+  const site = await findApprovalSubmitSite(authResult, data.siteId)
   if (!site) return NextResponse.json({ error: 'Forbidden: Site not found or access denied' }, { status: 404 })
 
-  const actualCompanyId = site.companyId || companyId
+  // Expense, BILL approval and its initial timeline entry commit together, so a failed
+  // approval write can never leave a PENDING expense with no approval pointing at it.
+  let expense
+  try {
+    expense = await prisma.$transaction(async (tx) => {
+      const created = await tx.expense.create({
+        data: {
+          companyId: site.companyId,
+          siteId: site.id,
+          category: data.category as 'MATERIAL',
+          description: data.description,
+          amount: data.amount,
+          paymentMode: data.paymentMode as 'CASH',
+          paidTo: data.paidTo,
+          billNumber: data.billNumber,
+          billDate: data.billDate ? new Date(data.billDate) : null,
+          notes: data.notes,
+          approvalStatus: 'PENDING',
+          createdById: authResult.id,
+        },
+      })
 
-  const expense = await prisma.expense.create({
-    data: {
-      companyId: actualCompanyId,
-      siteId: data.siteId,
-      category: data.category as 'MATERIAL',
-      description: data.description,
-      amount: data.amount,
-      paymentMode: data.paymentMode as 'CASH',
-      paidTo: data.paidTo,
-      billNumber: data.billNumber,
-      billDate: data.billDate ? new Date(data.billDate) : null,
-      notes: data.notes,
-      approvalStatus: 'PENDING',
-      createdById: authResult.id,
-    },
-  })
+      await createApprovalRequestRecord(tx, authResult, {
+        companyId: site.companyId,
+        siteId: site.id,
+        entityType: 'BILL',
+        entityId: created.id,
+        title: `Expense for ${data.category}`,
+        amount: data.amount,
+        description: data.notes || null,
+      })
 
-  await prisma.approval.create({
-    data: {
-      companyId: actualCompanyId,
-      siteId: data.siteId,
-      entityType: 'BILL',
-      entityId: expense.id,
-      title: `Expense for ${data.category}`,
-      amount: data.amount,
-      description: data.notes || null,
-      requestedById: authResult.id,
-      currentStatus: 'PENDING',
-      submittedAt: new Date(),
-    },
-  })
+      return created
+    })
+  } catch (error: unknown) {
+    console.error('Failed to create expense', error)
+    return NextResponse.json({ error: 'Failed to create expense' }, { status: 500 })
+  }
+
+  revalidatePath('/approvals')
+  revalidatePath('/mobile/approvals')
 
   return NextResponse.json({ success: true, expense })
 }
