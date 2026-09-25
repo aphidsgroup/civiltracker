@@ -1,6 +1,6 @@
-import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { redirect } from 'next/navigation'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import { enableChecklistForProject, toggleTaskStatus, toggleCategoryNeglect, addCustomTask } from '@/actions/checklists'
 import { ChecklistClient } from './ChecklistClient'
@@ -8,20 +8,23 @@ import { ChecklistClient } from './ChecklistClient'
 export const dynamic = 'force-dynamic'
 
 export default async function ProjectChecklistPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  
   const { id } = await params
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'sites.view', module: 'SITES' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}/checklist`)
+  const { companyId } = gate.access
 
-  const site = await prisma.site.findUnique({
-    where: { id, companyId: session.user.companyId },
+  // The page reads nothing until the id names a live site of exactly this company; the
+  // layout's own lookup renders in parallel and is not a guard for this page.
+  const site = await prisma.site.findFirst({
+    where: { id, ...liveCompanySiteWhere(companyId) },
+    select: { id: true, name: true },
   })
 
   if (!site) redirect('/sites')
 
   // Check if checklist is enabled
-  const checklist = await prisma.projectChecklist.findUnique({
-    where: { siteId: site.id },
+  const checklist = await prisma.projectChecklist.findFirst({
+    where: { siteId: site.id, companyId },
     include: {
       stages: {
         orderBy: { order: 'asc' },
@@ -45,7 +48,7 @@ export default async function ProjectChecklistPage({ params }: { params: Promise
       where: {
         OR: [
           { isGlobal: true },
-          { companyId: session.user.companyId }
+          { companyId }
         ]
       }
     })

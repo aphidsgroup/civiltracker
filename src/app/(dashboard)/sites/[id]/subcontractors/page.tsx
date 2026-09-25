@@ -1,6 +1,6 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { Users, FileText, CheckCircle2, AlertCircle, HardHat, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { SubCardList } from '@/app/(dashboard)/subcontractors/SubCardList'
@@ -9,10 +9,16 @@ import { deactivateSiteSubcontractor, markSiteSubcontractorPaid, updateSiteSubco
 export const dynamic = 'force-dynamic'
 
 export default async function SiteSubcontractorsPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
-  const { id: siteId } = await params
+  const { id } = await params
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'vendors.view', module: 'MATERIALS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}/subcontractors`)
+  const { companyId } = gate.access
+
+  // The page reads nothing until the id names a live site of exactly this company; the
+  // layout's own lookup renders in parallel and is not a guard for this page.
+  const site = await prisma.site.findFirst({ where: { id, ...liveCompanySiteWhere(companyId) }, select: { id: true } })
+  if (!site) redirect('/sites')
+  const siteId = site.id
 
   const updateSubcontractor = updateSiteSubcontractor.bind(null, siteId)
   const markSubPaid = markSiteSubcontractorPaid.bind(null, siteId)

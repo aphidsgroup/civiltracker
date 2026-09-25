@@ -447,6 +447,8 @@ describe('MobileSingleSitePage', () => {
 
   it.each(['SITE_ENGINEER', 'SUPERVISOR'])('shows no budget to a %s, by permission, and counts headcount under the live company', async (role) => {
     mocks.requireUser.mockResolvedValue(principal(role))
+    // A field role opens only an assigned site.
+    mocks.prisma.companyMember.findFirst.mockResolvedValueOnce({ siteIds: ['site_1'] })
 
     const html = await render(MobileSingleSitePage({ params: P({ id: 'site_1' }) }))
 

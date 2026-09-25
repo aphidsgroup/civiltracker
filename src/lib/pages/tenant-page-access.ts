@@ -92,6 +92,38 @@ export function liveCompanySiteWhere(companyId: string): Prisma.SiteWhereInput {
   return { companyId, deletedAt: null }
 }
 
+/** Field roles, which read only the sites they are assigned to. */
+const ASSIGNED_SITE_ROLES: ReadonlySet<string> = new Set(['SITE_ENGINEER', 'SUPERVISOR'])
+
+export function readsAssignedSitesOnly(role: string) {
+  return ASSIGNED_SITE_ROLES.has(role)
+}
+
+/**
+ * The sites a page may show the principal: `liveCompanySiteWhere`, narrowed for a field
+ * role to the sites it is the engineer of or that its *active* membership lists. Call it
+ * only after the page gate; list and detail pages share it so a site a field role cannot
+ * see in the list cannot be opened by id either.
+ */
+export async function assignedSiteWhere(access: TenantPageAccess): Promise<Prisma.SiteWhereInput> {
+  const live = liveCompanySiteWhere(access.companyId)
+  if (!readsAssignedSitesOnly(access.user.role)) return live
+
+  const member = await prisma.companyMember.findFirst({
+    where: { userId: access.user.id, companyId: access.companyId, isActive: true },
+    select: { siteIds: true },
+  })
+  const siteIds = member?.siteIds ?? []
+  return {
+    ...live,
+    OR: [
+      { assignedEngineerId: access.user.id },
+      { engineerId: access.user.id },
+      ...(siteIds.length > 0 ? [{ id: { in: siteIds } }] : []),
+    ],
+  }
+}
+
 /** Bounded, validated page size from a `?limit=` search param. */
 export function parsePageSize(limit: string | undefined, fallback = 50, max = 500) {
   const parsed = limit ? Number.parseInt(limit, 10) : fallback

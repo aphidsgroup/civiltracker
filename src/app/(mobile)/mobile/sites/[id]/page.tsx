@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma'
-import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import { Building2, MapPin, Calendar, Receipt, FileUp, HardHat, FileCheck, Camera, ArrowLeft, ShieldAlert, IndianRupee, Wallet } from 'lucide-react'
 import { notFound } from 'next/navigation'
@@ -19,9 +19,10 @@ export default async function MobileSingleSitePage({ params }: { params: Promise
   const showFinance = can('expenses.view') && moduleEnabled('EXPENSES')
   const showHeadcount = (can('labour.view') || can('attendance.mark')) && moduleEnabled('LABOUR')
 
+  // The same assigned-site policy as the list: a field role opens only its own sites.
   const site = await prisma.site.findFirst({
-    where: { id, ...liveCompanySiteWhere(companyId) },
-    select: { id: true, name: true, status: true, contractType: true, location: true, budget: true, spent: true },
+    where: { id, ...(await assignedSiteWhere(gate.access)) },
+    select: { id: true, name: true, status: true, contractType: true, location: true, budget: showFinance, spent: showFinance },
   })
 
   if (!site) {

@@ -1,7 +1,7 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { redirect } from 'next/navigation'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { Camera, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { PhotoApprovalCard } from '@/components/admin/PhotoApprovalCard'
 
@@ -22,14 +22,21 @@ type PhotoApprovalItem = Prisma.SitePhotoGetPayload<{
 }>
 
 export default async function SitePhotosPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { id: siteId } = await params
+  const { id } = await params
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'sites.view', module: 'SITES' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}/photos`)
+  const { companyId } = gate.access
+
+  // The page reads nothing until the id names a live site of exactly this company; the
+  // layout's own lookup renders in parallel and is not a guard for this page.
+  const site = await prisma.site.findFirst({ where: { id, ...liveCompanySiteWhere(companyId) }, select: { id: true } })
+  if (!site) redirect('/sites')
+  const siteId = site.id
 
   // Tasks that have been completed but have NO photo yet
   const missingPhotoTasks = await prisma.projectChecklistTask.findMany({
     where: {
-      category: { stage: { checklist: { siteId } } },
+      category: { stage: { checklist: { siteId, companyId } } },
       status: 'COMPLETED',
       sitePhotos: { none: {} }
     },
@@ -39,14 +46,14 @@ export default async function SitePhotosPage({ params }: { params: Promise<{ id:
 
   // All photos for this site — pending admin approval
   const pendingApprovalPhotos: PhotoApprovalItem[] = await prisma.sitePhoto.findMany({
-    where: { siteId, approvedForClient: false },
+    where: { siteId, companyId, approvedForClient: false },
     include: { task: { include: { category: { include: { stage: true } } } } },
     orderBy: { createdAt: 'desc' }
   })
 
   // Admin-approved photos
   const approvedPhotos: PhotoApprovalItem[] = await prisma.sitePhoto.findMany({
-    where: { siteId, approvedForClient: true },
+    where: { siteId, companyId, approvedForClient: true },
     include: { task: { include: { category: { include: { stage: true } } } } },
     orderBy: { approvedAt: 'desc' }
   })
