@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import type { Prisma } from '@prisma/client'
 import { requireUser } from '@/lib/auth/require-user'
 import { isModuleEnabled } from '@/lib/auth/require-module'
+import { assignedSiteScope, readsAssignedSitesOnly } from '@/lib/auth/site-mutation'
 import { getRoleRedirect, hasPermission } from '@/lib/permissions'
 import type { Permission } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
@@ -92,36 +93,16 @@ export function liveCompanySiteWhere(companyId: string): Prisma.SiteWhereInput {
   return { companyId, deletedAt: null }
 }
 
-/** Field roles, which read only the sites they are assigned to. */
-const ASSIGNED_SITE_ROLES: ReadonlySet<string> = new Set(['SITE_ENGINEER', 'SUPERVISOR'])
-
-export function readsAssignedSitesOnly(role: string) {
-  return ASSIGNED_SITE_ROLES.has(role)
-}
+export { readsAssignedSitesOnly }
 
 /**
  * The sites a page may show the principal: `liveCompanySiteWhere`, narrowed for a field
  * role to the sites it is the engineer of or that its *active* membership lists. Call it
  * only after the page gate; list and detail pages share it so a site a field role cannot
- * see in the list cannot be opened by id either.
+ * see in the list cannot be opened by id either. Actions use the same `assignedSiteScope`.
  */
 export async function assignedSiteWhere(access: TenantPageAccess): Promise<Prisma.SiteWhereInput> {
-  const live = liveCompanySiteWhere(access.companyId)
-  if (!readsAssignedSitesOnly(access.user.role)) return live
-
-  const member = await prisma.companyMember.findFirst({
-    where: { userId: access.user.id, companyId: access.companyId, isActive: true },
-    select: { siteIds: true },
-  })
-  const siteIds = member?.siteIds ?? []
-  return {
-    ...live,
-    OR: [
-      { assignedEngineerId: access.user.id },
-      { engineerId: access.user.id },
-      ...(siteIds.length > 0 ? [{ id: { in: siteIds } }] : []),
-    ],
-  }
+  return assignedSiteScope(access.user, access.companyId)
 }
 
 /** Bounded, validated page size from a `?limit=` search param. */
