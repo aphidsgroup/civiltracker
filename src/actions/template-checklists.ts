@@ -1,31 +1,46 @@
 'use server'
 
 import { requireUser } from '@/lib/auth/require-user'
+import { requireModuleEnabled } from '@/lib/auth/require-module'
+import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-async function requireTenantTemplate(templateId: string) {
+/**
+ * Every template action needs a live company member with `tasks.manage` and the TASKS
+ * module, checked before any template row is read. Templates are tenant-owned; global
+ * templates are read-only here and can only be cloned into the caller's company.
+ */
+async function requireTemplateManager() {
   const user = await requireUser()
   if (!user.companyId) throw new Error('FORBIDDEN: Company context required')
+  if (!hasPermission(user.role, 'tasks.manage')) {
+    throw new Error('FORBIDDEN: Checklist templates require tasks.manage')
+  }
+  await requireModuleEnabled('TASKS')
+  return { user, companyId: user.companyId }
+}
+
+async function requireTenantTemplate(templateId: string) {
+  const { user, companyId } = await requireTemplateManager()
 
   const template = await prisma.checklistTemplate.findFirst({
-    where: { id: templateId, companyId: user.companyId, isGlobal: false },
+    where: { id: templateId, companyId, isGlobal: false },
     select: { id: true },
   })
   if (!template) throw new Error('FORBIDDEN: Template not found or access denied')
 
-  return { user, template }
+  return { user, companyId, template }
 }
 
 export async function createTemplate(formData: FormData) {
-  const user = await requireUser()
-  if (!user.companyId) throw new Error('FORBIDDEN: Company context required')
+  const { companyId } = await requireTemplateManager()
 
   const name = formData.get('name') as string
   const description = formData.get('description') as string
   const template = await prisma.checklistTemplate.create({
-    data: { name, description, companyId: user.companyId, isGlobal: false },
+    data: { name, description, companyId, isGlobal: false },
   })
 
   revalidatePath('/checklists')
@@ -33,18 +48,17 @@ export async function createTemplate(formData: FormData) {
 }
 
 export async function cloneTemplate(templateId: string) {
-  const user = await requireUser()
-  if (!user.companyId) throw new Error('FORBIDDEN: Company context required')
+  const { companyId } = await requireTemplateManager()
 
   const original = await prisma.checklistTemplate.findFirst({
-    where: { id: templateId, OR: [{ companyId: user.companyId }, { isGlobal: true }] },
+    where: { id: templateId, OR: [{ companyId, isGlobal: false }, { isGlobal: true }] },
     include: { stages: { include: { categories: { include: { tasks: true } } } } },
   })
   if (!original) throw new Error('FORBIDDEN: Template not found or access denied')
 
   const clone = await prisma.checklistTemplate.create({
     data: {
-      name: `${original.name} (Copy)`, description: original.description, companyId: user.companyId, isGlobal: false,
+      name: `${original.name} (Copy)`, description: original.description, companyId, isGlobal: false,
       stages: { create: original.stages.map((stage) => ({
         name: stage.name, order: stage.order, weight: stage.weight,
         categories: { create: stage.categories.map((category) => ({
@@ -60,9 +74,9 @@ export async function cloneTemplate(templateId: string) {
 }
 
 export async function updateTemplateInfo(id: string, name: string, description: string) {
-  const { user } = await requireTenantTemplate(id)
+  const { companyId, template } = await requireTenantTemplate(id)
   const updated = await prisma.checklistTemplate.updateMany({
-    where: { id, companyId: user.companyId!, isGlobal: false },
+    where: { id: template.id, companyId, isGlobal: false },
     data: { name, description },
   })
   if (updated.count !== 1) throw new Error('FORBIDDEN: Template no longer available')
@@ -76,9 +90,9 @@ export async function addStage(templateId: string, name: string) {
 }
 
 export async function addCategory(stageId: string, name: string, templateId: string) {
-  const { user } = await requireTenantTemplate(templateId)
+  const { companyId, template } = await requireTenantTemplate(templateId)
   const stage = await prisma.checklistStage.findFirst({
-    where: { id: stageId, template: { id: templateId, companyId: user.companyId!, isGlobal: false } },
+    where: { id: stageId, template: { id: template.id, companyId, isGlobal: false } },
     select: { id: true },
   })
   if (!stage) throw new Error('FORBIDDEN: Stage not found or access denied')
@@ -87,9 +101,9 @@ export async function addCategory(stageId: string, name: string, templateId: str
 }
 
 export async function addTask(categoryId: string, name: string, templateId: string) {
-  const { user } = await requireTenantTemplate(templateId)
+  const { companyId, template } = await requireTenantTemplate(templateId)
   const category = await prisma.checklistCategory.findFirst({
-    where: { id: categoryId, stage: { template: { id: templateId, companyId: user.companyId!, isGlobal: false } } },
+    where: { id: categoryId, stage: { template: { id: template.id, companyId, isGlobal: false } } },
     select: { id: true },
   })
   if (!category) throw new Error('FORBIDDEN: Category not found or access denied')
@@ -98,9 +112,9 @@ export async function addTask(categoryId: string, name: string, templateId: stri
 }
 
 export async function deleteStage(stageId: string, templateId: string) {
-  const { user } = await requireTenantTemplate(templateId)
+  const { companyId, template } = await requireTenantTemplate(templateId)
   const stage = await prisma.checklistStage.findFirst({
-    where: { id: stageId, template: { id: templateId, companyId: user.companyId!, isGlobal: false } }, select: { id: true },
+    where: { id: stageId, template: { id: template.id, companyId, isGlobal: false } }, select: { id: true },
   })
   if (!stage) throw new Error('FORBIDDEN: Stage not found or access denied')
   await prisma.checklistStage.delete({ where: { id: stage.id } })
@@ -108,9 +122,9 @@ export async function deleteStage(stageId: string, templateId: string) {
 }
 
 export async function deleteCategory(categoryId: string, templateId: string) {
-  const { user } = await requireTenantTemplate(templateId)
+  const { companyId, template } = await requireTenantTemplate(templateId)
   const category = await prisma.checklistCategory.findFirst({
-    where: { id: categoryId, stage: { template: { id: templateId, companyId: user.companyId!, isGlobal: false } } }, select: { id: true },
+    where: { id: categoryId, stage: { template: { id: template.id, companyId, isGlobal: false } } }, select: { id: true },
   })
   if (!category) throw new Error('FORBIDDEN: Category not found or access denied')
   await prisma.checklistCategory.delete({ where: { id: category.id } })
@@ -118,9 +132,9 @@ export async function deleteCategory(categoryId: string, templateId: string) {
 }
 
 export async function deleteTask(taskId: string, templateId: string) {
-  const { user } = await requireTenantTemplate(templateId)
+  const { companyId, template } = await requireTenantTemplate(templateId)
   const task = await prisma.checklistTask.findFirst({
-    where: { id: taskId, category: { stage: { template: { id: templateId, companyId: user.companyId!, isGlobal: false } } } }, select: { id: true },
+    where: { id: taskId, category: { stage: { template: { id: template.id, companyId, isGlobal: false } } } }, select: { id: true },
   })
   if (!task) throw new Error('FORBIDDEN: Task not found or access denied')
   await prisma.checklistTask.delete({ where: { id: task.id } })

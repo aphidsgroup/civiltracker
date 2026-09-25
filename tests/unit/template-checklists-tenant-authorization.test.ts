@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
   redirect: vi.fn(),
   prisma: {
+    company: { findUnique: vi.fn() },
     checklistTemplate: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
     checklistStage: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
     checklistCategory: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
@@ -13,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/auth/require-user', () => ({ requireUser: mocks.requireUser }))
-vi.mock('@/lib/prisma', () => ({ default: mocks.prisma }))
+vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma, default: mocks.prisma }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }))
 
@@ -22,6 +23,7 @@ const actions = await import('@/actions/template-checklists')
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireUser.mockResolvedValue({ id: 'user_1', companyId: 'company_1', role: 'COMPANY_ADMIN' })
+  mocks.prisma.company.findUnique.mockResolvedValue({ modulesJson: ['TASKS'], status: 'ACTIVE' })
   mocks.prisma.checklistTemplate.findFirst.mockResolvedValue({ id: 'template_1' })
   mocks.prisma.checklistTemplate.create.mockResolvedValue({ id: 'clone_1' })
   mocks.prisma.checklistTemplate.updateMany.mockResolvedValue({ count: 1 })
@@ -35,7 +37,7 @@ describe('template checklist tenant authorization', () => {
     mocks.prisma.checklistTemplate.findFirst.mockResolvedValue(null)
     await expect(actions.cloneTemplate('foreign_template')).rejects.toThrow(/access denied/i)
     expect(mocks.prisma.checklistTemplate.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'foreign_template', OR: [{ companyId: 'company_1' }, { isGlobal: true }] },
+      where: { id: 'foreign_template', OR: [{ companyId: 'company_1', isGlobal: false }, { isGlobal: true }] },
     }))
     expect(mocks.prisma.checklistTemplate.create).not.toHaveBeenCalled()
   })

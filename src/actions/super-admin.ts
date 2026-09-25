@@ -1,18 +1,17 @@
 'use server'
 
-import { auth } from '@/lib/auth'
+import { requireSuperAdmin } from '@/lib/auth/require-super-admin'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { logActivity } from '@/lib/audit'
 
+// Every action resolves the live, active SUPER_ADMIN from the database before touching
+// data and acts as that principal; the session's role and name claims are never trusted.
+
 export async function changeSuperAdminPassword(password: string) {
-  const session = await auth()
-  
-  if (session?.user?.role !== 'SUPER_ADMIN') {
-    throw new Error('Unauthorized')
-  }
+  const actor = await requireSuperAdmin()
 
   if (!password || password.length < 6) {
     throw new Error('Password must be at least 6 characters long')
@@ -21,27 +20,26 @@ export async function changeSuperAdminPassword(password: string) {
   const hashedPassword = await bcrypt.hash(password, 10)
 
   await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: actor.id },
     data: { passwordHash: hashedPassword }
   })
 
   await logActivity({
-    userId: session.user.id,
+    userId: actor.id,
     companyId: null,
     action: 'UPDATE',
     module: 'PASSWORD_RESET',
-    recordId: session.user.id,
-    description: `${session.user.name ?? session.user.email} changed their own Super Admin password`,
+    recordId: actor.id,
+    description: `${actor.name ?? actor.email} changed their own Super Admin password`,
   })
 
   revalidatePath('/super-admin/settings')
-  
+
   return { success: true }
 }
 
 export async function deleteCompany(companyId: string) {
-  const session = await auth()
-  if (session?.user?.role !== 'SUPER_ADMIN') throw new Error('Unauthorized')
+  const actor = await requireSuperAdmin()
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
@@ -57,15 +55,15 @@ export async function deleteCompany(companyId: string) {
 
   if (!company) throw new Error('Company not found')
 
-  await prisma.company.delete({ where: { id: companyId } })
+  await prisma.company.delete({ where: { id: company.id } })
 
   await logActivity({
-    userId: session.user.id,
+    userId: actor.id,
     companyId: null,
     action: 'DELETE',
     module: 'COMPANY',
-    recordId: companyId,
-    description: `${session.user.name ?? session.user.email} permanently deleted company "${company.name}"`,
+    recordId: company.id,
+    description: `${actor.name ?? actor.email} permanently deleted company "${company.name}"`,
     before: {
       name: company.name,
       email: company.email,
@@ -81,11 +79,10 @@ export async function deleteCompany(companyId: string) {
 }
 
 export async function deleteUser(userId: string) {
-  const session = await auth()
-  if (session?.user?.role !== 'SUPER_ADMIN') throw new Error('Unauthorized')
+  const actor = await requireSuperAdmin()
 
   // Cannot delete self
-  if (session.user.id === userId) throw new Error('You cannot delete your own account.')
+  if (actor.id === userId) throw new Error('You cannot delete your own account.')
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -107,15 +104,15 @@ export async function deleteUser(userId: string) {
 
   if (!user) throw new Error('User not found')
 
-  await prisma.user.delete({ where: { id: userId } })
+  await prisma.user.delete({ where: { id: user.id } })
 
   await logActivity({
-    userId: session.user.id,
+    userId: actor.id,
     companyId: user.companyMembers[0]?.companyId ?? null,
     action: 'DELETE',
     module: 'USER',
-    recordId: userId,
-    description: `${session.user.name ?? session.user.email} permanently deleted user "${user.name ?? user.email}"`,
+    recordId: user.id,
+    description: `${actor.name ?? actor.email} permanently deleted user "${user.name ?? user.email}"`,
     before: {
       name: user.name,
       email: user.email,
