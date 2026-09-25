@@ -9,12 +9,13 @@ import {
   requireChecklistTask,
   requireProjectChecklist,
 } from '@/lib/auth/checklist-site'
+import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
 // Deep clone a master template to a project
 export async function enableChecklistForProject(siteId: string, templateId: string) {
-  const { site } = await requireChecklistSite(siteId)
+  const { site } = await requireChecklistSite(siteId, 'manage')
   const existing = await prisma.projectChecklist.findFirst({
     where: { siteId: site.id, companyId: site.companyId },
   })
@@ -44,12 +45,16 @@ export async function enableChecklistForProject(siteId: string, templateId: stri
 }
 
 export async function toggleTaskStatus(siteId: string, taskId: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED', isClientDone = false, isNeglected = false) {
-  const { user, site, task } = await requireChecklistTask(siteId, taskId)
+  // Field staff may tick progress; the client-done and neglected flags are manager-only.
+  const setsManagerFlags = isClientDone || isNeglected
+  const { user, site, task } = await requireChecklistTask(siteId, taskId, setsManagerFlags ? 'manage' : 'progress')
+  const canManage = hasPermission(user.role, 'tasks.manage')
 
   await prisma.projectChecklistTask.update({
     where: { id: task.id },
     data: {
-      status, isClientDone, isNeglected,
+      status,
+      ...(canManage ? { isClientDone, isNeglected } : {}),
       completedAt: status === 'COMPLETED' ? new Date() : null,
       completedById: status === 'COMPLETED' ? user.id : null,
     },
@@ -100,35 +105,35 @@ export async function toggleTaskStatus(siteId: string, taskId: string, status: '
 
 
 export async function toggleCategoryNeglect(siteId: string, categoryId: string, isNeglected: boolean) {
-  const { site, category } = await requireChecklistCategory(siteId, categoryId)
+  const { site, category } = await requireChecklistCategory(siteId, categoryId, 'manage')
   await prisma.projectChecklistCategory.update({ where: { id: category.id }, data: { isNeglected } })
   revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
 
 export async function addCustomTask(siteId: string, categoryId: string, name: string) {
-  const { site, category } = await requireChecklistCategory(siteId, categoryId)
+  const { site, category } = await requireChecklistCategory(siteId, categoryId, 'manage')
   await prisma.projectChecklistTask.create({ data: { categoryId: category.id, name, order: 999 } })
   revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
 
 export async function editChecklistTask(siteId: string, taskId: string, newName: string) {
-  const { site, task } = await requireChecklistTask(siteId, taskId)
+  const { site, task } = await requireChecklistTask(siteId, taskId, 'manage')
   await prisma.projectChecklistTask.update({ where: { id: task.id }, data: { name: newName } })
   revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
 
 export async function deleteChecklistTask(siteId: string, taskId: string) {
-  const { site, task } = await requireChecklistTask(siteId, taskId)
+  const { site, task } = await requireChecklistTask(siteId, taskId, 'manage')
   await prisma.projectChecklistTask.delete({ where: { id: task.id } })
   revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
 
 export async function deleteProjectChecklist(siteId: string) {
-  const { site, checklist } = await requireProjectChecklist(siteId)
+  const { site, checklist } = await requireProjectChecklist(siteId, 'manage')
   await prisma.projectChecklist.delete({ where: { id: checklist.id } })
   revalidatePath(`/sites/${site.id}`)
   return { success: true }
@@ -227,7 +232,7 @@ export async function getPendingChecklistPhotos(siteId?: string) {
 }
 
 export async function uploadChecklistPhotoAction(taskId: string, siteId: string, imageUrl: string) {
-  const { user, site, task } = await requireChecklistTask(siteId, taskId)
+  const { user, site, task } = await requireChecklistTask(siteId, taskId, 'photo')
 
   await prisma.sitePhoto.create({
     data: {

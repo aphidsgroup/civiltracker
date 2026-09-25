@@ -1,9 +1,45 @@
 import { Role } from '@prisma/client'
 import { requireUser } from '@/lib/auth/require-user'
+import { requireModuleEnabled } from '@/lib/auth/require-module'
+import { hasPermission } from '@/lib/permissions'
+import type { Permission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 
-export async function requireChecklistSite(siteId: string) {
+/**
+ * What a checklist mutation needs, from the existing permission vocabulary. Any one of
+ * the listed permissions admits the live role; every mutation also needs TASKS.
+ * - `manage`: structure and manager-only flags (enable/delete checklist, add/edit/delete
+ *   tasks, neglect categories, client-done/neglected task flags).
+ * - `progress`: ticking a task's status — managers, and field staff who file DPRs.
+ * - `photo`: attaching a checklist completion photo.
+ */
+export type ChecklistMutation = 'manage' | 'progress' | 'photo'
+
+const CHECKLIST_MUTATION_GRANTS: Record<ChecklistMutation, Permission[]> = {
+  manage: ['tasks.manage'],
+  progress: ['tasks.manage', 'dpr.create'],
+  photo: ['tasks.manage', 'sitePhotos.upload'],
+}
+
+async function requireChecklistPrincipal(mutation?: ChecklistMutation) {
   const user = await requireUser()
+  if (mutation) {
+    const grants = CHECKLIST_MUTATION_GRANTS[mutation]
+    if (!grants.some((permission) => hasPermission(user.role, permission))) {
+      throw new Error(`FORBIDDEN: Checklist ${mutation} requires ${grants.join(' or ')}`)
+    }
+    await requireModuleEnabled('TASKS')
+  }
+  return user
+}
+
+/**
+ * Resolves a live site of the caller's company (a CLIENT only their assigned site).
+ * Reads pass no `mutation`; every checklist write passes the grant it needs, which is
+ * checked on the live role and the TASKS module before the site is read.
+ */
+export async function requireChecklistSite(siteId: string, mutation?: ChecklistMutation) {
+  const user = await requireChecklistPrincipal(mutation)
   const site = await prisma.site.findFirst({
     where: {
       id: siteId,
@@ -17,8 +53,8 @@ export async function requireChecklistSite(siteId: string) {
   return { user, site }
 }
 
-export async function requireChecklistTask(siteId: string, taskId: string) {
-  const { user, site } = await requireChecklistSite(siteId)
+export async function requireChecklistTask(siteId: string, taskId: string, mutation?: ChecklistMutation) {
+  const { user, site } = await requireChecklistSite(siteId, mutation)
   const task = await prisma.projectChecklistTask.findFirst({
     where: { id: taskId, category: { stage: { checklist: { siteId: site.id, companyId: site.companyId } } } },
     select: { id: true, name: true },
@@ -27,8 +63,8 @@ export async function requireChecklistTask(siteId: string, taskId: string) {
   return { user, site, task }
 }
 
-export async function requireChecklistCategory(siteId: string, categoryId: string) {
-  const { user, site } = await requireChecklistSite(siteId)
+export async function requireChecklistCategory(siteId: string, categoryId: string, mutation?: ChecklistMutation) {
+  const { user, site } = await requireChecklistSite(siteId, mutation)
   const category = await prisma.projectChecklistCategory.findFirst({
     where: { id: categoryId, stage: { checklist: { siteId: site.id, companyId: site.companyId } } },
     select: { id: true },
@@ -37,8 +73,8 @@ export async function requireChecklistCategory(siteId: string, categoryId: strin
   return { user, site, category }
 }
 
-export async function requireProjectChecklist(siteId: string) {
-  const { user, site } = await requireChecklistSite(siteId)
+export async function requireProjectChecklist(siteId: string, mutation?: ChecklistMutation) {
+  const { user, site } = await requireChecklistSite(siteId, mutation)
   const checklist = await prisma.projectChecklist.findFirst({
     where: { siteId: site.id, companyId: site.companyId },
     select: { id: true },

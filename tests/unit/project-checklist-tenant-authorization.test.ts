@@ -37,7 +37,7 @@ beforeEach(() => {
 describe('project checklist tenant authorization', () => {
   it('binds checklist enablement to a live authorized site and tenant-owned template', async () => {
     await actions.enableChecklistForProject('site_1', 'template_1')
-    expect(mocks.requireChecklistSite).toHaveBeenCalledWith('site_1')
+    expect(mocks.requireChecklistSite).toHaveBeenCalledWith('site_1', 'manage')
     expect(mocks.prisma.checklistTemplate.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'template_1', OR: [{ companyId: 'company_1' }, { isGlobal: true }] },
     }))

@@ -3,9 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { Users, FileText, CheckCircle2, AlertCircle, HardHat, Plus } from 'lucide-react'
 import Link from 'next/link'
-import { revalidatePath } from 'next/cache'
 import { SubCardList } from '@/app/(dashboard)/subcontractors/SubCardList'
-import { logActivity } from '@/lib/audit'
+import { deactivateSiteSubcontractor, markSiteSubcontractorPaid, updateSiteSubcontractor } from '@/actions/site-subcontractors'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,75 +14,9 @@ export default async function SiteSubcontractorsPage({ params }: { params: Promi
   const { companyId } = session.user
   const { id: siteId } = await params
 
-  async function updateSubcontractor(formData: FormData) {
-    'use server'
-    const session = await auth()
-    if (!session?.user?.companyId) return
-    const id = formData.get('id') as string
-    await prisma.subcontractor.updateMany({
-      where: { id, companyId: session.user.companyId },
-      data: {
-        name: formData.get('name') as string,
-        phone: (formData.get('phone') as string) || null,
-        trade: (formData.get('trade') as string) || null,
-        gst: (formData.get('gst') as string) || null,
-        workOrderValue: parseFloat(formData.get('workOrderValue') as string) || 0,
-        raBilled: parseFloat(formData.get('raBilled') as string) || 0,
-        advance: parseFloat(formData.get('advance') as string) || 0,
-        retention: parseFloat(formData.get('retention') as string) || 0,
-        status: (formData.get('status') as string) || 'Active',
-      }
-    })
-    revalidatePath(`/sites/${siteId}/subcontractors`)
-  }
-
-  async function markSubPaid(formData: FormData) {
-    'use server'
-    const session = await auth()
-    if (!session?.user?.companyId) return
-    const id = formData.get('id') as string
-    const amount = parseFloat(formData.get('amount') as string)
-    if (isNaN(amount) || amount <= 0) return
-    const sub = await prisma.subcontractor.findFirst({ where: { id, companyId: session.user.companyId } })
-    if (!sub) return
-    await prisma.subcontractor.updateMany({
-      where: { id, companyId: session.user.companyId },
-      data: { advance: Number(sub.advance) + amount }
-    })
-    revalidatePath(`/sites/${siteId}/subcontractors`)
-  }
-
-  async function deactivateSubcontractor(formData: FormData) {
-    'use server'
-    const session = await auth()
-    if (!session?.user?.companyId) return
-    const id = formData.get('id') as string
-    const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
-
-    const sub = await prisma.subcontractor.findUnique({
-      where: { id, companyId: session.user.companyId },
-      select: { id: true, name: true, trade: true, status: true, isActive: true, raBilled: true, advance: true, retention: true },
-    })
-    if (!sub) throw new Error('Subcontractor not found.')
-    if (typed !== sub.name.trim()) {
-      throw new Error('Remove confirmation text did not match the subcontractor name.')
-    }
-
-    await prisma.subcontractor.update({ where: { id, companyId: session.user.companyId }, data: { isActive: false } })
-
-    await logActivity({
-      userId: session.user.id,
-      companyId: session.user.companyId,
-      action: 'UPDATE',
-      module: 'SUBCONTRACTOR',
-      recordId: sub.id,
-      description: `${session.user.name ?? session.user.email} deactivated subcontractor "${sub.name}"`,
-      before: { isActive: sub.isActive, trade: sub.trade, status: sub.status, raBilled: Number(sub.raBilled), advance: Number(sub.advance), retention: Number(sub.retention), name: sub.name },
-      after: { isActive: false, trade: sub.trade, status: sub.status, raBilled: Number(sub.raBilled), advance: Number(sub.advance), retention: Number(sub.retention), name: sub.name },
-    })
-
-    revalidatePath(`/sites/${siteId}/subcontractors`)
-  }
+  const updateSubcontractor = updateSiteSubcontractor.bind(null, siteId)
+  const markSubPaid = markSiteSubcontractorPaid.bind(null, siteId)
+  const deactivateSubcontractor = deactivateSiteSubcontractor.bind(null, siteId)
 
   function fmt(n: number) {
     if (n >= 100000) return '₹' + (n / 100000).toFixed(2) + 'L'
