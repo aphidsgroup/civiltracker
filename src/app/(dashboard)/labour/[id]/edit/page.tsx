@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { LabourTrade } from '@prisma/client'
 import { updateLabourAction } from '@/actions/labour'
-import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteIds, assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,21 +14,26 @@ export default async function EditLabourPage({ params }: { params: Promise<{ id:
   if (gate.status === 'denied') exitDeniedPage(gate, `/labour/${id}/edit`)
   const { companyId } = gate.access
 
-  // Exactly this worker of this company on a live site; anything else reads nothing more.
+  // Exactly this worker of this company on a live site the principal may act on (for a
+  // field role, one it is assigned to); anything else reads nothing more.
+  const siteWhere = await assignedSiteWhere(gate.access)
   const labour = await prisma.labour.findFirst({
-    where: { id, companyId, site: liveCompanySiteWhere(companyId) },
+    where: { id, companyId, site: siteWhere },
   })
 
   if (!labour) redirect('/labour')
 
+  // Only destinations `updateLabourAction` accepts for this principal.
   const sites = await prisma.site.findMany({
-    where: { ...liveCompanySiteWhere(companyId), status: 'ACTIVE' },
+    where: { ...siteWhere, status: 'ACTIVE' },
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   })
 
+  // A field role's summary counts only attendance logged on its assigned sites.
+  const visibleSiteIds = await assignedSiteIds(gate.access)
   const attendances = await prisma.labourAttendance.findMany({
-    where: { labourId: labour.id }
+    where: visibleSiteIds ? { labourId: labour.id, siteId: { in: [...visibleSiteIds] } } : { labourId: labour.id }
   })
 
   let totalAdvance = Number(labour.openingAdvance) || 0

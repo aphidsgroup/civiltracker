@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { LabourTrade } from '@prisma/client'
 import { createLabourAction } from '@/actions/labour'
-import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,8 +10,10 @@ export default async function NewLabourPage() {
   const gate = await resolveTenantPageAccess({ grants: [{ permission: 'labour.manage', module: 'LABOUR' }] })
   if (gate.status === 'denied') exitDeniedPage(gate, '/labour/new')
 
+  // ACTIVE sites `createLabourAction` accepts for this principal: for a field role, only
+  // the live sites it is assigned to.
   const sites = await prisma.site.findMany({
-    where: { ...liveCompanySiteWhere(gate.access.companyId), status: 'ACTIVE' },
+    where: { ...(await assignedSiteWhere(gate.access)), status: 'ACTIVE' },
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   })

@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { Users, UserCheck, UserMinus, HardHat, Plus, AlertCircle } from 'lucide-react'
 import { LabourCardList } from './LabourCardList'
 import { deactivateLabourAction, markLabourPaidAction, updateLabourRosterAction } from '@/actions/labour'
-import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export const metadata = { title: 'Labour | Civil Tracker' }
 export const dynamic = 'force-dynamic'
@@ -13,21 +13,25 @@ export default async function LabourPage() {
   if (gate.status === 'denied') exitDeniedPage(gate, '/labour')
   const { companyId } = gate.access
 
-  const [labour, sites] = await Promise.all([
-    prisma.labour.findMany({
-      where: { companyId, site: liveCompanySiteWhere(companyId) },
-      include: {
-        site: { select: { id: true, name: true } },
-        attendance: { select: { status: true, advance: true, overtimeHours: true } }
-      },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.site.findMany({
-      where: liveCompanySiteWhere(companyId),
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' }
-    })
-  ])
+  // The same assigned-site policy the labour actions enforce: a field role sees only the
+  // live sites it is assigned to, the workers on them, and only the attendance logged on
+  // them — a log from a site it is not assigned to never lends its wages or advances.
+  const siteWhere = await assignedSiteWhere(gate.access)
+  const sites = await prisma.site.findMany({
+    where: siteWhere,
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' }
+  })
+  const siteIds = sites.map(site => site.id)
+
+  const labour = await prisma.labour.findMany({
+    where: { companyId, site: siteWhere },
+    include: {
+      site: { select: { id: true, name: true } },
+      attendance: { where: { siteId: { in: siteIds } }, select: { status: true, advance: true, overtimeHours: true } }
+    },
+    orderBy: { name: 'asc' },
+  })
 
   // Compute per-worker financials
   const workers = labour.map(l => {
