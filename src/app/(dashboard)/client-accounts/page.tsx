@@ -7,7 +7,6 @@ import { revalidatePath } from 'next/cache'
 import { Plus, Building2, Eye } from 'lucide-react'
 import bcrypt from 'bcryptjs'
 import DangerConfirmSubmit from '@/components/ui/DangerConfirmSubmit'
-import { logActivity } from '@/lib/audit'
 
 export const metadata = { title: 'Client Accounts | Civil Tracker' }
 export const dynamic = 'force-dynamic'
@@ -77,13 +76,31 @@ export async function createClientUser(formData: FormData) {
     if (assigned.count !== assignedSiteIds.length) {
       throw new Error('One or more selected sites changed before client access could be assigned.')
     }
+    // Written with the transaction client so a failed audit rolls the login, membership
+    // and site assignment back instead of leaving unlogged client access behind.
+    await tx.auditLog.create({
+      data: {
+        companyId,
+        userId: actor.id,
+        action: 'CREATE',
+        module: 'USER',
+        recordId: user.id,
+        after: {
+          name,
+          email,
+          role: 'CLIENT',
+          siteIds: assignedSiteIds,
+          _description: `${actor.name ?? actor.email} created client login "${name}"`,
+        },
+      },
+    })
   })
 
   revalidatePath('/client-accounts')
   redirect('/client-accounts')
 }
 
-async function removeClientAccount(formData: FormData) {
+export async function removeClientAccount(formData: FormData) {
   'use server'
   const actor = await requireClientManager()
   const companyId = actor.companyId
@@ -101,20 +118,28 @@ async function removeClientAccount(formData: FormData) {
     throw new Error('Remove confirmation text did not match the client name/email.')
   }
 
-  await prisma.companyMember.update({
-    where: { id: memberId, companyId },
-    data: { isActive: false },
-  })
-
-  await logActivity({
-    userId: actor.id,
-    companyId,
-    action: 'UPDATE',
-    module: 'USER',
-    recordId: member.userId,
-    description: `${actor.name ?? actor.email} deactivated client login "${member.user.name ?? member.user.email}"`,
-    before: { isActive: member.isActive, role: member.role, name: member.user.name, email: member.user.email },
-    after: { isActive: false, role: member.role, name: member.user.name, email: member.user.email },
+  await prisma.$transaction(async tx => {
+    await tx.companyMember.update({
+      where: { id: member.id, companyId },
+      data: { isActive: false },
+    })
+    await tx.auditLog.create({
+      data: {
+        companyId,
+        userId: actor.id,
+        action: 'UPDATE',
+        module: 'USER',
+        recordId: member.userId,
+        before: { isActive: member.isActive, role: member.role, name: member.user.name, email: member.user.email },
+        after: {
+          isActive: false,
+          role: member.role,
+          name: member.user.name,
+          email: member.user.email,
+          _description: `${actor.name ?? actor.email} deactivated client login "${member.user.name ?? member.user.email}"`,
+        },
+      },
+    })
   })
 
   revalidatePath('/client-accounts')

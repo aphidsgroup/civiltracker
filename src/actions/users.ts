@@ -5,7 +5,6 @@ import { requirePermission } from '@/lib/auth/require-permission'
 import { requireUser } from '@/lib/auth/require-user'
 import { Role } from '@prisma/client'
 import bcrypt from 'bcryptjs'
-import { logActivity } from '@/lib/audit'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
@@ -325,53 +324,99 @@ export async function removeEmployeeFromCompany(formData: FormData): Promise<voi
   redirect('/settings/users')
 }
 
+const RESET_CONFIRMATION_MISMATCH = 'Password reset confirmation text did not match the user email.'
+
 /**
- * Reset a user's password.
- * - SUPER_ADMIN can reset any user's password.
- * - COMPANY_ADMIN can reset passwords for users within their own company.
+ * Reset another user's password.
+ * - SUPER_ADMIN may reset any active, non-SUPER_ADMIN user with an active membership of
+ *   a live company.
+ * - COMPANY_ADMIN may reset only such a user whose active membership is in its own
+ *   company and whose role ranks below its own.
+ *
+ * `confirmation` is the text the operator typed; it must equal the target's email as
+ * read inside the transaction that writes the hash. The hash and the audit record are
+ * written on the same transaction client, so a reset without its audit trail rolls
+ * back. The audit record never carries the password or its hash.
  */
-export async function resetUserPassword(userId: string, newPassword: string) {
+export async function resetUserPassword(userId: string, newPassword: string, confirmation: string) {
   const actor = await requireUser()
   const actorRole = actor.role
-  const actorCompanyId = actor.companyId
 
   if (actorRole !== Role.SUPER_ADMIN && actorRole !== Role.COMPANY_ADMIN) {
     throw new Error('Only Super Admins and Company Admins can reset passwords.')
   }
+  const tenantId = actorRole === Role.COMPANY_ADMIN ? actor.companyId : null
+  if (actorRole === Role.COMPANY_ADMIN && !tenantId) {
+    throw new Error('No company associated with this admin.')
+  }
 
-  if (newPassword.length < 6) {
+  if (typeof userId !== 'string' || !userId) {
+    throw new Error('User is required.')
+  }
+  if (userId === actor.id) {
+    throw new Error('You cannot reset your own password from this screen.')
+  }
+  if (typeof newPassword !== 'string' || newPassword.length < 6) {
     throw new Error('Password must be at least 6 characters long.')
   }
-
-  // If the actor is a COMPANY_ADMIN, make sure the target user is in their company
-  if (actorRole === 'COMPANY_ADMIN') {
-    if (!actorCompanyId) throw new Error('No company associated with this admin.')
-    const membership = await prisma.companyMember.findFirst({
-      where: { userId, companyId: actorCompanyId, isActive: true },
-    })
-    if (!membership) {
-      throw new Error('You can only reset passwords for users within your own company.')
-    }
-    // Company admin cannot reset another company admin's password
-    if (membership.role === 'COMPANY_ADMIN') {
-      throw new Error('Company Admins cannot reset another Company Admin password. Contact Super Admin.')
-    }
+  const typed = typeof confirmation === 'string' ? confirmation.trim() : ''
+  if (!typed) {
+    throw new Error(RESET_CONFIRMATION_MISMATCH)
   }
 
-  const hash = await bcrypt.hash(newPassword, 10)
-  await prisma.user.update({
-    where: { id: userId },
-    data: { passwordHash: hash },
-  })
+  const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS)
 
-  const target = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } })
-  await logActivity({
-    userId: actor.id,
-    companyId: actorCompanyId,
-    action: 'UPDATE',
-    module: 'PASSWORD_RESET',
-    recordId: userId,
-    description: `${actor.name ?? actor.email ?? 'Admin'} reset password for "${target?.name ?? target?.email ?? userId}"`,
+  await prisma.$transaction(async tx => {
+    const target = await tx.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        deletedAt: true,
+        companyMembers: {
+          where: { isActive: true, company: { deletedAt: null }, ...(tenantId ? { companyId: tenantId } : {}) },
+          select: { companyId: true, role: true },
+          orderBy: { joinedAt: 'asc' },
+          take: 1,
+        },
+      },
+    })
+    const membership = target?.companyMembers[0]
+    if (!target || !target.isActive || target.deletedAt || !membership) {
+      throw new Error(tenantId
+        ? 'You can only reset passwords for active users within your own company.'
+        : 'Passwords can only be reset for active members of a live company.')
+    }
+    if (target.role === Role.SUPER_ADMIN) {
+      throw new Error('Super Admin passwords cannot be reset from this screen.')
+    }
+    if (!canManageMemberWithRole(actorRole, membership.role) || !canManageMemberWithRole(actorRole, target.role)) {
+      throw new Error('Company Admins cannot reset another Company Admin password. Contact Super Admin.')
+    }
+    if (typed !== target.email.trim()) {
+      throw new Error(RESET_CONFIRMATION_MISMATCH)
+    }
+
+    await tx.user.update({
+      where: { id: target.id },
+      data: { passwordHash: hash },
+    })
+
+    await tx.auditLog.create({
+      data: {
+        userId: actor.id,
+        companyId: membership.companyId,
+        action: 'UPDATE',
+        module: 'PASSWORD_RESET',
+        recordId: target.id,
+        after: {
+          _description: `${actor.name ?? actor.email ?? 'Admin'} reset password for "${target.name ?? target.email}"`,
+        },
+      },
+    })
   })
 
   revalidatePath('/settings/users')

@@ -124,7 +124,7 @@ export default async function SAUserDetailPage({ params }: { params: Promise<{ i
         </div>
 
         {/* Set Password Panel — shows password once for copying */}
-        <SetPasswordPanel userId={user.id} userName={user.name ?? user.email} />
+        <SetPasswordPanel userId={user.id} userName={user.name ?? user.email} userEmail={user.email} />
       </div>
     </div>
   )

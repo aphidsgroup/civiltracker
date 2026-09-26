@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   const tx = {
-    user: { create: vi.fn(), update: vi.fn() },
+    user: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
     companyMember: { create: vi.fn(), update: vi.fn() },
     auditLog: { create: vi.fn() },
   }
@@ -494,23 +494,31 @@ describe('removeEmployeeFromCompany: access revocation guardrails', () => {
 })
 
 describe('resetUserPassword: live membership guard', () => {
+  const liveTarget = {
+    id: 'user_target', name: 'Target User', email: 'target@acme.test', role: 'SITE_ENGINEER', isActive: true, deletedAt: null,
+  }
+
   it('rejects inactive target membership before changing the password', async () => {
-    mocks.prisma.companyMember.findFirst.mockResolvedValue(null)
-    await expect(resetUserPassword('user_target', 'A-long-enough-password')).rejects.toThrow(/within your own company/i)
-    expect(mocks.prisma.companyMember.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ userId: 'user_target', companyId: COMPANY_ID, isActive: true }),
+    mocks.tx.user.findUnique.mockResolvedValue({ ...liveTarget, companyMembers: [] })
+    await expect(resetUserPassword('user_target', 'A-long-enough-password', 'target@acme.test')).rejects.toThrow(/within your own company/i)
+    expect(mocks.tx.user.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'user_target' },
+      select: expect.objectContaining({
+        companyMembers: expect.objectContaining({ where: expect.objectContaining({ companyId: COMPANY_ID, isActive: true }) }),
+      }),
     }))
+    expect(mocks.tx.user.update).not.toHaveBeenCalled()
     expect(mocks.prisma.user.update).not.toHaveBeenCalled()
   })
 
   it('scopes a permitted reset to the actor company audit context', async () => {
-    mocks.prisma.companyMember.findFirst.mockResolvedValue({ role: 'SITE_ENGINEER', isActive: true })
-    mocks.prisma.user.findUnique.mockResolvedValue({ name: 'Target User', email: 'target@acme.test' })
-    await resetUserPassword('user_target', 'A-long-enough-password')
-    expect(mocks.prisma.companyMember.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ userId: 'user_target', companyId: COMPANY_ID, isActive: true }),
+    mocks.tx.user.findUnique.mockResolvedValue({ ...liveTarget, companyMembers: [{ companyId: COMPANY_ID, role: 'SITE_ENGINEER' }] })
+    await resetUserPassword('user_target', 'A-long-enough-password', 'target@acme.test')
+    expect(mocks.tx.user.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'user_target' } }))
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ companyId: COMPANY_ID, recordId: 'user_target', module: 'PASSWORD_RESET' }),
     }))
-    expect(mocks.prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'user_target' } }))
+    expect(mocks.prisma.user.update).not.toHaveBeenCalled()
   })
 })
 

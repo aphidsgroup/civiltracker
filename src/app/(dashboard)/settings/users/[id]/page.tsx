@@ -18,7 +18,9 @@ async function handlePasswordReset(formData: FormData) {
   if (newPassword !== confirmPassword) {
     throw new Error('Passwords do not match.')
   }
-  await resetUserPassword(userId, newPassword)
+  // The action compares the typed text with the user's current email itself.
+  const typed = formData.get('resetConfirmText')
+  await resetUserPassword(userId, newPassword, typeof typed === 'string' ? typed : '')
   revalidatePath('/settings/users')
   redirect('/settings/users')
 }
@@ -174,6 +176,19 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
                 required
                 minLength={6}
                 placeholder="Re-type to confirm"
+                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Type <span className="font-mono normal-case">{member.user.email}</span> to confirm
+              </label>
+              <input
+                type="text"
+                name="resetConfirmText"
+                required
+                autoComplete="off"
+                placeholder={member.user.email}
                 className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all font-mono"
               />
             </div>

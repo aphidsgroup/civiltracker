@@ -14,22 +14,29 @@ import { Prisma } from '@prisma/client'
  * SUPER_ADMIN carries no company and is refused before any read, never querying with an
  * undefined company. Salary rows, receivables and profitability are each read and
  * returned only under their own permission, and come back null otherwise.
+ *
+ * Every site-derived figure — budget, spend, expenses, salary, pending approvals — is
+ * read through the principal's `assignedSiteWhere`, so a field role totals only its
+ * assigned live sites. The client ledger has no site to scope by, so a field role never
+ * reads it: its receivable and profit figures come back null.
  */
 export async function getFounderDashboardStats() {
   const gate = await resolveTenantPageAccess({ grants: [{ permission: 'reports.finance', module: 'REPORTS' }] })
   if (gate.status === 'denied') throw new Error('FORBIDDEN: Financial reports are not available')
-  const { companyId, can, moduleEnabled } = gate.access
+  const access = gate.access
+  const { companyId, can, moduleEnabled } = access
+  const companyWideLedger = !readsAssignedSitesOnly(access.user.role)
 
   const show = {
     salary: can('salary.view') && moduleEnabled('LABOUR'),
     vendorPayable: can('reports.vendorPayable'),
-    clientReceivable: can('reports.clientReceivable'),
-    profitability: can('reports.profitability'),
+    clientReceivable: can('reports.clientReceivable') && companyWideLedger,
+    profitability: can('reports.profitability') && companyWideLedger,
   }
 
   // Explicit branches keep Prisma's include typing: salary rows are only
   // queried under salary.view.
-  const siteWhere = { companyId, deletedAt: null }
+  const siteWhere = await assignedSiteWhere(access)
   const expensesInclude = { where: { deletedAt: null } }
   const salarySites = show.salary
     ? await prisma.site.findMany({
