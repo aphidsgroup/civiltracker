@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Check, X, Paperclip, CheckCircle2, Loader2 } from 'lucide-react'
+import { BILL_APPROVE_CONFIRM_TEXT, isBillApproveConfirmed, submitBillAction, type BillAction } from './bill-approval-request'
 
 type Bill = {
   id: string
@@ -27,19 +28,100 @@ const CATEGORY_LABELS: Record<string, string> = {
   DIESEL: 'Diesel', OFFICE_ADMIN: 'Office/Admin', CLIENT_VARIATION: 'Variation', MISCELLANEOUS: 'Misc',
 }
 
+/**
+ * Inline typed confirmation for approving one bill. The confirm button stays disabled until
+ * the input holds exactly `APPROVE`, and that typed value is what gets submitted.
+ */
+export function BillApproveConfirmation({
+  billId,
+  typed,
+  loading,
+  onTypedChange,
+  onConfirm,
+  onCancel,
+}: {
+  billId: string
+  typed: string
+  loading: boolean
+  onTypedChange: (value: string) => void
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const inputId = `approve-confirm-${billId}`
+  const armed = isBillApproveConfirmed(typed)
+  return (
+    <form
+      className="flex flex-col gap-2 items-stretch sm:items-end"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (armed && !loading) onConfirm()
+      }}
+    >
+      <label htmlFor={inputId} className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+        Type <strong>{BILL_APPROVE_CONFIRM_TEXT}</strong> to approve this bill
+      </label>
+      <input
+        id={inputId}
+        type="text"
+        value={typed}
+        onChange={(e) => onTypedChange(e.target.value)}
+        autoComplete="off"
+        autoFocus
+        disabled={loading}
+        placeholder={BILL_APPROVE_CONFIRM_TEXT}
+        className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-xs text-slate-900 dark:text-slate-100 w-full sm:w-40"
+      />
+      <div className="flex gap-2 justify-start sm:justify-end">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold text-xs transition-colors disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={loading || !armed}
+          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors inline-flex items-center gap-1 disabled:opacity-50 shadow-sm"
+        >
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+          <span>Confirm Approve</span>
+        </button>
+      </div>
+    </form>
+  )
+}
+
 export default function BillApprovalList({ bills }: { bills: Bill[] }) {
   const [loading, setLoading] = useState<string | null>(null)
   const [done, setDone] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [typed, setTyped] = useState('')
   const router = useRouter()
 
-  async function handleAction(id: string, action: 'approve' | 'reject') {
+  function openConfirm(id: string) {
+    setConfirming(id)
+    setTyped('')
+    setError(null)
+  }
+
+  function closeConfirm() {
+    setConfirming(null)
+    setTyped('')
+  }
+
+  async function handleAction(id: string, action: BillAction, confirmationText?: string) {
     setLoading(id)
     setError(null)
     try {
-      const res = await fetch(`/api/expenses/${id}/${action}`, { method: 'POST' })
-      if (res.ok) {
+      const res = await submitBillAction(id, action, confirmationText)
+      if (res === null) {
+        setError(`Type ${BILL_APPROVE_CONFIRM_TEXT} to confirm approval.`)
+      } else if (res.ok) {
         setDone(prev => [...prev, id])
+        if (confirming === id) closeConfirm()
         router.refresh()
       } else {
         const data = await res.json().catch(() => ({}))
@@ -104,7 +186,16 @@ export default function BillApprovalList({ bills }: { bills: Bill[] }) {
             </div>
             <div className="text-left sm:text-right flex-shrink-0 w-full sm:w-auto">
               <div className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mb-3">{formatCurrency(Number(bill.amount))}</div>
-              {bill.approvalStatus === 'PENDING' ? (
+              {bill.approvalStatus === 'PENDING' && confirming === bill.id ? (
+                <BillApproveConfirmation
+                  billId={bill.id}
+                  typed={typed}
+                  loading={loading === bill.id}
+                  onTypedChange={setTyped}
+                  onConfirm={() => handleAction(bill.id, 'approve', typed)}
+                  onCancel={closeConfirm}
+                />
+              ) : bill.approvalStatus === 'PENDING' ? (
                 <div className="flex gap-2 justify-start sm:justify-end">
                   <button
                     onClick={() => handleAction(bill.id, 'reject')}
@@ -115,7 +206,7 @@ export default function BillApprovalList({ bills }: { bills: Bill[] }) {
                     <span>Reject</span>
                   </button>
                   <button
-                    onClick={() => handleAction(bill.id, 'approve')}
+                    onClick={() => openConfirm(bill.id)}
                     disabled={loading === bill.id}
                     className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors inline-flex items-center gap-1 disabled:opacity-50 shadow-sm"
                   >

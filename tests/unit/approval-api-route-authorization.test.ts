@@ -344,7 +344,7 @@ describe('POST /api/approvals/[id]/approve uses the hardened transition', () => 
     mocks.requireUser.mockRejectedValue(new Error('UNAUTHORIZED: Account is inactive'))
 
     const response = await approveApproval(
-      postRequest('http://localhost/api/approvals/approval_1/approve', {}),
+      postRequest('http://localhost/api/approvals/approval_1/approve', { confirmationText: 'APPROVE' }),
       routeParams('approval_1')
     )
 
@@ -355,7 +355,7 @@ describe('POST /api/approvals/[id]/approve uses the hardened transition', () => 
 
   it('transitions conditionally inside the approval tenant instead of a bare global update', async () => {
     const response = await approveApproval(
-      postRequest('http://localhost/api/approvals/approval_1/approve', { note: 'Approved by finance' }),
+      postRequest('http://localhost/api/approvals/approval_1/approve', { note: 'Approved by finance', confirmationText: 'APPROVE' }),
       routeParams('approval_1')
     )
 
@@ -386,7 +386,7 @@ describe('POST /api/approvals/[id]/approve uses the hardened transition', () => 
     mocks.prisma.approval.findFirst.mockResolvedValue(approvalRow({ siteId: null }))
 
     const response = await approveApproval(
-      postRequest('http://localhost/api/approvals/legacy_1/approve', {}),
+      postRequest('http://localhost/api/approvals/legacy_1/approve', { confirmationText: 'APPROVE' }),
       routeParams('legacy_1')
     )
 
@@ -399,7 +399,7 @@ describe('POST /api/approvals/[id]/approve uses the hardened transition', () => 
     mocks.prisma.approval.findFirst.mockResolvedValue(null)
 
     const response = await approveApproval(
-      postRequest('http://localhost/api/approvals/other_company_1/approve', {}),
+      postRequest('http://localhost/api/approvals/other_company_1/approve', { confirmationText: 'APPROVE' }),
       routeParams('other_company_1')
     )
 
@@ -412,7 +412,7 @@ describe('POST /api/approvals/[id]/approve uses the hardened transition', () => 
     mocks.hasPermission.mockReturnValue(false)
 
     const response = await approveApproval(
-      postRequest('http://localhost/api/approvals/approval_1/approve', {}),
+      postRequest('http://localhost/api/approvals/approval_1/approve', { confirmationText: 'APPROVE' }),
       routeParams('approval_1')
     )
 
@@ -424,7 +424,7 @@ describe('POST /api/approvals/[id]/approve uses the hardened transition', () => 
     mocks.prisma.approval.findFirst.mockResolvedValue(approvalRow({ currentStatus: 'REJECTED' }))
 
     const response = await approveApproval(
-      postRequest('http://localhost/api/approvals/approval_1/approve', {}),
+      postRequest('http://localhost/api/approvals/approval_1/approve', { confirmationText: 'APPROVE' }),
       routeParams('approval_1')
     )
 
@@ -436,7 +436,7 @@ describe('POST /api/approvals/[id]/approve uses the hardened transition', () => 
     mocks.prisma.expense.updateMany.mockResolvedValue({ count: 0 })
 
     const response = await approveApproval(
-      postRequest('http://localhost/api/approvals/approval_1/approve', {}),
+      postRequest('http://localhost/api/approvals/approval_1/approve', { confirmationText: 'APPROVE' }),
       routeParams('approval_1')
     )
 

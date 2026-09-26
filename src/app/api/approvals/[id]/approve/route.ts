@@ -1,17 +1,15 @@
 import { NextResponse } from 'next/server'
 import { approveApprovalAction } from '@/actions/approvals'
 import { approvalApiError } from '@/lib/approvals/api-errors'
+import { parseApproveRequestBody } from '@/lib/approvals/api-approve-body'
 import { requireApprovalApiUser } from '@/lib/approvals/api-guard'
 
 /**
- * The action demands an explicit confirmation token so a single UI click cannot approve
- * by accident. A REST caller has no such surface — the POST to this endpoint is itself
- * the explicit intent — so the token is supplied here. It is a misclick guard, not an
- * authorization control: the live principal, the tenant scope, the site binding, the
- * per-entity approve permission and the atomic transition all stay in the action.
+ * The caller must send `{ "confirmationText": "APPROVE" }`. The handler does not supply
+ * the token on the caller's behalf; the live principal, the tenant scope, the site
+ * binding, the per-entity approve permission, the confirmation match and the atomic
+ * transition all stay in the action.
  */
-const API_APPROVE_CONFIRMATION = 'APPROVE'
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -21,13 +19,11 @@ export async function POST(
   try {
     await requireApprovalApiUser('approvals.view')
 
-    let note: string | undefined
-    try {
-      const body = await request.json()
-      if (typeof body?.note === 'string' && body.note.trim()) note = body.note
-    } catch {}
+    const parsed = await parseApproveRequestBody(request)
+    if (!parsed.ok) return parsed.response
+    const { note, confirmationText } = parsed.body
 
-    const updated = await approveApprovalAction(id, note, API_APPROVE_CONFIRMATION)
+    const updated = await approveApprovalAction(id, note, confirmationText)
 
     return NextResponse.json({ success: true, data: updated })
   } catch (error) {

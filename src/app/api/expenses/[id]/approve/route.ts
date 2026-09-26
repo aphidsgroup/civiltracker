@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { approveApprovalAction } from '@/actions/approvals'
 import { approvalApiError } from '@/lib/approvals/api-errors'
+import { parseApproveRequestBody } from '@/lib/approvals/api-approve-body'
 import { requireApprovalApiUser } from '@/lib/approvals/api-guard'
 import { resolveExpenseApprovalId } from '@/lib/approvals/expense-approval-link'
 
@@ -9,12 +10,9 @@ import { resolveExpenseApprovalId } from '@/lib/approvals/expense-approval-link'
  * company- and site-exact lookup for that expense and then delegates the decision to the
  * hardened action — it no longer runs an approval workflow of its own.
  *
- * The action demands an explicit confirmation token so a single UI click cannot approve by
- * accident. A REST caller has no such surface — the POST is itself the explicit intent —
- * so the token is supplied here. It is a misclick guard, not an authorization control.
+ * The caller must send `{ "confirmationText": "APPROVE" }`. The handler does not supply
+ * the token on the caller's behalf; the action decides whether it matches.
  */
-const API_APPROVE_CONFIRMATION = 'APPROVE'
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -24,15 +22,12 @@ export async function POST(
   try {
     const user = await requireApprovalApiUser('expenses.approve', 'EXPENSES')
 
-    // The bills UI posts without a body, so an unparseable request is not a failure.
-    let note: string | undefined
-    try {
-      const body = await request.json()
-      if (typeof body?.note === 'string' && body.note.trim()) note = body.note
-    } catch {}
+    const parsed = await parseApproveRequestBody(request)
+    if (!parsed.ok) return parsed.response
+    const { note, confirmationText } = parsed.body
 
     const approvalId = await resolveExpenseApprovalId(id, user)
-    await approveApprovalAction(approvalId, note, API_APPROVE_CONFIRMATION)
+    await approveApprovalAction(approvalId, note, confirmationText)
 
     return NextResponse.json({ success: true })
   } catch (error) {

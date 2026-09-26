@@ -103,9 +103,11 @@ const SITE_SCOPE_PREDICATE = {
   ],
 }
 
+/** The explicit confirmation the approve route requires its caller to supply. */
+const CONFIRMED = { confirmationText: 'APPROVE' }
+
 function postRequest(url: string, body?: unknown) {
-  // The bills UI posts with no body at all, so the handlers must tolerate an unparseable
-  // request rather than depending on a payload.
+  // The reject handler tolerates a request with no body at all.
   if (body === undefined) return new Request(url, { method: 'POST' })
   return new Request(url, {
     method: 'POST',
@@ -176,7 +178,7 @@ beforeEach(() => {
 describe('POST /api/expenses/[id]/approve derives the approval from an exact tenant scope', () => {
   it('resolves the expense in the caller company and the approval on that exact company and site', async () => {
     const response = await approveExpense(
-      postRequest('http://localhost/api/expenses/expense_1/approve'),
+      postRequest('http://localhost/api/expenses/expense_1/approve', CONFIRMED),
       routeParams('expense_1')
     )
 
@@ -203,7 +205,7 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
 
   it('transitions atomically through the conditional gate instead of updating the expense directly', async () => {
     const response = await approveExpense(
-      postRequest('http://localhost/api/expenses/expense_1/approve'),
+      postRequest('http://localhost/api/expenses/expense_1/approve', CONFIRMED),
       routeParams('expense_1')
     )
 
@@ -234,7 +236,7 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
 
   it('writes exactly one timeline entry and one audit record', async () => {
     await approveExpense(
-      postRequest('http://localhost/api/expenses/expense_1/approve'),
+      postRequest('http://localhost/api/expenses/expense_1/approve', CONFIRMED),
       routeParams('expense_1')
     )
 
@@ -260,7 +262,7 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
     mocks.prisma.expense.findFirst.mockResolvedValue(null)
 
     const response = await approveExpense(
-      postRequest('http://localhost/api/expenses/expense_of_another_company/approve'),
+      postRequest('http://localhost/api/expenses/expense_of_another_company/approve', CONFIRMED),
       routeParams('expense_of_another_company')
     )
 
@@ -276,7 +278,7 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
     mocks.prisma.approval.findMany.mockResolvedValue([])
 
     const response = await approveExpense(
-      postRequest('http://localhost/api/expenses/expense_1/approve'),
+      postRequest('http://localhost/api/expenses/expense_1/approve', CONFIRMED),
       routeParams('expense_1')
     )
 
@@ -292,7 +294,7 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
     mocks.prisma.expense.findFirst.mockResolvedValue(expenseRow({ siteId: null }))
 
     const response = await approveExpense(
-      postRequest('http://localhost/api/expenses/expense_1/approve'),
+      postRequest('http://localhost/api/expenses/expense_1/approve', CONFIRMED),
       routeParams('expense_1')
     )
 
@@ -308,7 +310,7 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
     ])
 
     const response = await approveExpense(
-      postRequest('http://localhost/api/expenses/expense_1/approve'),
+      postRequest('http://localhost/api/expenses/expense_1/approve', CONFIRMED),
       routeParams('expense_1')
     )
 
@@ -321,7 +323,7 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
     mocks.prisma.approval.findMany.mockResolvedValue([{ id: 'approval_1', currentStatus: 'APPROVED' }])
 
     const response = await approveExpense(
-      postRequest('http://localhost/api/expenses/expense_1/approve'),
+      postRequest('http://localhost/api/expenses/expense_1/approve', CONFIRMED),
       routeParams('expense_1')
     )
 
@@ -334,7 +336,7 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
     mocks.requireUser.mockRejectedValue(new Error('UNAUTHORIZED: Active company membership required'))
 
     const response = await approveExpense(
-      postRequest('http://localhost/api/expenses/expense_1/approve'),
+      postRequest('http://localhost/api/expenses/expense_1/approve', CONFIRMED),
       routeParams('expense_1')
     )
 
@@ -349,7 +351,7 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
     mocks.hasPermission.mockReturnValue(false)
 
     const response = await approveExpense(
-      postRequest('http://localhost/api/expenses/expense_1/approve'),
+      postRequest('http://localhost/api/expenses/expense_1/approve', CONFIRMED),
       routeParams('expense_1')
     )
 
@@ -362,7 +364,7 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
     mocks.requireModuleEnabled.mockRejectedValue(new Error('Module EXPENSES is not enabled for this company'))
 
     const response = await approveExpense(
-      postRequest('http://localhost/api/expenses/expense_1/approve'),
+      postRequest('http://localhost/api/expenses/expense_1/approve', CONFIRMED),
       routeParams('expense_1')
     )
 
@@ -377,7 +379,7 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
     )
 
     const response = await approveExpense(
-      postRequest('http://localhost/api/expenses/expense_1/approve'),
+      postRequest('http://localhost/api/expenses/expense_1/approve', CONFIRMED),
       routeParams('expense_1')
     )
 
@@ -403,7 +405,7 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
     mocks.prisma.approval.findMany.mockResolvedValue([{ id: 'approval_9', currentStatus: 'PENDING' }])
 
     const response = await approveExpense(
-      postRequest('http://localhost/api/expenses/expense_9/approve'),
+      postRequest('http://localhost/api/expenses/expense_9/approve', CONFIRMED),
       routeParams('expense_9')
     )
 

@@ -394,7 +394,7 @@ describe('cross-bound approvals can never be commented on or transitioned', () =
   it('refuses the REST approve and reject of a cross-bound row', async () => {
     mocks.requireUser.mockResolvedValue(SUPER_ADMIN)
 
-    const approved = await approveApprovalRoute(postRequest('http://test/api/approvals/x_expense/approve', {}), routeParams('x_expense'))
+    const approved = await approveApprovalRoute(postRequest('http://test/api/approvals/x_expense/approve', { confirmationText: 'APPROVE' }), routeParams('x_expense'))
     const rejected = await rejectApprovalRoute(
       postRequest('http://test/api/approvals/x_expense/reject', { reason: 'not valid' }),
       routeParams('x_expense')

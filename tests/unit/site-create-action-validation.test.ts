@@ -20,7 +20,9 @@ const mocks = vi.hoisted(() => ({
   prisma: {
     company: { findUnique: vi.fn() },
     companyMember: { findFirst: vi.fn(), findMany: vi.fn() },
-    site: { findFirst: vi.fn(), create: vi.fn() },
+    site: { count: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
+    auditLog: { create: vi.fn() },
+    $transaction: vi.fn(),
   },
 }))
 
@@ -64,11 +66,16 @@ beforeEach(() => {
   vi.clearAllMocks()
   modules = ['SITES']
   mocks.requireUser.mockResolvedValue(principal('COMPANY_ADMIN'))
-  mocks.prisma.company.findUnique.mockImplementation(async (args: { include?: unknown }) =>
-    args.include
-      ? { id: 'company_1', status: 'ACTIVE', siteLimit: 10, _count: { sites: 1 } }
+  // The transaction client is the same mock, so the in-transaction reads and writes land
+  // on the delegates asserted below.
+  mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
+  mocks.prisma.company.findUnique.mockImplementation(async (args: { select?: { siteLimit?: boolean } }) =>
+    args.select?.siteLimit
+      ? { status: 'ACTIVE', siteLimit: 10 }
       : { modulesJson: modules, status: 'ACTIVE' }
   )
+  mocks.prisma.site.count.mockResolvedValue(1)
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
   mocks.prisma.companyMember.findMany.mockImplementation(
     async ({ where }: { where: { companyId: string; isActive: boolean; userId: { in: string[] } } }) =>
       where.companyId === 'company_1' && where.isActive
@@ -81,6 +88,7 @@ beforeEach(() => {
 
 function expectNoWrites() {
   expect(mocks.prisma.site.create).not.toHaveBeenCalled()
+  expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   expect(mocks.logActivity).not.toHaveBeenCalled()
 }
 
@@ -191,7 +199,25 @@ describe('createSite input validation', () => {
       status: 'PLANNING',
       createdById: 'user_company_admin',
     })
-    expect(mocks.logActivity).toHaveBeenCalledTimes(1)
+    // The audit record is required and written in the transaction, not best-effort.
+    expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
+    expect(mocks.logActivity).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prisma.auditLog.create.mock.calls[0][0].data).toMatchObject({
+      companyId: 'company_1', action: 'CREATE', module: 'SITE', recordId: 'site_new',
+    })
+  })
+
+  it('refuses a duplicate site name without writing', async () => {
+    mocks.prisma.site.findFirst.mockResolvedValue({ id: 'site_existing' })
+    await expect(createSite(VALID)).rejects.toThrow(/already exists/)
+    expectNoWrites()
+  })
+
+  it('refuses once the plan site limit is reached without writing', async () => {
+    mocks.prisma.site.count.mockResolvedValue(10)
+    await expect(createSite(VALID)).rejects.toThrow(/Site limit reached/)
+    expectNoWrites()
   })
 
   it('accepts the minimal payload and defaults the optional fields as before', async () => {

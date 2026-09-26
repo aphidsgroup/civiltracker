@@ -590,7 +590,7 @@ describe('approvals bound to a soft-deleted site fail closed everywhere', () => 
   )
 
   it.each(['a_dead_site', 'a_dead_site_po'])('the approve and reject REST delegates refuse %s without writes', async (id) => {
-    const approve = await approveApproval(postRequest(`http://localhost/api/approvals/${id}/approve`, {}), routeParams(id))
+    const approve = await approveApproval(postRequest(`http://localhost/api/approvals/${id}/approve`, { confirmationText: 'APPROVE' }), routeParams(id))
     const reject = await rejectApproval(
       postRequest(`http://localhost/api/approvals/${id}/reject`, { reason: 'Out of scope' }),
       routeParams(id)

@@ -25,8 +25,10 @@ import type { Row } from './support/prisma-where'
 const mocks = vi.hoisted(() => {
   const tx = {
     company: { findUnique: vi.fn() },
-    site: { count: vi.fn(), create: vi.fn() },
+    companyMember: { findMany: vi.fn() },
+    site: { count: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
     projectChecklist: { create: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
   return {
     auth: vi.fn(),
@@ -126,8 +128,10 @@ beforeEach(() => {
   mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.tx) => unknown) => fn(mocks.tx))
   mocks.tx.company.findUnique.mockResolvedValue({ siteLimit: 5 })
   mocks.tx.site.count.mockResolvedValue(1)
+  mocks.tx.site.findFirst.mockResolvedValue(null)
   mocks.tx.site.create.mockResolvedValue({ id: 'site_new', companyId: 'company_1' })
   mocks.tx.projectChecklist.create.mockResolvedValue({ id: 'checklist_new' })
+  mocks.tx.auditLog.create.mockResolvedValue({ id: 'audit_1' })
 })
 
 describe('/sites/new page load', () => {
