@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(),
   prisma: {
     company: { findUnique: vi.fn() },
+    companyMember: { findFirst: vi.fn() },
     site: { findFirst: vi.fn() },
     mediaAsset: { create: vi.fn() },
   },
@@ -40,9 +41,11 @@ vi.mock('@/lib/cloudinary', () => ({
 const { POST } = await import('@/app/api/upload/route')
 
 const SITES: Row[] = [
-  { id: 'site_1', companyId: 'company_1', deletedAt: null },
-  { id: 'site_dead', companyId: 'company_1', deletedAt: new Date('2026-01-01') },
-  { id: 'site_other', companyId: 'company_2', deletedAt: null },
+  { id: 'site_1', companyId: 'company_1', deletedAt: null, assignedEngineerId: 'user_site_engineer', engineerId: null },
+  { id: 'site_listed', companyId: 'company_1', deletedAt: null, assignedEngineerId: null, engineerId: null },
+  { id: 'site_theirs', companyId: 'company_1', deletedAt: null, assignedEngineerId: 'user_someone_else', engineerId: null },
+  { id: 'site_dead', companyId: 'company_1', deletedAt: new Date('2026-01-01'), assignedEngineerId: 'user_site_engineer', engineerId: null },
+  { id: 'site_other', companyId: 'company_2', deletedAt: null, assignedEngineerId: 'user_site_engineer', engineerId: null },
 ]
 
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01])
@@ -76,6 +79,8 @@ beforeEach(() => {
   mocks.auth.mockResolvedValue({ user: principal('COMPANY_ADMIN') })
   mocks.prisma.company.findUnique.mockImplementation(async () => ({ modulesJson: modules, status: 'ACTIVE' }))
   mocks.prisma.site.findFirst.mockImplementation(inMemoryDelegate(SITES).findFirst)
+  // Field roles are assigned to site_listed by active membership (the engineer to site_1 directly).
+  mocks.prisma.companyMember.findFirst.mockResolvedValue({ siteIds: ['site_listed'] })
   mocks.prisma.mediaAsset.create.mockImplementation(async (args: { data: Row }) => ({ id: 'asset_1', ...args.data }))
   mocks.cloudinary.uploader.upload.mockImplementation((_file: string, options: Row, callback: (error: unknown, result?: unknown) => void) => {
     callback(null, { public_id: `${options.folder}/abc123`, secure_url: 'https://res.cloudinary.com/demo/image/upload/abc123.jpg', format: 'jpg', bytes: 12, width: 10, height: 10 })
@@ -151,6 +156,60 @@ describe('POST /api/upload authorization', () => {
     expect(response.status).toBe(403)
     expect(mocks.cloudinary.uploader.upload).not.toHaveBeenCalled()
     expect(mocks.prisma.mediaAsset.create).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /api/upload assigned-site scope', () => {
+  function noUploadWork() {
+    expect(mocks.cloudinary.uploader.upload).not.toHaveBeenCalled()
+    expect(mocks.cloudinary.uploader.destroy).not.toHaveBeenCalled()
+    expect(mocks.prisma.mediaAsset.create).not.toHaveBeenCalled()
+  }
+
+  it.each(['SITE_ENGINEER', 'SUPERVISOR'])('refuses a %s uploading to an unassigned company site', async (role) => {
+    mocks.requireUser.mockResolvedValue(principal(role))
+    const response = await upload({ siteId: 'site_theirs' })
+    expect(response.status).toBe(403)
+    expect((await response.json()).error).toMatch(/Site access denied/)
+    noUploadWork()
+  })
+
+  it.each(['SITE_ENGINEER', 'SUPERVISOR'])('refuses a %s on a deleted or foreign site it is named on', async (role) => {
+    mocks.requireUser.mockResolvedValue(principal(role))
+    mocks.prisma.companyMember.findFirst.mockResolvedValue({ siteIds: ['site_dead', 'site_other'] })
+    for (const siteId of ['site_dead', 'site_other']) {
+      expect((await upload({ siteId })).status).toBe(403)
+    }
+    noUploadWork()
+  })
+
+  it.each(['SITE_ENGINEER', 'SUPERVISOR'])('lets a %s upload to a site listed on its active membership', async (role) => {
+    mocks.requireUser.mockResolvedValue(principal(role))
+    const response = await upload({ siteId: 'site_listed' })
+    expect(response.status).toBe(200)
+    expect(mocks.prisma.companyMember.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: `user_${role.toLowerCase()}`, companyId: 'company_1', isActive: true },
+    }))
+    expect(mocks.prisma.mediaAsset.create.mock.calls[0][0].data).toMatchObject({ companyId: 'company_1', siteId: 'site_listed' })
+  })
+
+  it('refuses a membership-listed site once the membership is inactive', async () => {
+    mocks.requireUser.mockResolvedValue(principal('SUPERVISOR'))
+    mocks.prisma.companyMember.findFirst.mockResolvedValue(null)
+    expect((await upload({ siteId: 'site_listed' })).status).toBe(403)
+    noUploadWork()
+  })
+
+  it.each(['COMPANY_ADMIN', 'PROJECT_MANAGER'])('lets a %s upload to any live site of its company', async (role) => {
+    mocks.requireUser.mockResolvedValue(principal(role))
+    expect((await upload({ siteId: 'site_theirs' })).status).toBe(200)
+    expect(mocks.prisma.companyMember.findFirst).not.toHaveBeenCalled()
+  })
+
+  it.each(['site_other', 'site_dead'])('refuses a COMPANY_ADMIN on site %s', async (siteId) => {
+    mocks.requireUser.mockResolvedValue(principal('COMPANY_ADMIN'))
+    expect((await upload({ siteId })).status).toBe(403)
+    noUploadWork()
   })
 })
 

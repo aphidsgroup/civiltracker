@@ -1,5 +1,6 @@
 import { requireUser } from '@/lib/auth/require-user'
 import { requireModuleEnabled } from '@/lib/auth/require-module'
+import { assignedSiteScope } from '@/lib/auth/site-mutation'
 import cloudinary from '@/lib/cloudinary'
 import { prisma } from '@/lib/prisma'
 import { hasPermission } from '@/lib/permissions'
@@ -36,7 +37,8 @@ function safeOriginalName(name: string): string | null {
  * The live principal must hold the upload module's permission and its company must have
  * the module enabled, both before any tenant query. The file is capped at 10 MB and typed
  * from its leading bytes against the module's allowlist; the client's type and name are
- * never trusted. A supplied site must be a live site of the live company. Cloudinary only
+ * never trusted. A supplied site must be a live site of the live company within the
+ * principal's `assignedSiteScope` (field roles: their assigned sites). Cloudinary only
  * stores images/PDFs of the allowed formats under a random public id, and the MediaAsset
  * row is mandatory: if it cannot be written the stored file is removed again.
  */
@@ -99,8 +101,9 @@ export async function POST(request: Request) {
   const rawSiteId = fieldText(formData.get('siteId'))
   const siteId = rawSiteId && rawSiteId !== 'undefined' && rawSiteId !== 'null' ? rawSiteId : null
   if (siteId) {
+    const scope = await assignedSiteScope(user, companyId)
     const site = await prisma.site.findFirst({
-      where: { id: siteId, companyId, deletedAt: null },
+      where: { id: siteId, ...scope },
       select: { id: true },
     })
     if (!site) {

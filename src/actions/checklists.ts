@@ -3,6 +3,7 @@
 import { auth } from '@/lib/auth'
 import { requireUser } from '@/lib/auth/require-user'
 import {
+  listChecklistSites,
   requireChecklistCategory,
   requireChecklistPhoto,
   requireChecklistSite,
@@ -185,21 +186,26 @@ export async function getPendingTasks(siteId: string) {
   return tasks
 }
 
+// Without a site, lists only the sites the caller may read (field roles: assigned sites).
 export async function getPendingChecklistPhotos(siteId?: string) {
-  const user = await requireUser()
-  let companyId = user.companyId
-  let authorizedSiteId: string | undefined
+  let companyId: string
+  let siteIds: string[]
 
   if (siteId) {
     const { site } = await requireChecklistSite(siteId)
     companyId = site.companyId
-    authorizedSiteId = site.id
+    siteIds = [site.id]
+  } else {
+    const readable = await listChecklistSites()
+    if (!readable) return []
+    companyId = readable.companyId
+    siteIds = readable.siteIds
   }
-  if (!companyId) return []
+  if (siteIds.length === 0) return []
 
   const pendingTasks = await prisma.projectChecklistTask.findMany({
     where: {
-      category: { stage: { checklist: { companyId, siteId: authorizedSiteId } } },
+      category: { stage: { checklist: { companyId, siteId: { in: siteIds } } } },
       OR: [ { status: 'COMPLETED' }, { isClientDone: true } ],
       sitePhotos: { none: {} }
     },
@@ -216,9 +222,9 @@ export async function getPendingChecklistPhotos(siteId?: string) {
   })
 
   // Fetch site names since ProjectChecklist doesn't have a direct site relation in prisma include
-  const siteIds = [...new Set(pendingTasks.map(t => t.category.stage.checklist.siteId))]
+  const pendingSiteIds = [...new Set(pendingTasks.map(t => t.category.stage.checklist.siteId))]
   const sites = await prisma.site.findMany({
-    where: { id: { in: siteIds }, companyId, deletedAt: null },
+    where: { id: { in: pendingSiteIds }, companyId, deletedAt: null },
     select: { id: true, name: true }
   })
   const siteMap = new Map(sites.map(s => [s.id, s.name]))

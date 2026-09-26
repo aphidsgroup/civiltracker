@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => {
     order: [] as string[],
     tx,
     prisma: {
+      company: { findUnique: vi.fn() },
+      companyMember: { findFirst: vi.fn() },
       sitePhoto: { findFirst: vi.fn(), findUnique: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
       mediaAsset: { deleteMany: vi.fn() },
       $transaction: vi.fn(),
@@ -46,14 +48,17 @@ vi.mock('@/lib/cloudinary', () => ({ default: { uploader: { destroy: mocks.destr
 const { deleteSitePhotoAction } = await import('@/actions/site-photos')
 
 const SITES: Row[] = [
-  { id: 'site_1', companyId: 'company_1', deletedAt: null },
-  { id: 'site_dead', companyId: 'company_1', deletedAt: new Date('2026-01-01') },
-  { id: 'site_other', companyId: 'company_2', deletedAt: null },
+  { id: 'site_1', companyId: 'company_1', deletedAt: null, assignedEngineerId: null, engineerId: null },
+  { id: 'site_theirs', companyId: 'company_1', deletedAt: null, assignedEngineerId: 'user_someone_else', engineerId: null },
+  { id: 'site_dead', companyId: 'company_1', deletedAt: new Date('2026-01-01'), assignedEngineerId: null, engineerId: null },
+  { id: 'site_other', companyId: 'company_2', deletedAt: null, assignedEngineerId: null, engineerId: null },
 ]
 
 const PHOTOS: Row[] = [
   { id: 'photo_1', companyId: 'company_1', siteId: 'site_1', caption: 'Slab', category: null, taskId: null, cloudinaryPublicId: 'pub_1', secureUrl: 'https://x/1', uploadedById: 'user_supervisor', task: null },
   { id: 'photo_dead', companyId: 'company_1', siteId: 'site_dead', caption: 'Old', category: null, taskId: null, cloudinaryPublicId: 'pub_dead', secureUrl: 'https://x/2', uploadedById: 'user_supervisor', task: null },
+  { id: 'photo_theirs', companyId: 'company_1', siteId: 'site_theirs', caption: 'Beam', category: null, taskId: null, cloudinaryPublicId: 'pub_theirs', secureUrl: 'https://x/4', uploadedById: 'user_supervisor', task: null },
+  { id: 'photo_accountant', companyId: 'company_1', siteId: 'site_1', caption: 'Receipt', category: null, taskId: null, cloudinaryPublicId: 'pub_acct', secureUrl: 'https://x/5', uploadedById: 'user_accountant', task: null },
   { id: 'photo_other', companyId: 'company_2', siteId: 'site_other', caption: 'Foreign', category: null, taskId: null, cloudinaryPublicId: 'pub_other', secureUrl: 'https://x/3', uploadedById: 'user_x', task: null },
 ]
 
@@ -63,10 +68,16 @@ function principal(role: string, companyId = 'company_1') {
   return { id: `user_${role.toLowerCase()}`, name: role, email: `${role.toLowerCase()}@acme.test`, role, companyId }
 }
 
+let modules: unknown
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.order.length = 0
+  modules = ['SITES', 'TASKS']
   mocks.requireUser.mockResolvedValue(principal('COMPANY_ADMIN'))
+  mocks.prisma.company.findUnique.mockImplementation(async () => ({ modulesJson: modules, status: 'ACTIVE' }))
+  // Field roles are assigned to site_1 by active membership, never to site_theirs.
+  mocks.prisma.companyMember.findFirst.mockResolvedValue({ siteIds: ['site_1'] })
   const photos = inMemoryDelegate(PHOTOS, siteRelation)
   mocks.prisma.sitePhoto.findFirst.mockImplementation(photos.findFirst)
   mocks.tx.sitePhoto.deleteMany.mockImplementation(async (args: { where: Row }) => {
@@ -142,6 +153,55 @@ describe('deleteSitePhotoAction authorization', () => {
     await expect(deleteSitePhotoAction('photo_1', 'Slab')).resolves.toEqual({ success: true })
   })
 
+  it.each(['SUPERVISOR', 'COMPANY_ADMIN'])('refuses a %s while the TASKS module is disabled, before reading the photo', async (role) => {
+    modules = ['SITES']
+    mocks.requireUser.mockResolvedValue(principal(role))
+    await expect(deleteSitePhotoAction('photo_1', 'Slab')).rejects.toThrow(/Module TASKS is not enabled/)
+    expect(mocks.prisma.sitePhoto.findFirst).not.toHaveBeenCalled()
+    expect(deleted()).toBe(0)
+    expect(mocks.destroy).not.toHaveBeenCalled()
+  })
+
+  it('refuses an uploader whose live role no longer holds a photo grant, before reading the photo', async () => {
+    mocks.requireUser.mockResolvedValue(principal('ACCOUNTANT'))
+    await expect(deleteSitePhotoAction('photo_accountant', 'Receipt')).rejects.toThrow(/FORBIDDEN/)
+    expect(mocks.prisma.sitePhoto.findFirst).not.toHaveBeenCalled()
+    expect(deleted()).toBe(0)
+  })
+
+  it('refuses the uploader on a site it is no longer assigned to', async () => {
+    mocks.requireUser.mockResolvedValue(principal('SUPERVISOR'))
+    await expect(deleteSitePhotoAction('photo_theirs', 'Beam')).rejects.toThrow(/not found or access denied/)
+    expect(deleted()).toBe(0)
+    expect(mocks.destroy).not.toHaveBeenCalled()
+    expect(mocks.logActivity).not.toHaveBeenCalled()
+  })
+
+  it('refuses the uploader once its membership is inactive', async () => {
+    mocks.prisma.companyMember.findFirst.mockResolvedValue(null)
+    mocks.requireUser.mockResolvedValue(principal('SUPERVISOR'))
+    await expect(deleteSitePhotoAction('photo_1', 'Slab')).rejects.toThrow(/not found or access denied/)
+    expect(deleted()).toBe(0)
+  })
+
+  it('binds the uploader read and guarded delete to its assigned-site scope', async () => {
+    mocks.requireUser.mockResolvedValue(principal('SUPERVISOR'))
+    await deleteSitePhotoAction('photo_1', 'Slab')
+    const scope = {
+      companyId: 'company_1',
+      deletedAt: null,
+      OR: [{ assignedEngineerId: 'user_supervisor' }, { engineerId: 'user_supervisor' }, { id: { in: ['site_1'] } }],
+    }
+    expect(mocks.prisma.sitePhoto.findFirst.mock.calls[0][0].where).toEqual({ id: 'photo_1', companyId: 'company_1', site: scope })
+    expect(mocks.tx.sitePhoto.deleteMany).toHaveBeenCalledWith({ where: { id: 'photo_1', companyId: 'company_1', site: scope } })
+  })
+
+  it.each(['COMPANY_ADMIN', 'PROJECT_MANAGER'])('lets a %s delete on any live company site', async (role) => {
+    mocks.requireUser.mockResolvedValue(principal(role))
+    await expect(deleteSitePhotoAction('photo_theirs', 'Beam')).resolves.toEqual({ success: true })
+    expect(mocks.prisma.companyMember.findFirst).not.toHaveBeenCalled()
+  })
+
   it('refuses a mismatched confirmation before any delete', async () => {
     await expect(deleteSitePhotoAction('photo_1', 'wrong')).rejects.toThrow(/confirmation/)
     expect(deleted()).toBe(0)
@@ -152,7 +212,7 @@ describe('deleteSitePhotoAction authorization', () => {
 describe('deleteSitePhotoAction database and cloud ordering', () => {
   it('deletes company-scoped rows in one transaction and destroys the asset only after commit', async () => {
     await deleteSitePhotoAction('photo_1', 'Slab')
-    expect(mocks.tx.sitePhoto.deleteMany).toHaveBeenCalledWith({ where: { id: 'photo_1', companyId: 'company_1', site: { deletedAt: null } } })
+    expect(mocks.tx.sitePhoto.deleteMany).toHaveBeenCalledWith({ where: { id: 'photo_1', companyId: 'company_1', site: { companyId: 'company_1', deletedAt: null } } })
     expect(mocks.tx.mediaAsset.deleteMany).toHaveBeenCalledWith({ where: { cloudinaryPublicId: 'pub_1', companyId: 'company_1' } })
     expect(mocks.order).toEqual(['db:sitePhoto', 'db:mediaAsset', 'commit', 'cloud:destroy'])
     expect(mocks.destroy).toHaveBeenCalledWith('pub_1')
