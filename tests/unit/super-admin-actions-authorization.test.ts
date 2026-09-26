@@ -21,9 +21,11 @@ const mocks = vi.hoisted(() => ({
   redirect: vi.fn(),
   hash: vi.fn(),
   prisma: {
-    user: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    user: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
     company: { findUnique: vi.fn(), delete: vi.fn() },
     companyMember: { findFirst: vi.fn() },
+    auditLog: { create: vi.fn() },
+    $transaction: vi.fn(),
   },
 }))
 
@@ -55,8 +57,8 @@ function session(user: Partial<{ id: string; role: string; name: string; email: 
 
 const ACTIONS: Array<[string, () => Promise<unknown>]> = [
   ['changeSuperAdminPassword', () => actions.changeSuperAdminPassword('new-secret')],
-  ['deleteCompany', () => actions.deleteCompany('company_b')],
-  ['deleteUser', () => actions.deleteUser('user_b')],
+  ['deleteCompany', () => actions.deleteCompany('company_b', 'Beta')],
+  ['deleteUser', () => actions.deleteUser('user_b', 'bea@beta.test')],
 ]
 
 function expectNoTargetPrismaCalls() {
@@ -69,6 +71,8 @@ function expectNoTargetPrismaCalls() {
     expect(args.select).not.toHaveProperty('companyMembers')
   }
   expect(mocks.logActivity).not.toHaveBeenCalled()
+  expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
+  expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
   expect(mocks.hash).not.toHaveBeenCalled()
 }
 
@@ -81,8 +85,15 @@ beforeEach(() => {
     if (select?.companyMembers) return where.id === TARGET_USER.id ? TARGET_USER : null
     return liveUsers[where.id] ?? null
   })
+  mocks.prisma.user.findFirst.mockImplementation(async ({ where }: { where: { id: string; role: string; isActive: boolean } }) => {
+    const live = liveUsers[where.id]
+    return live && live.role === where.role && live.isActive === where.isActive ? { id: live.id } : null
+  })
   mocks.prisma.company.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
     where.id === TARGET_COMPANY.id ? TARGET_COMPANY : null)
+  mocks.prisma.auditLog.create.mockResolvedValue({})
+  // The destructive actions run on the transaction client; here it is the same mock.
+  mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
   mocks.prisma.companyMember.findFirst.mockResolvedValue({
     companyId: 'company_a', role: 'COMPANY_ADMIN', moduleControls: null,
     company: { slug: 'alpha', name: 'Alpha', status: 'ACTIVE', deletedAt: null },
@@ -148,38 +159,38 @@ describe('super-admin actions: legitimate live super admin', () => {
   })
 
   it('deletes a company in any tenant and audits as the live principal', async () => {
-    await actions.deleteCompany('company_b')
+    await actions.deleteCompany('company_b', 'Beta')
     expect(mocks.prisma.company.delete).toHaveBeenCalledWith({ where: { id: 'company_b' } })
-    expect(mocks.logActivity).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       userId: 'sa_1', companyId: null, action: 'DELETE', module: 'COMPANY', recordId: 'company_b',
-      description: expect.stringMatching(/^Root permanently deleted company "Beta"/),
-    }))
+      after: { _description: expect.stringMatching(/^Root permanently deleted company "Beta"/) },
+    }) })
     expect(mocks.redirect).toHaveBeenCalledWith('/super-admin/companies')
   })
 
   it('rejects an unknown company before deleting', async () => {
-    await expect(actions.deleteCompany('missing')).rejects.toThrow(/Company not found/)
+    await expect(actions.deleteCompany('missing', 'Beta')).rejects.toThrow(/Company not found/)
     expect(mocks.prisma.company.delete).not.toHaveBeenCalled()
-    expect(mocks.logActivity).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   })
 
   it('deletes a user in another company and audits against that user company', async () => {
-    await actions.deleteUser('user_b')
+    await actions.deleteUser('user_b', 'bea@beta.test')
     expect(mocks.prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user_b' } })
-    expect(mocks.logActivity).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       userId: 'sa_1', companyId: 'company_b', module: 'USER', recordId: 'user_b',
-      description: expect.stringMatching(/^Root permanently deleted user "Bea"/),
-    }))
+      after: { _description: expect.stringMatching(/^Root permanently deleted user "Bea"/) },
+    }) })
   })
 
   it('rejects an unknown user before deleting', async () => {
-    await expect(actions.deleteUser('missing')).rejects.toThrow(/User not found/)
+    await expect(actions.deleteUser('missing', 'bea@beta.test')).rejects.toThrow(/User not found/)
     expect(mocks.prisma.user.delete).not.toHaveBeenCalled()
   })
 
   it('rejects self-deletion by the live principal id before target reads', async () => {
-    await expect(actions.deleteUser('sa_1')).rejects.toThrow(/cannot delete your own account/)
+    await expect(actions.deleteUser('sa_1', 'root@platform.test')).rejects.toThrow(/cannot delete your own account/)
     expect(mocks.prisma.user.delete).not.toHaveBeenCalled()
-    expect(mocks.logActivity).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   })
 })

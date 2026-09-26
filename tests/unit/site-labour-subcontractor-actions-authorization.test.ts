@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
   const tx = {
     labour: { findFirst: vi.fn(), updateMany: vi.fn() },
     labourAttendance: { findFirst: vi.fn(), updateMany: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
   return {
     requireUser: vi.fn(),
@@ -121,6 +122,7 @@ beforeEach(() => {
     delegate.findFirst.mockImplementation(attendance.findFirst)
     delegate.updateMany.mockImplementation(attendance.updateMany)
   }
+  mocks.tx.auditLog.create.mockResolvedValue({})
   mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.tx) => unknown) => fn(mocks.tx))
 
   const subs = inMemoryDelegate(SUBS, siteRelation)
@@ -142,7 +144,7 @@ function subWrites() {
 const LABOUR_ACTIONS = [
   { name: 'updateSiteLabour', run: (siteId = 'site_1', fields: Record<string, string> = {}) => labourActions.updateSiteLabour(siteId, labourForm(fields)) },
   { name: 'markSiteLabourPaid', run: (siteId = 'site_1', fields: Record<string, string> = {}) => labourActions.markSiteLabourPaid(siteId, form({ id: 'lab_1', amount: '500', ...fields })) },
-  { name: 'deactivateSiteLabour', run: (siteId = 'site_1', fields: Record<string, string> = {}) => labourActions.deactivateSiteLabour(siteId, form({ id: 'lab_1', ...fields })) },
+  { name: 'deactivateSiteLabour', run: (siteId = 'site_1', fields: Record<string, string> = {}) => labourActions.deactivateSiteLabour(siteId, form({ id: 'lab_1', dangerConfirmText: 'Ravi', ...fields })) },
 ]
 
 describe('site labour actions (F3-F4)', () => {
@@ -237,10 +239,16 @@ describe('site labour actions (F3-F4)', () => {
     expect(mocks.tx.labourAttendance.findFirst).not.toHaveBeenCalled()
   })
 
-  it.each(['updateSiteLabour', 'deactivateSiteLabour'] as const)('%s fails when the guarded write matches no row', async (name) => {
+  it('updateSiteLabour fails when the guarded write matches no row', async () => {
     mocks.prisma.labour.updateMany.mockResolvedValue({ count: 0 })
-    const fd = name === 'updateSiteLabour' ? labourForm() : form({ id: 'lab_1' })
-    await expect(labourActions[name]('site_1', fd)).rejects.toThrow(/access denied/)
+    await expect(labourActions.updateSiteLabour('site_1', labourForm())).rejects.toThrow(/access denied/)
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('deactivateSiteLabour fails, without an audit record, when the guarded write matches no row', async () => {
+    mocks.tx.labour.updateMany.mockResolvedValue({ count: 0 })
+    await expect(labourActions.deactivateSiteLabour('site_1', form({ id: 'lab_1', dangerConfirmText: 'Ravi' }))).rejects.toThrow(/access denied/)
+    expect(mocks.tx.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
@@ -251,11 +259,13 @@ describe('site labour actions (F3-F4)', () => {
   })
 
   it('deactivateSiteLabour deactivates only the worker on this live site', async () => {
-    await labourActions.deactivateSiteLabour('site_1', form({ id: 'lab_1' }))
-    expect(mocks.prisma.labour.updateMany).toHaveBeenCalledWith({
+    await labourActions.deactivateSiteLabour('site_1', form({ id: 'lab_1', dangerConfirmText: 'Ravi' }))
+    expect(mocks.tx.labour.updateMany).toHaveBeenCalledWith({
       where: { id: 'lab_1', companyId: 'company_1', siteId: 'site_1', site: { deletedAt: null } },
       data: { isActive: false },
     })
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prisma.labour.updateMany).not.toHaveBeenCalled()
     expect(mocks.prisma.labour.update).not.toHaveBeenCalled()
   })
 })

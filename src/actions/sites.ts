@@ -2,10 +2,12 @@
 
 import { prisma } from '@/lib/prisma'
 import { requirePermission } from '@/lib/auth/require-permission'
-import { requireCompanyAccess } from '@/lib/auth/require-company-access'
+import { requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
 import { slugify } from '@/lib/utils'
 import { SiteStatus } from '@prisma/client'
 import { logActivity } from '@/lib/audit'
+
+const SITE_NOT_FOUND = 'FORBIDDEN: Site not found or access denied'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function createSite(data: any) {
@@ -79,16 +81,17 @@ export async function createSite(data: any) {
   return { success: true, siteId: site.id }
 }
 
+/**
+ * Live `sites.update` + SITES, then the id is bound to a live site of exactly the live
+ * company inside the principal's assigned-site scope before any write. The write repeats
+ * the binding and must match exactly one row, so a site deleted in between is refused.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function updateSite(siteId: string, data: any) {
-  const user = await requirePermission('sites.update')
-  
-  const existingSite = await prisma.site.findUnique({ where: { id: siteId } })
-  if (!existingSite) throw new Error('Site not found')
-  await requireCompanyAccess(existingSite.companyId)
+  const { user, site } = await requireAssignedSiteMutation(siteId, 'sites.update', 'SITES')
 
-  await prisma.site.update({
-    where: { id: siteId },
+  const result = await prisma.site.updateMany({
+    where: { id: site.id, companyId: user.companyId, deletedAt: null },
     data: {
       name: data.name,
       location: data.location,
@@ -109,17 +112,18 @@ export async function updateSite(siteId: string, data: any) {
       assignedEngineerId: data.assignedEngineerId || null,
     }
   })
+  if (result.count !== 1) throw new Error(SITE_NOT_FOUND)
 
   await logActivity({
     userId: user.id,
-    companyId: existingSite.companyId,
+    companyId: user.companyId,
     action: 'UPDATE',
     module: 'SITE',
-    recordId: siteId,
-    description: `${user.name ?? user.email} updated site "${existingSite.name}"`,
-    before: { name: existingSite.name, status: existingSite.status },
+    recordId: site.id,
+    description: `${user.name ?? user.email} updated site "${site.name}"`,
+    before: { name: site.name },
     after: { name: data.name, location: data.location },
   })
 
-  return { success: true, siteId: existingSite.id }
+  return { success: true, siteId: site.id }
 }

@@ -24,7 +24,6 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
 
   if (!company) notFound()
 
-  const companyName = company.name
   const activeMembers = company.members.filter(m => m.isActive).length
 
   const statusColor: Record<string, string> = {
@@ -45,13 +44,11 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   }
 
+  // The action compares the typed text with the company's current name itself.
   async function handleDelete(formData: FormData) {
     'use server'
-    const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
-    if (typed !== companyName.trim()) {
-      throw new Error('Delete confirmation text did not match the company name.')
-    }
-    await deleteCompany(id)
+    const typed = formData.get('dangerConfirmText')
+    await deleteCompany(id, typeof typed === 'string' ? typed : '')
   }
 
   return (

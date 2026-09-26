@@ -23,17 +23,13 @@ export default async function SAUserDetailPage({ params }: { params: Promise<{ i
   })
   if (!user) return notFound()
 
-  const expectedDeleteText = user.name ?? user.email
   const member = user.companyMembers[0]
 
+  // The action compares the typed text with the user's current email itself.
   async function handleDelete(formData: FormData) {
     'use server'
-    const expected = expectedDeleteText.trim()
-    const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
-    if (typed !== expected) {
-      throw new Error('Delete confirmation text did not match the user name/email.')
-    }
-    await deleteUser(userId)
+    const typed = formData.get('dangerConfirmText')
+    await deleteUser(userId, typeof typed === 'string' ? typed : '')
   }
 
   const roleColors: Record<string, string> = {
@@ -67,9 +63,9 @@ export default async function SAUserDetailPage({ params }: { params: Promise<{ i
         <form action={handleDelete}>
           <DangerConfirmSubmit
             entityLabel={user.name ?? user.email}
-            confirmText={user.name ?? user.email}
+            confirmText={user.email}
             buttonText="Delete User"
-            helperText="Type the exact user name or email to unlock permanent deletion of this account and its data."
+            helperText="Type the exact user email to unlock permanent deletion of this account and its data."
           />
         </form>
       </div>

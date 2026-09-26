@@ -4,9 +4,11 @@ import { LabourTrade } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import {
+  optionalText,
   parseNonNegativeAmount,
   parsePositiveAmount,
   requiredText,
+  requireAssignedSiteMutation,
   requireSiteMutation,
 } from '@/lib/auth/site-mutation'
 
@@ -103,14 +105,48 @@ export async function markSiteLabourPaid(siteId: string, formData: FormData) {
   revalidatePath(`/sites/${site.id}/labour`)
 }
 
+/**
+ * Deactivation is confirmed on the server: the site is bound through the assigned-site
+ * mutation gate, the worker is re-read inside the transaction and the typed text must
+ * equal its current name. The guarded write and the audit record share the transaction,
+ * so a deactivation without its audit trail rolls back.
+ */
 export async function deactivateSiteLabour(siteId: string, formData: FormData) {
-  const { user, site } = await requireLabourMutation(siteId)
+  const { user, site } = await requireAssignedSiteMutation(siteId, 'labour.manage', 'LABOUR')
   const id = formData.get('id') as string
-  await requireSiteLabour(id, user.companyId, site.id)
-  const result = await prisma.labour.updateMany({
-    where: siteLabourWhere(id, user.companyId, site.id),
-    data: { isActive: false },
+  const typed = optionalText(formData.get('dangerConfirmText')) ?? ''
+  const where = siteLabourWhere(id, user.companyId, site.id)
+
+  await prisma.$transaction(async (tx) => {
+    const labour = await tx.labour.findFirst({
+      where,
+      select: { id: true, name: true, trade: true, isActive: true, siteId: true },
+    })
+    if (!labour) throw new Error(LABOUR_NOT_FOUND)
+    if (typed !== labour.name.trim()) {
+      throw new Error('Remove confirmation text did not match the worker name.')
+    }
+
+    const result = await tx.labour.updateMany({ where, data: { isActive: false } })
+    if (result.count !== 1) throw new Error(LABOUR_NOT_FOUND)
+
+    const snapshot = { name: labour.name, trade: labour.trade, siteId: labour.siteId, siteName: site.name }
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        companyId: user.companyId,
+        action: 'UPDATE',
+        module: 'LABOUR',
+        recordId: labour.id,
+        before: { ...snapshot, isActive: labour.isActive },
+        after: {
+          ...snapshot,
+          isActive: false,
+          _description: `${user.name ?? user.email} deactivated worker "${labour.name}" on site "${site.name}"`,
+        },
+      },
+    })
   })
-  if (result.count !== 1) throw new Error(LABOUR_NOT_FOUND)
+
   revalidatePath(`/sites/${site.id}/labour`)
 }

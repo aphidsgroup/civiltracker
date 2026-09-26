@@ -42,7 +42,7 @@ const mocks = vi.hoisted(() => ({
   prisma: {
     company: { findFirst: vi.fn(), findUnique: vi.fn() },
     companyMember: { findFirst: vi.fn() },
-    site: { findMany: vi.fn() },
+    site: { findMany: vi.fn(), findFirst: vi.fn() },
     vendor: { findMany: vi.fn() },
     client: { findMany: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -119,6 +119,7 @@ beforeEach(() => {
   mocks.prisma.company.findFirst.mockResolvedValue({ modulesJson: null })
   mocks.prisma.company.findUnique.mockResolvedValue({ name: 'Acme' })
   mocks.prisma.site.findMany.mockImplementation(inMemoryDelegate(SITES).findMany)
+  mocks.prisma.site.findFirst.mockImplementation(inMemoryDelegate(SITES).findFirst)
   mocks.prisma.companyMember.findFirst.mockImplementation(inMemoryDelegate(MEMBERS).findFirst)
   mocks.prisma.vendor.findMany.mockResolvedValue([{ id: 'v1', name: 'Vendor', totalPurchase: new Prisma.Decimal(10), amountPayable: new Prisma.Decimal(5) }])
   mocks.prisma.client.findMany.mockResolvedValue([{ id: 'c1', name: 'Client', contractValue: new Prisma.Decimal(10), amountPaid: new Prisma.Decimal(4), amountDue: new Prisma.Decimal(6) }])
@@ -273,11 +274,13 @@ describe('exportReportAction', () => {
     expect(rows.map((row: unknown[]) => row[0])).toEqual(['Name site_1'])
   })
 
-  it('exports a foreign site filter as an empty report', async () => {
-    await exportReportAction('site-cost', 'EXCEL', { siteId: 'site_other' })
+  it('refuses a foreign site filter at the export audit gate, writing no audit and generating no file', async () => {
+    await expect(exportReportAction('site-cost', 'EXCEL', { siteId: 'site_other' })).rejects.toThrow(/FORBIDDEN/)
 
-    const [, , , , rows] = mocks.generateExcelBuffer.mock.calls[0]
-    expect(rows).toEqual([])
+    expect(wheres(mocks.prisma.site.findFirst)).toEqual([expect.objectContaining({ companyId: 'company_1', id: 'site_other' })])
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
+    expect(mocks.prisma.reportExport.create).not.toHaveBeenCalled()
+    expect(mocks.generateExcelBuffer).not.toHaveBeenCalled()
   })
 })
 
