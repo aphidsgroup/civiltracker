@@ -1,0 +1,141 @@
+import { notFound, redirect } from 'next/navigation'
+import type { Prisma } from '@prisma/client'
+import { requireUser } from '@/lib/auth/require-user'
+import { isModuleEnabled } from '@/lib/auth/require-module'
+import { assignedSiteScope, readsAssignedSitesOnly } from '@/lib/auth/site-mutation'
+import { getRoleRedirect, hasPermission } from '@/lib/permissions'
+import type { Permission } from '@/lib/permissions'
+import { prisma } from '@/lib/prisma'
+import type { SessionUser } from '@/types'
+
+/**
+ * One way into a page: a permission, and optionally the company module that permission
+ * reads from. A grant only opens the page when the live role holds the permission *and*
+ * its own module is enabled, so a module switched on for one grant never opens another.
+ */
+export type TenantPageGrant = {
+  permission: Permission
+  module?: string
+}
+
+export type TenantPageGate = {
+  grants: TenantPageGrant[]
+}
+
+export type TenantPageAccess = {
+  user: SessionUser & { companyId: string }
+  companyId: string
+  /** Live-role permission check, for gating each section a page renders. */
+  can: (permission: Permission) => boolean
+  /** Company module check against the modules loaded once by the gate. */
+  moduleEnabled: (moduleName: string) => boolean
+}
+
+export type TenantPageDenial = { status: 'denied'; redirectTo: string }
+
+export type TenantPageResult = { status: 'ok'; access: TenantPageAccess } | TenantPageDenial
+
+function denied(redirectTo: string): TenantPageDenial {
+  return { status: 'denied', redirectTo }
+}
+
+/**
+ * Read gate for tenant pages, run before the page's first data query.
+ *
+ * The principal is always the live one from `requireUser`, never the JWT claims, so a
+ * revoked membership, a deactivated account or a suspended company throws here, and a
+ * demoted role is judged on its current permissions. The permission is decided on the
+ * live role before any query; the company modules are loaded only for a principal that
+ * already holds one of the permissions, and a denial is returned before any page data is
+ * read.
+ *
+ * SUPER_ADMIN carries no tenant context, so a tenant page turns it away to the platform
+ * dashboard instead of reading any company's data.
+ */
+export async function resolveTenantPageAccess(gate: TenantPageGate): Promise<TenantPageResult> {
+  const user = await requireUser()
+  if (user.role === 'SUPER_ADMIN') return denied('/super-admin/dashboard')
+  if (!user.companyId) return denied('/login')
+
+  const can = (permission: Permission) => hasPermission(user.role, permission)
+  const held = gate.grants.filter((grant) => can(grant.permission))
+  if (held.length === 0) return denied(getRoleRedirect(user.role))
+
+  const companyId = user.companyId
+  const company = await prisma.company.findFirst({
+    where: { id: companyId, deletedAt: null },
+    select: { modulesJson: true },
+  })
+  if (!company) return denied('/login')
+
+  const moduleEnabled = (moduleName: string) => isModuleEnabled(company.modulesJson, moduleName)
+  if (!held.some((grant) => !grant.module || moduleEnabled(grant.module))) {
+    return denied(getRoleRedirect(user.role))
+  }
+
+  return { status: 'ok', access: { user: { ...user, companyId }, companyId, can, moduleEnabled } }
+}
+
+export type TenantPrincipalResult = { status: 'ok'; user: SessionUser & { companyId: string } } | TenantPageDenial
+
+/**
+ * Live tenant principal for a shell or menu that reads no tenant data of its own and so
+ * has no page permission to check. A principal `requireUser` cannot resolve goes to
+ * /login instead of throwing, SUPER_ADMIN goes to the platform dashboard and a CLIENT to
+ * its portal. Every data page below it still runs `resolveTenantPageAccess` itself.
+ */
+export async function resolveTenantPrincipal(): Promise<TenantPrincipalResult> {
+  const user = await requireUser().catch(() => null)
+  if (!user) return denied('/login')
+  if (user.role === 'SUPER_ADMIN') return denied('/super-admin/dashboard')
+  if (user.role === 'CLIENT') return denied(getRoleRedirect(user.role))
+  if (!user.companyId) return denied('/login')
+  return { status: 'ok', user: { ...user, companyId: user.companyId } }
+}
+
+/**
+ * Leaves a denied page. A denial that would send the page back onto itself — a role whose
+ * home is the page it may not read — answers not found instead of looping.
+ */
+export function exitDeniedPage(denial: TenantPageDenial, currentPath: string): never {
+  if (denial.redirectTo === currentPath) notFound()
+  redirect(denial.redirectTo)
+}
+
+/**
+ * The site binding every tenant page read carries: a site that is not soft deleted and
+ * belongs to exactly the principal's company.
+ */
+export function liveCompanySiteWhere(companyId: string): Prisma.SiteWhereInput {
+  return { companyId, deletedAt: null }
+}
+
+export { readsAssignedSitesOnly }
+
+/**
+ * The sites a page may show the principal: `liveCompanySiteWhere`, narrowed for a field
+ * role to the sites it is the engineer of or that its *active* membership lists. Call it
+ * only after the page gate; list and detail pages share it so a site a field role cannot
+ * see in the list cannot be opened by id either. Actions use the same `assignedSiteScope`.
+ */
+export async function assignedSiteWhere(access: TenantPageAccess): Promise<Prisma.SiteWhereInput> {
+  return assignedSiteScope(access.user, access.companyId)
+}
+
+/**
+ * The ids of the sites a field role may see, for pages that read records through an
+ * action whose query they cannot narrow; `null` for every other role, which sees every
+ * live site of its company. A field role with no assignment gets an empty set.
+ */
+export async function assignedSiteIds(access: TenantPageAccess): Promise<ReadonlySet<string> | null> {
+  if (!readsAssignedSitesOnly(access.user.role)) return null
+  const sites = await prisma.site.findMany({ where: await assignedSiteWhere(access), select: { id: true } })
+  return new Set(sites.map((site) => site.id))
+}
+
+/** Bounded, validated page size from a `?limit=` search param. */
+export function parsePageSize(limit: string | undefined, fallback = 50, max = 500) {
+  const parsed = limit ? Number.parseInt(limit, 10) : fallback
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback
+  return Math.min(parsed, max)
+}

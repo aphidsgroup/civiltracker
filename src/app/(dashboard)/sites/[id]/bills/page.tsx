@@ -1,20 +1,28 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { Prisma, ApprovalStatus } from '@prisma/client'
 import { redirect } from 'next/navigation'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import BillApprovalList from '@/components/bills/BillApprovalList'
 
 export const dynamic = 'force-dynamic'
 
+const TABS = ['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'PAID'] as const
+
 export default async function SiteBillsPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ tab?: string }> }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
-  
-  const { id: siteId } = await params
+  const { id } = await params
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'bills.view', module: 'BILLS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}/bills`)
+  const { companyId } = gate.access
+
   const { tab } = await searchParams
-  const activeTab = tab || 'PENDING'
+  const activeTab = TABS.find((t) => t === tab) ?? 'PENDING'
+
+  // The page reads nothing until the id names a live site of exactly this company that the
+  // principal may see; the layout's own lookup renders in parallel and is not a guard.
+  const site = await prisma.site.findFirst({ where: { id, ...(await assignedSiteWhere(gate.access)) }, select: { id: true } })
+  if (!site) redirect('/sites')
+  const siteId = site.id
 
   const whereClause: Prisma.ExpenseWhereInput = { companyId, siteId, deletedAt: null }
   if (activeTab !== 'ALL') {
@@ -35,7 +43,7 @@ export default async function SiteBillsPage({ params, searchParams }: { params: 
           <p className="text-slate-500 text-xs m-0">{bills.length} bills found for this site</p>
         </div>
         <div className="flex bg-slate-100 p-1 rounded-lg overflow-x-auto w-full sm:w-auto">
-          {['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'PAID'].map(t => (
+          {TABS.map(t => (
             <Link key={t} href={`/sites/${siteId}/bills?tab=${t}`} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${activeTab === t ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
               {t}
             </Link>

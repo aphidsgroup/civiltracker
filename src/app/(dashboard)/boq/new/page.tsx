@@ -1,53 +1,14 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
-
-async function createBoqItem(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  const companyId = session.user.companyId
-  const siteId = formData.get('siteId') as string
-  const category = formData.get('category') as string
-  const description = formData.get('description') as string
-  const unit = formData.get('unit') as string
-  const quantity = parseFloat(formData.get('quantity') as string) || 0
-  const rate = parseFloat(formData.get('rate') as string) || 0
-  const gstPercent = parseFloat(formData.get('gstPercent') as string) || 0
-
-  if (!description || !siteId || quantity === 0 || rate === 0) return
-
-  const amount = quantity * rate
-  const gstAmount = amount * (gstPercent / 100)
-  const totalWithGst = amount + gstAmount
-
-  await prisma.bOQItem.create({
-    data: {
-      companyId,
-      siteId,
-      category: category || 'General',
-      description,
-      unit,
-      quantity,
-      rate,
-      amount,
-      gstPercent,
-      totalWithGst,
-      clientApproved: false,
-    },
-  })
-
-  redirect('/boq')
-}
+import { createBoqItemAction } from '@/actions/boq'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export default async function NewBoqItemPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'sites.update', module: 'BOQ' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/boq/new')
 
   const sites = await prisma.site.findMany({
-    where: { companyId: session.user.companyId, status: 'ACTIVE', deletedAt: null },
+    where: { ...liveCompanySiteWhere(gate.access.companyId), status: 'ACTIVE' },
     select: { id: true, name: true }
   })
 
@@ -59,7 +20,7 @@ export default async function NewBoqItemPage() {
       
       <div className="p-6 max-w-2xl">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <form action={createBoqItem}>
+          <form action={createBoqItemAction}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Item Description / Particulars *</label>

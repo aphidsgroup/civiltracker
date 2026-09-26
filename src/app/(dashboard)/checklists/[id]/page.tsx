@@ -1,16 +1,18 @@
-import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { TemplateBuilderClient } from './TemplateBuilderClient'
 
-export default async function EditTemplatePage({ params }: { params: { id: string } }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+export default async function EditTemplatePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'tasks.manage', module: 'TASKS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/checklists/${id}`)
 
-  const template = await prisma.checklistTemplate.findUnique({
-    where: { id: params.id, companyId: session.user.companyId },
+  // Only the live company's own editable templates; global masters are cloned, never edited.
+  const template = await prisma.checklistTemplate.findFirst({
+    where: { id, companyId: gate.access.companyId, isGlobal: false },
     include: {
       stages: {
         orderBy: { order: 'asc' },

@@ -1,11 +1,9 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { requireSuperAdminPage } from '@/lib/pages/super-admin-page-access'
 import { CreditCard, Building2, Layers, CheckCircle2 } from 'lucide-react'
 
 export default async function SubscriptionsPage() {
-  const session = await auth()
-  if (session?.user?.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  await requireSuperAdminPage()
 
   const plans = await prisma.subscriptionPlan.findMany({ orderBy: { price: 'asc' } })
 

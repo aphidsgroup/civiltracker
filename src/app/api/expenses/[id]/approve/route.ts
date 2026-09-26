@@ -1,57 +1,41 @@
-import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { hasPermission } from '@/lib/permissions'
-import { Role } from '@prisma/client'
-import { ensureCompanyContext, requireApiPermission } from '@/lib/auth/require-api-permission'
+import { approveApprovalAction } from '@/actions/approvals'
+import { approvalApiError } from '@/lib/approvals/api-errors'
+import { requireApprovalApiUser } from '@/lib/approvals/api-guard'
+import { resolveExpenseApprovalId } from '@/lib/approvals/expense-approval-link'
+
+/**
+ * Legacy bills endpoint. It addresses an expense id, so it derives the approval id from a
+ * company- and site-exact lookup for that expense and then delegates the decision to the
+ * hardened action — it no longer runs an approval workflow of its own.
+ *
+ * The action demands an explicit confirmation token so a single UI click cannot approve by
+ * accident. A REST caller has no such surface — the POST is itself the explicit intent —
+ * so the token is supplied here. It is a misclick guard, not an authorization control.
+ */
+const API_APPROVE_CONFIRMATION = 'APPROVE'
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const authResult = await requireApiPermission('expenses.approve', 'EXPENSES')
-  if (authResult instanceof NextResponse) return authResult
 
-  const companyContextError = ensureCompanyContext(authResult)
-  if (companyContextError) return companyContextError
-
-  if (!hasPermission(authResult.role as Role, 'expenses.approve')) {
-    return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
-  }
-
-  const companyFilter = authResult.role === 'SUPER_ADMIN' ? {} : { companyId: authResult.companyId }
-
-  const expense = await prisma.expense.findFirst({
-    where: { id, ...companyFilter },
-  })
-
-  if (!expense) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  const now = new Date()
-
-  // Update the expense status
-  await prisma.expense.update({
-    where: { id },
-    data: {
-      approvalStatus: 'APPROVED',
-      approvedById: authResult.id,
-      approvedAt: now,
-    },
-  })
-
-  // Update any linked approval records (using updateMany with raw scalar fields only)
   try {
-    await prisma.$executeRaw`
-      UPDATE "Approval"
-      SET "currentStatus" = 'APPROVED',
-          "approvedById" = ${authResult.id},
-          "approvedAt" = ${now}
-      WHERE "entityId" = ${id}
-        AND "entityType" IN ('EXPENSE', 'BILL')
-    `
-  } catch {
-    // Non-critical: approval record update failure doesn't block expense approval
-  }
+    const user = await requireApprovalApiUser('expenses.approve', 'EXPENSES')
 
-  return NextResponse.json({ success: true })
+    // The bills UI posts without a body, so an unparseable request is not a failure.
+    let note: string | undefined
+    try {
+      const body = await request.json()
+      if (typeof body?.note === 'string' && body.note.trim()) note = body.note
+    } catch {}
+
+    const approvalId = await resolveExpenseApprovalId(id, user)
+    await approveApprovalAction(approvalId, note, API_APPROVE_CONFIRMATION)
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    return approvalApiError(error)
+  }
 }

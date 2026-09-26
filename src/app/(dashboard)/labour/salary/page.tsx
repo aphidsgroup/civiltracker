@@ -1,7 +1,6 @@
-import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
 import { SalaryRun } from '@prisma/client'
-import { redirect } from 'next/navigation'
+import { assignedSiteWhere, exitDeniedPage, readsAssignedSitesOnly, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Banknote, CheckCircle2, Clock, Plus, Filter, Calendar, Building2, Wallet, ShieldAlert, Coins, Sparkles, Layers, ArrowRight } from 'lucide-react'
@@ -10,24 +9,42 @@ export const metadata = {
   title: 'Salary Runs & Wages | Civil Tracker',
   description: 'Manage weekly and monthly labour wage disbursements and advance deductions.',
 }
+export const dynamic = 'force-dynamic'
 
 type SalaryRunWithSitePlaceholder = SalaryRun & {
   site: { name: string } | null
 }
 
 export default async function LabourSalaryPage() {
-  const user = await requireUser()
-  if (!user.companyId) redirect('/login')
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'salary.view', module: 'LABOUR' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/labour/salary')
+  const { companyId } = gate.access
+
+  // A run carries a bare site id, so it is bound to the sites the principal may see: a
+  // run of a deleted, foreign or (for a field role) unassigned site never shows, and
+  // company-wide runs are left to the roles that read every site.
+  const sites = await prisma.site.findMany({
+    where: await assignedSiteWhere(gate.access),
+    select: { id: true, name: true },
+  })
+  const siteNames = new Map(sites.map((site) => [site.id, site.name]))
+  const siteIds = [...siteNames.keys()]
 
   const rawRuns = await prisma.salaryRun.findMany({
-    where: { companyId: user.companyId },
+    where: {
+      companyId,
+      OR: [
+        { siteId: { in: siteIds } },
+        ...(readsAssignedSitesOnly(gate.access.user.role) ? [] : [{ siteId: null }]),
+      ],
+    },
     orderBy: { createdAt: 'desc' },
   })
 
-  const displayRuns: SalaryRunWithSitePlaceholder[] = rawRuns.map(run => ({
-    ...run,
-    site: null,
-  }))
+  const displayRuns: SalaryRunWithSitePlaceholder[] = rawRuns.map(run => {
+    const siteName = run.siteId ? siteNames.get(run.siteId) : undefined
+    return { ...run, site: siteName ? { name: siteName } : null }
+  })
 
   const totalGrossSum = displayRuns.reduce((acc, r) => acc + Number(r.totalGross), 0)
   const totalAdvanceSum = displayRuns.reduce((acc, r) => acc + Number(r.totalAdvance), 0)

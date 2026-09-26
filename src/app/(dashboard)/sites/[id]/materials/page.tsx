@@ -1,6 +1,6 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
 import ResponsiveTable from '@/components/responsive/ResponsiveTable'
@@ -10,10 +10,16 @@ import { Package, DollarSign, AlertTriangle, Boxes, Plus } from 'lucide-react'
 export const dynamic = 'force-dynamic'
 
 export default async function SiteMaterialsPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
-  const { id: siteId } = await params
+  const { id } = await params
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'materials.view', module: 'MATERIALS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}/materials`)
+  const { companyId } = gate.access
+
+  // The page reads nothing until the id names a live site of exactly this company that the
+  // principal may see; the layout's own lookup renders in parallel and is not a guard.
+  const site = await prisma.site.findFirst({ where: { id, ...(await assignedSiteWhere(gate.access)) }, select: { id: true } })
+  if (!site) redirect('/sites')
+  const siteId = site.id
 
   const materials = await prisma.material.findMany({
     where: { companyId, siteId, isActive: true },

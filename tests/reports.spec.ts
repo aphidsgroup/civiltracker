@@ -5,7 +5,7 @@ test.describe('Reports & Financials Phase 8', () => {
   test('Company Admin can view Founder Dashboard', async ({ page }) => {
     await page.goto('/login')
     await page.fill('input[name="email"]', 'arun@madras-crafters.in')
-    await page.fill('input[name="password"]', 'Admin@123456')
+    await page.fill('input[name="password"]', process.env.E2E_TEST_PASSWORD ?? '')
     await page.click('button[type="submit"]')
     await expect(page).toHaveURL('/dashboard')
 
@@ -22,7 +22,7 @@ test.describe('Reports & Financials Phase 8', () => {
   test('Accountant can view Financial Reports', async ({ page }) => {
     await page.goto('/login')
     await page.fill('input[name="email"]', 'priya@madras-crafters.in')
-    await page.fill('input[name="password"]', 'Admin@123456')
+    await page.fill('input[name="password"]', process.env.E2E_TEST_PASSWORD ?? '')
     await page.click('button[type="submit"]')
 
     await page.goto('/reports/vendor-payable')
@@ -38,7 +38,7 @@ test.describe('Reports & Financials Phase 8', () => {
     // Note: Assuming a PM login, if one existed, but let's test Arun (Company Admin) for site-cost
     await page.goto('/login')
     await page.fill('input[name="email"]', 'arun@madras-crafters.in')
-    await page.fill('input[name="password"]', 'Admin@123456')
+    await page.fill('input[name="password"]', process.env.E2E_TEST_PASSWORD ?? '')
     await page.click('button[type="submit"]')
 
     await page.goto('/reports/site-cost')
@@ -49,7 +49,7 @@ test.describe('Reports & Financials Phase 8', () => {
   test('Export Buttons render and function', async ({ page }) => {
     await page.goto('/login')
     await page.fill('input[name="email"]', 'arun@madras-crafters.in')
-    await page.fill('input[name="password"]', 'Admin@123456')
+    await page.fill('input[name="password"]', process.env.E2E_TEST_PASSWORD ?? '')
     await page.click('button[type="submit"]')
 
     await page.goto('/reports/site-cost')

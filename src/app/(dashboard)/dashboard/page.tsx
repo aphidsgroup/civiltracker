@@ -1,7 +1,7 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import type { TenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import {
   Building2, DollarSign, Clock, Users, Wallet, CreditCard,
   Plus, Upload, Receipt, CheckSquare, FileText, BarChart3, TrendingUp, AlertCircle, Truck, Package
@@ -22,54 +22,87 @@ function siteStatusChip(progress: number) {
 }
 
 
-async function getCachedDashboardData(companyId: string) {
+/**
+ * Loads only the sections the live role may read, each under its own permission and the
+ * module that permission reads from. Every read is bound to the live company and to its
+ * live sites; a section the role may not see is never queried and comes back null.
+ */
+async function getDashboardData({ companyId, can, moduleEnabled }: TenantPageAccess) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const todayEnd = new Date(today)
   todayEnd.setHours(23, 59, 59, 999)
 
-  const siteIds = await prisma.site.findMany({ where: { companyId, deletedAt: null }, select: { id: true } }).then(s => s.map(x => x.id))
+  const show = {
+    sites: can('sites.view') && moduleEnabled('SITES'),
+    expenses: can('expenses.view') && moduleEnabled('EXPENSES'),
+    labour: can('labour.view') && moduleEnabled('LABOUR'),
+    materials: can('materials.view') && moduleEnabled('MATERIALS'),
+    vendors: can('vendors.view') && moduleEnabled('MATERIALS'),
+  }
 
-  return Promise.all([
-    prisma.site.count({ where: { companyId, deletedAt: null, status: 'ACTIVE' } }),
-    // Expense queries scoped to non-deleted sites via siteId filter
-    prisma.expense.aggregate({ where: { companyId, deletedAt: null, siteId: { in: siteIds }, createdAt: { gte: today, lte: todayEnd } }, _sum: { amount: true } }),
-    prisma.expense.aggregate({ where: { companyId, deletedAt: null, siteId: { in: siteIds }, approvalStatus: 'PENDING' }, _sum: { amount: true }, _count: true }),
-    prisma.labour.count({ where: { companyId, isActive: true, siteId: { in: siteIds } } }),
-    prisma.labourAttendance.count({ where: { siteId: { in: siteIds }, date: { gte: today, lte: todayEnd }, status: 'PRESENT' } }),
-    prisma.expense.findMany({ where: { companyId, deletedAt: null, siteId: { in: siteIds }, approvalStatus: 'PENDING' }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, category: true, site: { select: { name: true } }, createdAt: true } }),
-    prisma.expense.findMany({ where: { companyId, deletedAt: null, siteId: { in: siteIds } }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, approvalStatus: true, category: true, createdAt: true, site: { select: { name: true } } } }),
-    prisma.site.findMany({ where: { companyId, deletedAt: null, status: 'ACTIVE' }, orderBy: { spent: 'desc' }, take: 5 }),
-    prisma.salaryRun.aggregate({ where: { companyId, status: 'APPROVED', OR: [{ siteId: null }, { siteId: { in: siteIds } }] }, _sum: { totalNet: true } }),
-    prisma.invoice.aggregate({ where: { companyId, status: 'DUE', OR: [{ siteId: null }, { siteId: { in: siteIds } }] }, _sum: { amount: true } }),
-    prisma.vendor.count({ where: { companyId, isActive: true, OR: [{ siteId: null }, { site: { deletedAt: null } }] } }),
-    prisma.subcontractor.count({ where: { companyId, isActive: true, OR: [{ siteId: null }, { site: { deletedAt: null } }] } }),
-    prisma.material.count({ where: { companyId, isActive: true, siteId: { in: siteIds } } }),
-    prisma.labourAttendance.findMany({ where: { siteId: { in: siteIds } }, select: { advance: true, status: true, overtimeHours: true, labour: { select: { dailyWage: true } } } }),
-    prisma.vendor.aggregate({ where: { companyId, isActive: true, OR: [{ siteId: null }, { site: { deletedAt: null } }] }, _sum: { amountPayable: true } }),
-    prisma.subcontractor.aggregate({ where: { companyId, isActive: true, OR: [{ siteId: null }, { site: { deletedAt: null } }] }, _sum: { raBilled: true, advance: true, retention: true } })
+  const liveSite = liveCompanySiteWhere(companyId)
+  // Section permissions and modules are settled above; the live site ids are read only
+  // when a shown section binds to them, so a company with those modules off reads nothing.
+  const needsSiteIds = show.expenses || show.labour || show.materials
+  const siteIds = needsSiteIds
+    ? await prisma.site.findMany({ where: liveSite, select: { id: true } }).then(s => s.map(x => x.id))
+    : []
+  const onLiveSite = { siteId: { in: siteIds } }
+  const optionalLiveSite = { OR: [{ siteId: null }, { site: liveSite }] }
+  const expenseWhere = { companyId, deletedAt: null, ...onLiveSite }
+
+  const [sites, expenses, labour, materialCount, vendors] = await Promise.all([
+    show.sites ? Promise.all([
+      prisma.site.count({ where: { ...liveSite, status: 'ACTIVE' } }),
+      prisma.site.findMany({ where: { ...liveSite, status: 'ACTIVE' }, orderBy: { spent: 'desc' }, take: 5 }),
+    ]) : null,
+    show.expenses ? Promise.all([
+      prisma.expense.aggregate({ where: { ...expenseWhere, createdAt: { gte: today, lte: todayEnd } }, _sum: { amount: true } }),
+      prisma.expense.aggregate({ where: { ...expenseWhere, approvalStatus: 'PENDING' }, _sum: { amount: true }, _count: true }),
+      prisma.expense.findMany({ where: { ...expenseWhere, approvalStatus: 'PENDING' }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, category: true, site: { select: { name: true } }, createdAt: true } }),
+      prisma.expense.findMany({ where: expenseWhere, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, approvalStatus: true, category: true, createdAt: true, site: { select: { name: true } } } }),
+    ]) : null,
+    show.labour ? Promise.all([
+      prisma.labour.count({ where: { companyId, isActive: true, ...onLiveSite } }),
+      prisma.labourAttendance.count({ where: { ...onLiveSite, date: { gte: today, lte: todayEnd }, status: 'PRESENT' } }),
+      prisma.labourAttendance.findMany({ where: onLiveSite, select: { advance: true, status: true, overtimeHours: true, labour: { select: { dailyWage: true } } } }),
+    ]) : null,
+    show.materials ? prisma.material.count({ where: { companyId, isActive: true, ...onLiveSite } }) : null,
+    show.vendors ? Promise.all([
+      prisma.vendor.aggregate({ where: { companyId, isActive: true, ...optionalLiveSite }, _sum: { amountPayable: true } }),
+      prisma.subcontractor.aggregate({ where: { companyId, isActive: true, ...optionalLiveSite }, _sum: { raBilled: true, advance: true, retention: true } }),
+    ]) : null,
   ])
+
+  return { sites, expenses, labour, materialCount, vendors }
 }
 
 export const dynamic = 'force-dynamic'
 
 export default async function CompanyDashboard() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'company.view' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/dashboard')
 
-  const [
-    activeSitesCount, todayExpenseAgg, pendingExpenses,
-    totalLabour, todayAttendance, recentPendingExpenses, recentExpenses, sites,
-    salaryDueAgg, invoicesDueAgg, vendorCount, subCount, materialCount, allAttendance,
-    vendorAgg, subAgg
-  ] = await getCachedDashboardData(companyId)
+  const data = await getDashboardData(gate.access)
+  const activeSitesCount = data.sites?.[0] ?? 0
+  const sites = data.sites?.[1] ?? []
+  const todayExpenseAgg = data.expenses?.[0]
+  const pendingExpenses = data.expenses?.[1]
+  const recentPendingExpenses = data.expenses?.[2] ?? []
+  const recentExpenses = data.expenses?.[3] ?? []
+  const totalLabour = data.labour?.[0] ?? 0
+  const todayAttendance = data.labour?.[1] ?? 0
+  const allAttendance = data.labour?.[2] ?? []
+  const vendorAgg = data.vendors?.[0]
+  const subAgg = data.vendors?.[1]
+  const materialCount = data.materialCount ?? 0
   const now = new Date()
 
-  const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
-  const pendingCount = pendingExpenses._count
-  const pendingTotal = Number(pendingExpenses._sum.amount ?? 0)
-  
+  const todaySpend = Number(todayExpenseAgg?._sum.amount ?? 0)
+  const pendingCount = pendingExpenses?._count ?? 0
+  const pendingTotal = Number(pendingExpenses?._sum.amount ?? 0)
+
   let totalAdvances = 0
   let totalWages = 0
   allAttendance.forEach(a => {
@@ -108,9 +141,6 @@ export default async function CompanyDashboard() {
     { href: '/reports', Icon: BarChart3, label: 'Generate Report', color: 'text-[#be123c]', bg: 'bg-[#ffe4e6]' },
   ]
 
-  const salaryDue = Number(salaryDueAgg._sum.totalNet ?? 0)
-  const invoicesDue = Number(invoicesDueAgg._sum.amount ?? 0)
-
   const vendorPending = Number(vendorAgg?._sum?.amountPayable ?? 0)
   const subRaBilled = Number(subAgg?._sum?.raBilled ?? 0)
   const subAdvance = Number(subAgg?._sum?.advance ?? 0)
@@ -118,16 +148,16 @@ export default async function CompanyDashboard() {
   const subPending = Math.max(0, subRaBilled - subAdvance - subRetention)
 
   const kpis = [
-    { label: 'Active Sites', value: activeSitesCount, sub: 'Active this month', trend: 'up', Icon: Building2 },
-    { label: "Today's Expense", value: fmtAmt(todaySpend), sub: 'Across all sites today', trend: 'up', Icon: DollarSign, featured: true },
-    { label: 'Bills Pending', value: pendingCount, sub: `${fmtAmt(pendingTotal)} to approve`, trend: 'warn', Icon: Clock },
-    { label: 'Labour Present', value: `${todayAttendance}/${totalLabour || '—'}`, sub: `${totalLabour > 0 ? Math.round((todayAttendance / totalLabour) * 100) : 0}% attendance`, trend: 'up', Icon: Users },
-    { label: 'Labour Pending', value: fmtAmt(labourPendingSalaries), sub: 'Unpaid earned wages', trend: labourPendingSalaries > 0 ? 'warn' : 'flat', Icon: Wallet },
-    { label: 'Labour Advances', value: fmtAmt(totalAdvances), sub: 'Total upfront paid', trend: 'up', Icon: CreditCard },
-    { label: 'Vendor Pending', value: fmtAmt(vendorPending), sub: 'Payable to active vendors', trend: vendorPending > 0 ? 'warn' : 'flat', Icon: Truck },
-    { label: 'Sub Pending', value: fmtAmt(subPending), sub: 'Unpaid approved RA bills', trend: subPending > 0 ? 'warn' : 'flat', Icon: Users },
-    { label: 'Materials Tracked', value: materialCount, sub: 'Across all sites', trend: 'flat', Icon: Package },
-  ]
+    data.sites && { label: 'Active Sites', value: activeSitesCount, sub: 'Active this month', trend: 'up', Icon: Building2 },
+    data.expenses && { label: "Today's Expense", value: fmtAmt(todaySpend), sub: 'Across all sites today', trend: 'up', Icon: DollarSign, featured: true },
+    data.expenses && { label: 'Bills Pending', value: pendingCount, sub: `${fmtAmt(pendingTotal)} to approve`, trend: 'warn', Icon: Clock },
+    data.labour && { label: 'Labour Present', value: `${todayAttendance}/${totalLabour || '—'}`, sub: `${totalLabour > 0 ? Math.round((todayAttendance / totalLabour) * 100) : 0}% attendance`, trend: 'up', Icon: Users },
+    data.labour && { label: 'Labour Pending', value: fmtAmt(labourPendingSalaries), sub: 'Unpaid earned wages', trend: labourPendingSalaries > 0 ? 'warn' : 'flat', Icon: Wallet },
+    data.labour && { label: 'Labour Advances', value: fmtAmt(totalAdvances), sub: 'Total upfront paid', trend: 'up', Icon: CreditCard },
+    data.vendors && { label: 'Vendor Pending', value: fmtAmt(vendorPending), sub: 'Payable to active vendors', trend: vendorPending > 0 ? 'warn' : 'flat', Icon: Truck },
+    data.vendors && { label: 'Sub Pending', value: fmtAmt(subPending), sub: 'Unpaid approved RA bills', trend: subPending > 0 ? 'warn' : 'flat', Icon: Users },
+    data.materialCount !== null && { label: 'Materials Tracked', value: materialCount, sub: 'Across all sites', trend: 'flat', Icon: Package },
+  ].flatMap((kpi) => (kpi ? [kpi] : []))
 
   return (
     <>
@@ -169,7 +199,7 @@ export default async function CompanyDashboard() {
       {/* Main grid */}
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4 items-start">
         {/* Left: Sites table */}
-        <div className="bg-white border border-[#e4eaf0] rounded-[18px] shadow-[0_2px_6px_rgba(16,40,70,0.04)]">
+        {data.sites && <div className="bg-white border border-[#e4eaf0] rounded-[18px] shadow-[0_2px_6px_rgba(16,40,70,0.04)]">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[#e4eaf0]">
             <div>
               <div className="text-[15px] font-extrabold text-[#16273a] tracking-[-0.02em]">Site-wise cost summary</div>
@@ -234,10 +264,10 @@ export default async function CompanyDashboard() {
               </table>
             )}
           </div>
-        </div>
+        </div>}
 
         {/* Right panel */}
-        <div className="flex flex-col gap-4">
+        {data.expenses && <div className="flex flex-col gap-4">
           {/* Pending Approval */}
           <div className="bg-white border border-[#e4eaf0] rounded-[18px] shadow-[0_2px_6px_rgba(16,40,70,0.04)]">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#e4eaf0]">
@@ -293,7 +323,7 @@ export default async function CompanyDashboard() {
               ))}
             </div>
           </div>
-        </div>
+        </div>}
       </div>
     </>
   )

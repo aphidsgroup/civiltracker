@@ -1,40 +1,30 @@
-import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { ensureCompanyContext, requireApiPermission } from '@/lib/auth/require-api-permission'
+import { approvalApiError } from '@/lib/approvals/api-errors'
+import { requireApprovalApiUser } from '@/lib/approvals/api-guard'
+import {
+  APPROVAL_DETAIL_NOT_FOUND,
+  resolveEntityBoundApprovalDetail,
+} from '@/lib/approvals/detail'
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const authResult = await requireApiPermission('approvals.view', 'APPROVALS')
-  if (authResult instanceof NextResponse) return authResult
 
-  const companyContextError = ensureCompanyContext(authResult)
-  if (companyContextError) return companyContextError
+  try {
+    const user = await requireApprovalApiUser('approvals.view')
 
-  const companyFilter = authResult.role === 'SUPER_ADMIN' ? {} : { companyId: authResult.companyId }
+    // A missing approval, a malformed row and an approval whose linked entity is
+    // unreachable inside its own company/site all answer identically, so a reader
+    // cannot tell an unreadable approval apart from a missing one.
+    const detail = await resolveEntityBoundApprovalDetail(user, id)
+    if (detail.status !== 'found') {
+      return NextResponse.json({ error: APPROVAL_DETAIL_NOT_FOUND }, { status: 404 })
+    }
 
-  const approval = await prisma.approval.findFirst({
-    where: { id, ...companyFilter, deletedAt: null },
-    include: {
-      site: { select: { name: true, location: true } },
-      requestedBy: { select: { name: true, email: true, role: true, avatar: true } },
-      reviewedBy: { select: { name: true } },
-      approvedBy: { select: { name: true } },
-      rejectedBy: { select: { name: true } },
-      comments: {
-        include: { user: { select: { name: true, avatar: true, role: true } } },
-        orderBy: { createdAt: 'asc' },
-      },
-      timelines: {
-        include: { actor: { select: { name: true, role: true } } },
-        orderBy: { createdAt: 'desc' },
-      },
-    },
-  })
-
-  if (!approval) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  return NextResponse.json({ success: true, data: approval })
+    return NextResponse.json({ success: true, data: detail.approval })
+  } catch (error) {
+    return approvalApiError(error)
+  }
 }

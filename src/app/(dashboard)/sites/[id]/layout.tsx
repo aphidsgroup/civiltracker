@@ -1,10 +1,32 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { EditSiteModal } from '@/components/client/EditSiteModal'
 import { SiteTabsNav } from '@/components/client/SiteTabsNav'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import type { TenantPageGrant } from '@/lib/pages/tenant-page-access'
+
+/**
+ * Every way into a nested site section. The layout admits a role that may read any one
+ * of them, so a section with its own permission (an accountant's site bills) is not
+ * blocked by the site header. Pages render in parallel with this layout, so each nested
+ * page still runs its own gate; this one only guards what the layout itself reads.
+ */
+const SITE_SECTION_GRANTS: TenantPageGrant[] = [
+  { permission: 'sites.view', module: 'SITES' },
+  { permission: 'expenses.view', module: 'EXPENSES' },
+  { permission: 'bills.view', module: 'BILLS' },
+  { permission: 'dpr.view', module: 'DPR' },
+  { permission: 'labour.view', module: 'LABOUR' },
+  { permission: 'materials.view', module: 'MATERIALS' },
+  { permission: 'vendors.view', module: 'MATERIALS' },
+]
+
+const SITE_HEADER_SELECT = {
+  id: true, name: true, status: true, location: true, address: true, projectType: true,
+  clientName: true, clientPhone: true, areaSqft: true, startDate: true, targetEndDate: true, budget: true,
+} as const
 
 export default async function SiteLayout({
   children,
@@ -13,14 +35,18 @@ export default async function SiteLayout({
   children: React.ReactNode
   params: Promise<{ id: string }>
 }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  
   const { id } = await params
+  const gate = await resolveTenantPageAccess({ grants: SITE_SECTION_GRANTS })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}`)
+  const { can, moduleEnabled } = gate.access
 
-  const site = await prisma.site.findUnique({
-    where: { id, companyId: session.user.companyId, deletedAt: null },
-  })
+  // Site metadata is read only under sites.view and the SITES module; any other admitted
+  // role gets the bare existence check, so a foreign, dead or — for a field role —
+  // unassigned id still leaves the page.
+  const showHeader = can('sites.view') && moduleEnabled('SITES')
+  const where = { id, ...(await assignedSiteWhere(gate.access)) }
+  const header = showHeader ? await prisma.site.findFirst({ where, select: SITE_HEADER_SELECT }) : null
+  const site = header ?? (showHeader ? null : await prisma.site.findFirst({ where, select: { id: true } }))
   const now = new Date()
 
   if (!site) redirect('/sites')
@@ -33,35 +59,38 @@ export default async function SiteLayout({
             <ChevronLeft className="w-4 h-4" />
             Sites
           </Link>
-          <div className="text-lg font-extrabold text-slate-900">{site.name}</div>
+          {header && <>
+          <div className="text-lg font-extrabold text-slate-900">{header.name}</div>
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            {site.status.replace('_', ' ')}
+            {header.status.replace('_', ' ')}
           </div>
-          {site.targetEndDate && (
+          {header.targetEndDate && (
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
               {(() => {
-                const diff = Math.ceil((new Date(site.targetEndDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                const diff = Math.ceil((new Date(header.targetEndDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                 return diff < 0 ? `Overdue by ${-diff} days` : `${diff} days left`
               })()}
             </div>
           )}
+          </>}
         </div>
         <div className="flex items-center gap-2">
-          <EditSiteModal site={{
-            id: site.id,
-            name: site.name,
-            location: site.location,
-            address: site.address,
-            projectType: site.projectType,
-            clientName: site.clientName,
-            clientPhone: site.clientPhone,
-            areaSqft: site.areaSqft ? Number(site.areaSqft) : null,
-            startDate: site.startDate,
-            targetEndDate: site.targetEndDate,
-            budget: Number(site.budget),
-            status: site.status
-          }} />
+          {/* The edit form carries the budget and client contact, so only sites.update gets it. */}
+          {header && can('sites.update') && <EditSiteModal site={{
+            id: header.id,
+            name: header.name,
+            location: header.location,
+            address: header.address,
+            projectType: header.projectType,
+            clientName: header.clientName,
+            clientPhone: header.clientPhone,
+            areaSqft: header.areaSqft ? Number(header.areaSqft) : null,
+            startDate: header.startDate,
+            targetEndDate: header.targetEndDate,
+            budget: Number(header.budget),
+            status: header.status
+          }} />}
           <div className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer shadow-sm transition-colors">
             Share
           </div>

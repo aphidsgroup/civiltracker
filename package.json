@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test:e2e": "playwright test",
     "test:stories": "vitest run",
+    "test:unit": "vitest run --project unit",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "ts-node --project prisma/tsconfig.seed.json prisma/seed.ts",

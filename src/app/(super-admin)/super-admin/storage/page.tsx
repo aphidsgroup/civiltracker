@@ -1,11 +1,9 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { requireSuperAdminPage } from '@/lib/pages/super-admin-page-access'
 import { HardDrive, Cloud, FileCode, Building2 } from 'lucide-react'
 
 export default async function StoragePage() {
-  const session = await auth()
-  if (session?.user?.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  await requireSuperAdminPage()
 
   const companies = await prisma.company.findMany({
     select: {

@@ -1,76 +1,31 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { LabourTrade } from '@prisma/client'
 import { redirect } from 'next/navigation'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import { Users, UserCheck, UserMinus, HardHat, Plus, AlertCircle } from 'lucide-react'
-import { revalidatePath } from 'next/cache'
 import { LabourCardList } from '@/app/(dashboard)/labour/LabourCardList'
+import { deactivateSiteLabour, markSiteLabourPaid, updateSiteLabour } from '@/actions/site-labour'
 
 export const metadata = { title: 'Site Labour | Civil Tracker' }
 export const dynamic = 'force-dynamic'
 
 export default async function SiteLabourPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
-  const { id: siteId } = await params
+  const { id } = await params
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'labour.view', module: 'LABOUR' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}/labour`)
+  const { companyId } = gate.access
 
-  async function updateLabour(formData: FormData) {
-    'use server'
-    const session = await auth()
-    if (!session?.user?.companyId) return
-    const id = formData.get('id') as string
-    const name = formData.get('name') as string
-    const phone = formData.get('phone') as string
-    const trade = formData.get('trade') as string
-    const dailyWage = parseFloat(formData.get('dailyWage') as string) || 0
-    const overtimeRate = parseFloat(formData.get('overtimeRate') as string) || 0
-    const openingAdvance = parseFloat(formData.get('openingAdvance') as string) || 0
-    const status = formData.get('status') as string
-    await prisma.labour.updateMany({
-      where: { id, companyId: session.user.companyId },
-      data: { name, phone: phone || null, trade: trade as LabourTrade, dailyWage, overtimeRate, openingAdvance, siteId, isActive: status === 'active' }
-    })
-    revalidatePath(`/sites/${siteId}/labour`)
-  }
-  
-  async function markLabourPaid(formData: FormData) {
-    'use server'
-    const session = await auth()
-    if (!session?.user?.companyId) return
-    const id = formData.get('id') as string
-    const amount = parseFloat(formData.get('amount') as string)
-    if (isNaN(amount) || amount <= 0) return
-    const latest = await prisma.labourAttendance.findFirst({
-      where: { labourId: id },
-      orderBy: { date: 'desc' },
-    })
-    if (latest) {
-      await prisma.labourAttendance.update({
-        where: { id: latest.id },
-        data: { advance: Number(latest.advance) + amount }
-      })
-    } else {
-      await prisma.labour.updateMany({
-        where: { id, companyId: session.user.companyId },
-        data: { openingAdvance: amount }
-      })
-    }
-    revalidatePath(`/sites/${siteId}/labour`)
-  }
-  
-  async function deactivateLabour(formData: FormData) {
-    'use server'
-    const session = await auth()
-    if (!session?.user?.companyId) return
-    const id = formData.get('id') as string
-    await prisma.labour.update({
-      where: { id, companyId: session.user.companyId },
-      data: { isActive: false },
-    })
-    revalidatePath(`/sites/${siteId}/labour`)
-  }
+  // The page reads nothing until the id names a live site of exactly this company that the
+  // principal may see; the layout's own lookup renders in parallel and is not a guard. The
+  // reassignment picker offers only sites under the same scope.
+  const siteScope = await assignedSiteWhere(gate.access)
+  const site = await prisma.site.findFirst({ where: { id, ...siteScope }, select: { id: true } })
+  if (!site) redirect('/sites')
+  const siteId = site.id
+
+  const updateLabour = updateSiteLabour.bind(null, siteId)
+  const markLabourPaid = markSiteLabourPaid.bind(null, siteId)
+  const deactivateLabour = deactivateSiteLabour.bind(null, siteId)
 
   const [labour, sites] = await Promise.all([
     prisma.labour.findMany({
@@ -82,7 +37,7 @@ export default async function SiteLabourPage({ params }: { params: Promise<{ id:
       orderBy: { name: 'asc' },
     }),
     prisma.site.findMany({
-      where: { companyId },
+      where: siteScope,
       select: { id: true, name: true },
       orderBy: { name: 'asc' }
     })

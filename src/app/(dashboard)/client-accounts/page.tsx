@@ -1,4 +1,5 @@
-import { auth } from '@/lib/auth'
+import { requirePermission } from '@/lib/auth/require-permission'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -6,16 +7,36 @@ import { revalidatePath } from 'next/cache'
 import { Plus, Building2, Eye } from 'lucide-react'
 import bcrypt from 'bcryptjs'
 import DangerConfirmSubmit from '@/components/ui/DangerConfirmSubmit'
-import { logActivity } from '@/lib/audit'
 
 export const metadata = { title: 'Client Accounts | Civil Tracker' }
 export const dynamic = 'force-dynamic'
 
-async function createClientUser(formData: FormData) {
+async function requireClientManager() {
+  const actor = await requirePermission('company.manage')
+  if (!actor.companyId) throw new Error('Company context required')
+  return { ...actor, companyId: actor.companyId }
+}
+
+async function requireActiveCompanySites(companyId: string, siteIds: string[]) {
+  const uniqueSiteIds = [...new Set(siteIds.filter(Boolean))]
+  if (uniqueSiteIds.length === 0) {
+    throw new Error('Select at least one active site for client portal access.')
+  }
+  const sites = await prisma.site.findMany({
+    where: { id: { in: uniqueSiteIds }, companyId, deletedAt: null, status: 'ACTIVE' },
+    select: { id: true },
+  })
+  if (sites.length !== uniqueSiteIds.length) {
+    throw new Error('One or more selected sites are unavailable in your company.')
+  }
+  return uniqueSiteIds
+}
+
+export async function createClientUser(formData: FormData) {
   'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-  const { companyId } = session.user
+  const actor = await requirePermission('company.manage')
+  const companyId = actor.companyId
+  if (!companyId) throw new Error('Company context required')
 
   const name = formData.get('name') as string
   const email = formData.get('email') as string
@@ -24,6 +45,7 @@ async function createClientUser(formData: FormData) {
   const siteIds = formData.getAll('siteIds') as string[]
 
   if (!name || !email || !password) redirect('/client-accounts?error=Missing+required+fields')
+  const assignedSiteIds = await requireActiveCompanySites(companyId, siteIds)
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
@@ -42,7 +64,35 @@ async function createClientUser(formData: FormData) {
       data: { name, email, phone, passwordHash, role: 'CLIENT' },
     })
     await tx.companyMember.create({
-      data: { userId: user.id, companyId, role: 'CLIENT', siteIds: siteIds.length > 0 ? siteIds : [], isActive: true },
+      data: { userId: user.id, companyId, role: 'CLIENT', siteIds: assignedSiteIds, isActive: true },
+    })
+    const assigned = await tx.site.updateMany({
+      where: {
+        id: { in: assignedSiteIds }, companyId, deletedAt: null, status: 'ACTIVE',
+        OR: [{ clientUserId: null }, { clientUserId: user.id }],
+      },
+      data: { clientUserId: user.id },
+    })
+    if (assigned.count !== assignedSiteIds.length) {
+      throw new Error('One or more selected sites changed before client access could be assigned.')
+    }
+    // Written with the transaction client so a failed audit rolls the login, membership
+    // and site assignment back instead of leaving unlogged client access behind.
+    await tx.auditLog.create({
+      data: {
+        companyId,
+        userId: actor.id,
+        action: 'CREATE',
+        module: 'USER',
+        recordId: user.id,
+        after: {
+          name,
+          email,
+          role: 'CLIENT',
+          siteIds: assignedSiteIds,
+          _description: `${actor.name ?? actor.email} created client login "${name}"`,
+        },
+      },
     })
   })
 
@@ -50,15 +100,15 @@ async function createClientUser(formData: FormData) {
   redirect('/client-accounts')
 }
 
-async function removeClientAccount(formData: FormData) {
+export async function removeClientAccount(formData: FormData) {
   'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) return
+  const actor = await requireClientManager()
+  const companyId = actor.companyId
   const memberId = formData.get('memberId') as string
   const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
 
   const member = await prisma.companyMember.findUnique({
-    where: { id: memberId, companyId: session.user.companyId },
+    where: { id: memberId, companyId },
     include: { user: { select: { id: true, name: true, email: true } } },
   })
   if (!member) throw new Error('Client account not found.')
@@ -68,29 +118,76 @@ async function removeClientAccount(formData: FormData) {
     throw new Error('Remove confirmation text did not match the client name/email.')
   }
 
-  await prisma.companyMember.update({
-    where: { id: memberId, companyId: session.user.companyId },
-    data: { isActive: false },
-  })
-
-  await logActivity({
-    userId: session.user.id,
-    companyId: session.user.companyId,
-    action: 'UPDATE',
-    module: 'USER',
-    recordId: member.userId,
-    description: `${session.user.name ?? session.user.email} deactivated client login "${member.user.name ?? member.user.email}"`,
-    before: { isActive: member.isActive, role: member.role, name: member.user.name, email: member.user.email },
-    after: { isActive: false, role: member.role, name: member.user.name, email: member.user.email },
+  await prisma.$transaction(async tx => {
+    await tx.companyMember.update({
+      where: { id: member.id, companyId },
+      data: { isActive: false },
+    })
+    await tx.auditLog.create({
+      data: {
+        companyId,
+        userId: actor.id,
+        action: 'UPDATE',
+        module: 'USER',
+        recordId: member.userId,
+        before: { isActive: member.isActive, role: member.role, name: member.user.name, email: member.user.email },
+        after: {
+          isActive: false,
+          role: member.role,
+          name: member.user.name,
+          email: member.user.email,
+          _description: `${actor.name ?? actor.email} deactivated client login "${member.user.name ?? member.user.email}"`,
+        },
+      },
+    })
   })
 
   revalidatePath('/client-accounts')
 }
 
+export async function assignClientSites(formData: FormData) {
+  'use server'
+  const actor = await requireClientManager()
+  const companyId = actor.companyId
+  const memberId = String(formData.get('memberId') ?? '')
+  const siteIds = await requireActiveCompanySites(companyId, formData.getAll('siteIds').map(String))
+  const member = await prisma.companyMember.findUnique({
+    where: { id: memberId },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  })
+  if (!member || member.companyId !== companyId || member.role !== 'CLIENT' || !member.isActive) {
+    throw new Error('Active client account not found in your company.')
+  }
+
+  await prisma.$transaction(async tx => {
+    await tx.site.updateMany({ where: { companyId, clientUserId: member.userId }, data: { clientUserId: null } })
+    const assigned = await tx.site.updateMany({
+      where: {
+        id: { in: siteIds }, companyId, deletedAt: null, status: 'ACTIVE',
+        OR: [{ clientUserId: null }, { clientUserId: member.userId }],
+      },
+      data: { clientUserId: member.userId },
+    })
+    if (assigned.count !== siteIds.length) {
+      throw new Error('One or more selected sites changed before client access could be assigned.')
+    }
+    await tx.companyMember.update({ where: { id: member.id, companyId }, data: { siteIds } })
+    await tx.auditLog.create({
+      data: {
+        companyId, userId: actor.id, action: 'UPDATE', module: 'USER', recordId: member.userId,
+        before: { siteIds: member.siteIds }, after: { siteIds, _description: `${actor.name ?? actor.email} updated client site access for "${member.user.name ?? member.user.email}"` },
+      },
+    })
+  })
+  revalidatePath('/client-accounts')
+}
+
 export default async function ClientAccountsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  // The list carries every client login's contact details, so it opens only under the
+  // same company.manage grant as the actions on it, decided on the live principal.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'company.manage' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/client-accounts')
+  const { companyId } = gate.access
 
   const members = await prisma.companyMember.findMany({
     where: { companyId, role: 'CLIENT' },
@@ -172,9 +269,9 @@ export default async function ClientAccountsPage({ searchParams }: { searchParam
               
               {sites.length > 0 && (
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Site Access (Optional)</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Site Access *</label>
                   <div className="text-xs text-slate-400 mb-2 border-l-2 border-[#fc6e20] pl-2">
-                    Select which projects this client can view. Leave empty to allow all.
+                    Select at least one project this client can view. Client access is limited to these explicitly assigned sites.
                   </div>
                   <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-3 bg-slate-50">
                     {sites.map(site => (
@@ -239,6 +336,20 @@ export default async function ClientAccountsPage({ searchParams }: { searchParam
                         <span className="w-1.5 h-1.5 rounded-full bg-current" />
                         {m.isActive ? 'Active' : 'Inactive'}
                       </span>
+                      <details className="relative">
+                        <summary className="cursor-pointer list-none inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Sites</summary>
+                        <form action={assignClientSites} className="absolute right-0 z-10 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl space-y-2">
+                          <input type="hidden" name="memberId" value={m.id} />
+                          <p className="text-xs font-semibold text-slate-700">Client portal sites</p>
+                          {sites.map(site => (
+                            <label key={site.id} className="flex items-center gap-2 text-xs text-slate-700">
+                              <input type="checkbox" name="siteIds" value={site.id} defaultChecked={m.siteIds.includes(site.id)} />
+                              {site.name}
+                            </label>
+                          ))}
+                          <button type="submit" className="w-full rounded-lg bg-[#fc6e20] px-2 py-1.5 text-xs font-bold text-white">Save site access</button>
+                        </form>
+                      </details>
                       <Link
                         href={`/settings/users/${m.id}`}
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-[#fc6e20] bg-[#fff7ed] hover:bg-[#fde8d1] border border-[#fcdcbf] rounded-lg transition-colors"

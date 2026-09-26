@@ -1,11 +1,10 @@
-import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
 import Link from 'next/link'
 import { getApprovalByIdAction } from '@/actions/approvals'
 import ApprovalDetailActions from '@/components/approvals/ApprovalDetailActions'
-import { hasPermission } from '@/lib/permissions'
-import type { Role } from '@prisma/client'
+import { canApprove as roleCanApprove } from '@/lib/permissions'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { ArrowLeft, Paperclip, MessageSquare, XCircle } from 'lucide-react'
 
 export default async function MobileApprovalDetailPage({
@@ -14,15 +13,22 @@ export default async function MobileApprovalDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const session = await auth()
-  if (!session?.user) redirect('/login')
+  // Same live gate as the desktop approval detail, before the approval is looked up.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'approvals.view', module: 'APPROVALS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/mobile/approvals/${id}`)
+  const { user, companyId, can } = gate.access
 
-  let approvalData
+  // The action binds the row to the live company, a live site of it and a reachable
+  // linked entity; a malformed, foreign, deleted, cross-bound or orphaned id answers like
+  // a missing one. The company is checked again so the page never renders another
+  // tenant's row.
+  let approvalData: Awaited<ReturnType<typeof getApprovalByIdAction>> | null = null
   try {
     approvalData = await getApprovalByIdAction(id)
   } catch {
-    redirect('/mobile/approvals')
+    approvalData = null
   }
+  if (!approvalData || approvalData.approval.companyId !== companyId) redirect('/mobile/approvals')
 
   const { approval, entityData } = approvalData
 
@@ -36,9 +42,9 @@ export default async function MobileApprovalDetailPage({
     DRAFT: 'bg-gray-50 text-gray-600 border-gray-200',
   }
 
-  const userRole = session.user.role as Role
-  const canApprove = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'PROJECT_MANAGER', 'ACCOUNTANT', 'PURCHASE_MANAGER'].includes(userRole)
-  const canPay = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'ACCOUNTANT'].includes(userRole) || hasPermission(userRole, 'salary.markPaid') || hasPermission(userRole, 'payments.manage')
+  // Button hints from the live role; each transition action re-checks on its own.
+  const canApprove = roleCanApprove(user.role)
+  const canPay = can('payments.manage') || can('salary.markPaid')
 
   return (
     <div className="p-4 pb-24 max-w-lg mx-auto bg-gray-50 min-h-screen space-y-4">

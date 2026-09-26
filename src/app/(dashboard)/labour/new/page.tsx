@@ -1,51 +1,19 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { revalidatePath } from 'next/cache'
 import { LabourTrade } from '@prisma/client'
+import { createLabourAction } from '@/actions/labour'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export const dynamic = 'force-dynamic'
 
-async function createLabour(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-  const { companyId } = session.user
-
-  const name = formData.get('name') as string
-  const phone = (formData.get('phone') as string) || undefined
-  const trade = formData.get('trade') as LabourTrade
-  const dailyWage = parseFloat(formData.get('dailyWage') as string)
-  const overtimeRate = formData.get('overtimeRate') ? parseFloat(formData.get('overtimeRate') as string) : undefined
-  const siteId = formData.get('siteId') as string
-
-  if (!name || !trade || !siteId || isNaN(dailyWage)) throw new Error('Missing required fields')
-
-  await prisma.labour.create({
-    data: {
-      companyId,
-      siteId,
-      name,
-      phone,
-      trade,
-      dailyWage,
-      overtimeRate,
-      isActive: true,
-    },
-  })
-
-  revalidatePath('/labour')
-  redirect('/labour')
-}
-
 export default async function NewLabourPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'labour.manage', module: 'LABOUR' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/labour/new')
 
+  // ACTIVE sites `createLabourAction` accepts for this principal: for a field role, only
+  // the live sites it is assigned to.
   const sites = await prisma.site.findMany({
-    where: { companyId, deletedAt: null, status: 'ACTIVE' },
+    where: { ...(await assignedSiteWhere(gate.access)), status: 'ACTIVE' },
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   })
@@ -75,7 +43,7 @@ export default async function NewLabourPage() {
 
       <div className="p-6 max-w-2xl mx-auto">
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-          <form action={createLabour} className="space-y-5">
+          <form action={createLabourAction} className="space-y-5">
             {/* Name */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Full Name *</label>

@@ -1,44 +1,14 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
-
-async function createClient(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  const companyId = session.user.companyId
-  const name = formData.get('name') as string
-  const phone = formData.get('phone') as string
-  const email = formData.get('email') as string
-  const siteId = formData.get('siteId') as string
-  const contractValue = formData.get('contractValue') as string
-  const portalAccess = formData.get('portalAccess') === 'on'
-
-  if (!name) return
-
-  await prisma.client.create({
-    data: {
-      companyId,
-      name,
-      phone: phone || null,
-      email: email || null,
-      siteId: siteId || null,
-      contractValue: contractValue ? parseFloat(contractValue) : 0,
-      portalAccess,
-    },
-  })
-
-  redirect('/clients')
-}
+import { createClientAction } from '@/actions/clients'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export default async function NewClientPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'payments.manage', module: 'CLIENTS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/clients/new')
 
   const sites = await prisma.site.findMany({
-    where: { companyId: session.user.companyId, status: 'ACTIVE', deletedAt: null },
+    where: { ...liveCompanySiteWhere(gate.access.companyId), status: 'ACTIVE' },
     select: { id: true, name: true }
   })
 
@@ -50,7 +20,7 @@ export default async function NewClientPage() {
       
       <div className="p-6 max-w-2xl">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <form action={createClient}>
+          <form action={createClientAction}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Client / Developer Name *</label>

@@ -1,33 +1,64 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { requireUser } from '@/lib/auth/require-user'
-import { hasPermission } from '@/lib/permissions'
+import { isExportFormat, isExportReportType, isSiteScopedReport } from '@/lib/reports/report-types'
+import type { ExportReportType } from '@/lib/reports/report-types'
+import { assignedSiteWhere, readsAssignedSitesOnly, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { hasCostRisk, isSiteOverBudget, calculateProfitForecast } from '@/lib/reports/calculations'
+import { sumValidOpenApprovalAmountsBySite } from '@/lib/approvals/valid-reads'
 import { Prisma } from '@prisma/client'
 
+/**
+ * The founder financial overview. It is a finance report, so `reports.view` alone does
+ * not open it: the live role needs `reports.finance` and the company the REPORTS module.
+ * SUPER_ADMIN carries no company and is refused before any read, never querying with an
+ * undefined company. Salary rows, receivables and profitability are each read and
+ * returned only under their own permission, and come back null otherwise.
+ *
+ * Every site-derived figure — budget, spend, expenses, salary, pending approvals — is
+ * read through the principal's `assignedSiteWhere`, so a field role totals only its
+ * assigned live sites. The client ledger has no site to scope by, so a field role never
+ * reads it: its receivable and profit figures come back null.
+ */
 export async function getFounderDashboardStats() {
-  const user = await requireUser()
-  const companyId = user.companyId!
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'reports.finance', module: 'REPORTS' }] })
+  if (gate.status === 'denied') throw new Error('FORBIDDEN: Financial reports are not available')
+  const access = gate.access
+  const { companyId, can, moduleEnabled } = access
+  const companyWideLedger = !readsAssignedSitesOnly(access.user.role)
 
-  if (user.role !== 'SUPER_ADMIN') {
-    if (!hasPermission(user.role, 'reports.view')) throw new Error('Unauthorized')
+  const show = {
+    salary: can('salary.view') && moduleEnabled('LABOUR'),
+    vendorPayable: can('reports.vendorPayable'),
+    clientReceivable: can('reports.clientReceivable') && companyWideLedger,
+    profitability: can('reports.profitability') && companyWideLedger,
   }
 
-  const sites = await prisma.site.findMany({
-    where: { companyId, deletedAt: null },
+  // Explicit branches keep Prisma's include typing: salary rows are only
+  // queried under salary.view.
+  const siteWhere = await assignedSiteWhere(access)
+  const expensesInclude = { where: { deletedAt: null } }
+  const salarySites = show.salary
+    ? await prisma.site.findMany({
+        where: siteWhere,
+        include: {
+          expenses: expensesInclude,
+          labour: { include: { salaryItems: true } },
+        }
+      })
+    : null
+  const sites = salarySites ?? await prisma.site.findMany({
+    where: siteWhere,
     include: {
-      expenses: {
-        where: { deletedAt: null }
-      },
-      labour: {
-        include: { salaryItems: true }
-      },
-      approvals: {
-        where: { deletedAt: null }
-      }
+      expenses: expensesInclude,
     }
   })
+  // Salary rows keyed by site; empty unless the salary branch loaded them.
+  const labourBySite = new Map((salarySites ?? []).map(s => [s.id, s.labour]))
+
+  // Pending approval money only counts rows an approver could action: never a
+  // malformed, orphaned, cross-bound or deleted-site approval.
+  const pendingBySite = await sumValidOpenApprovalAmountsBySite(sites)
 
   // Basic totals
   let totalBudget = new Prisma.Decimal(0)
@@ -68,8 +99,9 @@ export async function getFounderDashboardStats() {
       }
     }
 
-    // Calculate Labour
-    for (const lab of site.labour) {
+    // Calculate Labour — salary rows are only loaded under salary.view.
+    const labour = labourBySite.get(site.id) ?? []
+    for (const lab of labour) {
       for (const item of lab.salaryItems) {
         if (item.status === 'PAID') {
           siteSpend = siteSpend.add(item.netPayable)
@@ -86,11 +118,7 @@ export async function getFounderDashboardStats() {
     totalActualSpend = totalActualSpend.add(siteSpend)
 
     // Calculate Pending Approvals
-    for (const app of site.approvals) {
-      if ((app.currentStatus === 'PENDING' || app.currentStatus === 'PENDING_REVIEW' || app.currentStatus === 'SUBMITTED') && app.amount) {
-        pendingApprovalAmount = pendingApprovalAmount.add(app.amount)
-      }
-    }
+    pendingApprovalAmount = pendingApprovalAmount.add(pendingBySite.get(site.id) ?? 0)
 
     if (isSiteOverBudget(siteSpend, site.budget || 0)) {
       overBudgetSites++
@@ -101,10 +129,10 @@ export async function getFounderDashboardStats() {
     }
   }
 
-  // Client Receivables
-  const clients = await prisma.client.findMany({
-    where: { companyId }
-  })
+  // Client Receivables — the client ledger is read only for a figure the role may see.
+  const clients = show.clientReceivable || show.profitability
+    ? await prisma.client.findMany({ where: { companyId } })
+    : []
   for (const client of clients) {
     clientReceivable = clientReceivable.add(client.amountDue || 0)
   }
@@ -125,54 +153,92 @@ export async function getFounderDashboardStats() {
     pendingApprovalAmount: pendingApprovalAmount.toNumber(),
     approvedExpenseAmount: approvedExpenseAmount.toNumber(),
     paidAmount: paidAmount.toNumber(),
-    vendorPayable: vendorPayable.toNumber(),
-    clientReceivable: clientReceivable.toNumber(),
-    salaryPayable: salaryPayable.toNumber(),
+    vendorPayable: show.vendorPayable ? vendorPayable.toNumber() : null,
+    clientReceivable: show.clientReceivable ? clientReceivable.toNumber() : null,
+    salaryPayable: show.salary ? salaryPayable.toNumber() : null,
     materialCost: materialCost.toNumber(),
-    labourCost: labourCost.toNumber(),
-    profitForecastAmount: profitForecast.amount.toNumber(),
-    profitMarginPercent: profitForecast.marginPercent,
+    labourCost: show.salary ? labourCost.toNumber() : null,
+    profitForecastAmount: show.profitability ? profitForecast.amount.toNumber() : null,
+    profitMarginPercent: show.profitability ? profitForecast.marginPercent : null,
     overBudgetSites,
     delayedSitesWithCostRisk
   }
 }
 
+/**
+ * A site filter from a caller: absent, or one site id string. Anything else — an operator
+ * object, an array, a number — is refused rather than handed to Prisma.
+ */
+export async function parseReportSiteId(filters: unknown): Promise<string | undefined> {
+  const raw = filters && typeof filters === 'object' ? (filters as { siteId?: unknown }).siteId : undefined
+  if (raw === undefined || raw === null || raw === '') return undefined
+  if (typeof raw !== 'string') throw new Error('FORBIDDEN: Invalid site filter')
+  return raw
+}
+
+/**
+ * Live gate for a company-wide ledger report (vendor payable, client receivable). The
+ * ledger has no site to scope by, so a field role — which reads only its assigned sites —
+ * is refused outright even though its role carries the report permission.
+ */
+async function requireTenantLedgerReport(permission: 'reports.vendorPayable' | 'reports.clientReceivable') {
+  const gate = await resolveTenantPageAccess({ grants: [{ permission, module: 'REPORTS' }] })
+  if (gate.status === 'denied') throw new Error('FORBIDDEN: Report is not available')
+  if (!gate.access.can('reports.view')) throw new Error('FORBIDDEN: Report is not available')
+  if (readsAssignedSitesOnly(gate.access.user.role)) throw new Error('FORBIDDEN: Company-wide reports are not available to field roles')
+  return gate.access
+}
+
+/**
+ * Budget and spend per site. A finance report: the live role needs `reports.view` and
+ * `reports.finance` and the company the REPORTS module; SUPER_ADMIN and CLIENT are
+ * refused before any read. Sites are narrowed at the query to the principal's
+ * `assignedSiteWhere`, so a field role sees only its assigned live sites and a site
+ * filter outside that scope returns nothing. Salary rows are read only under
+ * `salary.view` with LABOUR on.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getSiteCostReport(filters: any) {
-  const user = await requireUser()
-  if (!hasPermission(user.role, 'reports.view')) throw new Error('Unauthorized')
-  
-  const sites = await prisma.site.findMany({
-    where: { 
-      companyId: user.companyId!,
-      deletedAt: null,
-      ...(filters.siteId ? { id: filters.siteId } : {})
-    },
-    include: {
-      expenses: { where: { deletedAt: null } },
-      labour: { include: { salaryItems: true } },
-      approvals: { where: { deletedAt: null } }
-    }
+  const siteId = await parseReportSiteId(filters)
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'reports.finance', module: 'REPORTS' }] })
+  if (gate.status === 'denied') throw new Error('FORBIDDEN: Financial reports are not available')
+  const access = gate.access
+  if (access.user.role === 'CLIENT' || !access.can('reports.view')) throw new Error('FORBIDDEN: Financial reports are not available')
+
+  const showSalary = access.can('salary.view') && access.moduleEnabled('LABOUR')
+  const where: Prisma.SiteWhereInput = { ...(await assignedSiteWhere(access)), ...(siteId ? { id: siteId } : {}) }
+  const expensesInclude = { where: { deletedAt: null } }
+
+  // Explicit branches keep Prisma's include typing: salary rows are only queried under
+  // salary.view.
+  const salarySites = showSalary
+    ? await prisma.site.findMany({
+        where,
+        include: { expenses: expensesInclude, labour: { include: { salaryItems: true } } },
+      })
+    : null
+  const sites = salarySites ?? await prisma.site.findMany({
+    where,
+    include: { expenses: expensesInclude },
   })
+  const labourBySite = new Map((salarySites ?? []).map(s => [s.id, s.labour]))
+
+  const pendingBySite = await sumValidOpenApprovalAmountsBySite(sites)
 
   return sites.map(s => {
     let spent = new Prisma.Decimal(0)
-    let pending = new Prisma.Decimal(0)
-    
+    const pending = pendingBySite.get(s.id) ?? new Prisma.Decimal(0)
+
     s.expenses.forEach(e => {
       if (['APPROVED', 'PAID'].includes(e.approvalStatus)) spent = spent.add(e.amount)
     })
-    
-    s.labour.forEach(l => {
+
+    // Salary rows are only loaded under salary.view.
+    const labour = labourBySite.get(s.id) ?? []
+    labour.forEach(l => {
       l.salaryItems.forEach(si => {
         if (['APPROVED', 'PAID'].includes(si.status)) spent = spent.add(si.netPayable)
       })
-    })
-
-    s.approvals.forEach(a => {
-      if (['PENDING', 'PENDING_REVIEW', 'SUBMITTED'].includes(a.currentStatus) && a.amount) {
-        pending = pending.add(a.amount)
-      }
     })
 
     return {
@@ -187,34 +253,75 @@ export async function getSiteCostReport(filters: any) {
   })
 }
 
-// Ensure simple export tracking
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function logReportExport(reportType: string, format: string, filters: any) {
-  const user = await requireUser()
-  if (user.role !== 'SUPER_ADMIN') {
-    if (!hasPermission(user.role, 'reports.export')) throw new Error('Unauthorized')
+/**
+ * Filters an export may log: a plain object carrying nothing but an optional non-empty
+ * string `siteId`, and that only for a site-scoped report. A company id, a description,
+ * a nested payload, an operator object or any unknown key is refused, never logged.
+ */
+function parseExportFilters(reportType: ExportReportType, filters: unknown): { siteId?: string } {
+  if (!filters || typeof filters !== 'object' || Array.isArray(filters)) throw new Error('FORBIDDEN: Invalid report filter')
+  const proto = Object.getPrototypeOf(filters)
+  if (proto !== Object.prototype && proto !== null) throw new Error('FORBIDDEN: Invalid report filter')
+
+  const keys = Object.keys(filters)
+  if (keys.some((key) => key !== 'siteId')) throw new Error('FORBIDDEN: Invalid report filter')
+  if (keys.length === 0) return {}
+
+  const siteId = (filters as { siteId?: unknown }).siteId
+  if (typeof siteId !== 'string' || siteId === '') throw new Error('FORBIDDEN: Invalid site filter')
+  if (!isSiteScopedReport(reportType)) throw new Error('FORBIDDEN: This report takes no site filter')
+  return { siteId }
+}
+
+/**
+ * Records a report export. The report type and format are checked against their
+ * allowlists and the filters sanitized before anything is read. The live principal then
+ * needs `reports.export` with the REPORTS module on; SUPER_ADMIN (no company) and CLIENT
+ * are refused, and a field role is refused the company-wide ledgers. A site filter must
+ * name a live site of the live company inside the principal's assigned-site scope. The
+ * actor and company come from the live principal and only the sanitized filters are
+ * logged.
+ */
+export async function logReportExport(reportType: string, format: string, filters: unknown) {
+  if (!isExportReportType(reportType)) throw new Error('FORBIDDEN: Unknown report type')
+  if (!isExportFormat(format)) throw new Error('FORBIDDEN: Unknown export format')
+  const safeFilters = parseExportFilters(reportType, filters)
+
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'reports.export', module: 'REPORTS' }] })
+  if (gate.status === 'denied') throw new Error('FORBIDDEN: Report export is not available')
+  const access = gate.access
+  const { user, companyId } = access
+  if (user.role === 'CLIENT') throw new Error('FORBIDDEN: Report export is not available')
+  if (!isSiteScopedReport(reportType) && readsAssignedSitesOnly(user.role)) {
+    throw new Error('FORBIDDEN: Company-wide reports are not available to field roles')
+  }
+
+  if (safeFilters.siteId) {
+    const site = await prisma.site.findFirst({
+      where: { ...(await assignedSiteWhere(access)), id: safeFilters.siteId },
+      select: { id: true },
+    })
+    if (!site) throw new Error('FORBIDDEN: Site not found or access denied')
   }
 
   await prisma.auditLog.create({
     data: {
       userId: user.id,
-      companyId: user.companyId,
+      companyId,
       action: `REPORT_EXPORTED_${format}`,
       module: 'REPORTS',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      after: { reportType, filters } as any
+      after: { reportType, filters: safeFilters },
     }
   })
 
   try {
     await prisma.reportExport.create({
       data: {
-        companyId: user.companyId!,
+        companyId,
         generatedById: user.id,
         reportType,
         format,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        filtersJson: filters as any
+        filtersJson: safeFilters,
       }
     })
   } catch(e) {
@@ -224,11 +331,10 @@ export async function logReportExport(reportType: string, format: string, filter
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
 export async function getVendorPayableReport(filters: any) {
-  const user = await requireUser()
-  if (!hasPermission(user.role, 'reports.vendorPayable')) throw new Error('Unauthorized')
+  const { companyId } = await requireTenantLedgerReport('reports.vendorPayable')
 
   const vendors = await prisma.vendor.findMany({
-    where: { companyId: user.companyId! },
+    where: { companyId },
     include: {
       purchaseOrders: true
     }
@@ -244,11 +350,10 @@ export async function getVendorPayableReport(filters: any) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
 export async function getClientReceivableReport(filters: any) {
-  const user = await requireUser()
-  if (!hasPermission(user.role, 'reports.clientReceivable')) throw new Error('Unauthorized')
+  const { companyId } = await requireTenantLedgerReport('reports.clientReceivable')
 
   const clients = await prisma.client.findMany({
-    where: { companyId: user.companyId! },
+    where: { companyId },
     include: {
       invoices: true
     }

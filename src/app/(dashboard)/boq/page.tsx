@@ -1,23 +1,25 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { ClipboardList, FileSpreadsheet, DollarSign, Receipt } from 'lucide-react'
 
 export const metadata = { title: 'BOQ | Civil Tracker' }
 
 export default async function BOQPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'sites.view', module: 'BOQ' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/boq')
+  const { companyId } = gate.access
+
+  // Items on live sites of exactly this company; a field role sees only its assigned sites.
+  const where = { companyId, site: await assignedSiteWhere(gate.access) }
 
   const items = await prisma.bOQItem.findMany({
-    where: { companyId },
+    where,
     include: { site: { select: { name: true } } },
     orderBy: [{ siteId: 'asc' }, { category: 'asc' }],
   })
 
   const totalAgg = await prisma.bOQItem.aggregate({
-    where: { companyId },
+    where,
     _sum: { amount: true, totalWithGst: true },
   })
   const totalAmount = Number(totalAgg._sum.amount || 0)

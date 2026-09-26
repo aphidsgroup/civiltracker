@@ -194,7 +194,7 @@ test.describe('Migration File Safety Guard', () => {
 async function loginAsSuperAdmin(page: Parameters<typeof test>[1] extends (args: infer A) => unknown ? A extends { page: infer P } ? P : never : never) {
   await page.goto('/login')
   await page.fill('input[name="email"]', 'admin@civiltracker.in')
-  await page.fill('input[name="password"]', 'Admin@123456')
+  await page.fill('input[name="password"]', process.env.E2E_TEST_PASSWORD ?? '')
   const btn = page.locator('button:has-text("Sign in"), button[type="submit"]').first()
   await btn.click()
   await page.waitForURL(/\/super-admin\/dashboard/, { timeout: 10000 })

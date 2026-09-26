@@ -1,75 +1,99 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
+import { requireTenantMutation } from '@/lib/auth/site-mutation'
 
+const SITE_NOT_FOUND = 'FORBIDDEN: Site not found or access denied'
+const CLIENT_NOT_FOUND = 'FORBIDDEN: Client not found or access denied'
+
+/*
+ * Records a client advance. Live `payments.manage` + CLIENTS is checked before any read.
+ * The site must be a live site of exactly the live company, and the client it is linked
+ * to must belong to that company too. When the site has no client yet, the generated
+ * client, the site link and the payment are written in one transaction, so a failure
+ * leaves none of them behind.
+ */
 export async function createClientAdvance(data: {
   siteId: string
   amount: number
   purpose: string
   receivedAt: string
 }) {
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
+  const user = await requireTenantMutation('payments.manage', 'CLIENTS')
+  const companyId = user.companyId
 
-  if (!data.siteId) throw new Error('Please select a site.')
-  if (!data.amount || data.amount <= 0) throw new Error('Amount must be greater than 0.')
-  if (!data.purpose?.trim()) throw new Error('Purpose / notes are required.')
+  if (typeof data?.siteId !== 'string' || !data.siteId.trim()) throw new Error('Please select a site.')
+  if (typeof data.amount !== 'number' || !Number.isFinite(data.amount) || data.amount <= 0) {
+    throw new Error('Amount must be greater than 0.')
+  }
+  const purpose = typeof data.purpose === 'string' ? data.purpose.trim() : ''
+  if (!purpose) throw new Error('Purpose / notes are required.')
+  const paidAt = new Date(data.receivedAt)
+  if (typeof data.receivedAt !== 'string' || Number.isNaN(paidAt.getTime())) {
+    throw new Error('Invalid received date.')
+  }
+  const siteId = data.siteId.trim()
+  const amount = data.amount
 
-  const companyId = session.user.companyId
+  const advance = await prisma.$transaction(async (tx) => {
+    const site = await tx.site.findFirst({
+      where: { id: siteId, companyId, deletedAt: null },
+      select: { id: true, name: true, clientId: true },
+    })
+    if (!site) throw new Error(SITE_NOT_FOUND)
 
-  // Verify site belongs to this company
-  const site = await prisma.site.findFirst({
-    where: { id: data.siteId, companyId },
-    select: { id: true, name: true, clientId: true },
-  })
-  if (!site) throw new Error('Site not found or access denied.')
+    let clientId: string
+    if (site.clientId) {
+      const client = await tx.client.findFirst({
+        where: { id: site.clientId, companyId },
+        select: { id: true },
+      })
+      if (!client) throw new Error(CLIENT_NOT_FOUND)
+      clientId = client.id
+    } else {
+      const genericClient = await tx.client.create({
+        data: {
+          companyId,
+          name: `Client – ${site.name}`,
+          phone: '',
+          siteId: site.id,
+        },
+      })
+      const linked = await tx.site.updateMany({
+        where: { id: site.id, companyId, deletedAt: null, clientId: null },
+        data: { clientId: genericClient.id },
+      })
+      if (linked.count !== 1) throw new Error('Site client changed. Please retry.')
+      clientId = genericClient.id
+    }
 
-  // Resolve or create a Client record for this site
-  let clientId: string
-  if (site.clientId) {
-    clientId = site.clientId
-  } else {
-    const genericClient = await prisma.client.create({
+    return tx.payment.create({
       data: {
         companyId,
-        name: `Client – ${site.name}`,
-        phone: '',
+        clientId,
+        siteId: site.id,
+        amount,
+        type: 'ADVANCE',
+        mode: 'BANK_TRANSFER',
+        notes: purpose,
+        status: 'CONFIRMED',
+        paidAt,
       },
     })
-    clientId = genericClient.id
-    await prisma.site.update({
-      where: { id: site.id },
-      data: { clientId: genericClient.id },
-    })
-  }
-
-  const advance = await prisma.payment.create({
-    data: {
-      companyId,
-      clientId,
-      siteId: data.siteId,
-      amount: data.amount,
-      type: 'ADVANCE',
-      mode: 'BANK_TRANSFER',
-      notes: data.purpose,
-      status: 'CONFIRMED',
-      paidAt: new Date(data.receivedAt),
-    },
   })
 
   // Audit log
   try {
     const { logActivity } = await import('@/lib/audit')
     await logActivity({
-      userId: session.user.id!,
+      userId: user.id,
       companyId,
       action: 'CREATE',
       module: 'CLIENT_ADVANCE',
       recordId: advance.id,
-      description: `${session.user.name ?? session.user.email} recorded ₹${data.amount.toLocaleString('en-IN')} client advance — ${data.purpose.substring(0, 80)}`,
-      after: { amount: data.amount, purpose: data.purpose, siteId: data.siteId },
+      description: `${user.name ?? user.email} recorded ₹${amount.toLocaleString('en-IN')} client advance — ${purpose.substring(0, 80)}`,
+      after: { amount, purpose, siteId },
     })
   } catch {
     // Non-critical
@@ -78,4 +102,15 @@ export async function createClientAdvance(data: {
   revalidatePath('/clients/advances')
   revalidatePath('/mobile/add-client-advance')
   return { success: true, id: advance.id }
+}
+
+/* The `/clients/advances` form entry point; the same live gate and bindings apply. */
+export async function createClientAdvanceFromFormAction(formData: FormData) {
+  const amount = typeof formData.get('amount') === 'string' ? Number(formData.get('amount')) : NaN
+  await createClientAdvance({
+    siteId: String(formData.get('siteId') ?? ''),
+    amount,
+    purpose: String(formData.get('purpose') ?? ''),
+    receivedAt: String(formData.get('receivedAt') ?? ''),
+  })
 }

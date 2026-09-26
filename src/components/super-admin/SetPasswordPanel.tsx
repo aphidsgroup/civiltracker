@@ -7,11 +7,13 @@ import { resetUserPassword } from '@/actions/users'
 interface Props {
   userId: string
   userName: string
+  userEmail: string
 }
 
-export default function SetPasswordPanel({ userId, userName }: Props) {
+export default function SetPasswordPanel({ userId, userName, userEmail }: Props) {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [confirmEmail, setConfirmEmail] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [showEntryPassword, setShowEntryPassword] = useState(false)
   const [showEntryConfirm, setShowEntryConfirm] = useState(false)
@@ -27,10 +29,12 @@ export default function SetPasswordPanel({ userId, userName }: Props) {
     if (password !== confirm) { setError('Passwords do not match'); return }
     setLoading(true)
     try {
-      await resetUserPassword(userId, password)
+      // The server compares the typed email with the user's current email itself.
+      await resetUserPassword(userId, password, confirmEmail)
       setSetPasswordResult(password)
       setPassword('')
       setConfirm('')
+      setConfirmEmail('')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to set password')
     } finally {
@@ -142,9 +146,23 @@ export default function SetPasswordPanel({ userId, userName }: Props) {
             </button>
           </div>
         </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+            Type <span className="font-mono normal-case">{userEmail}</span> to confirm
+          </label>
+          <input
+            type="text"
+            value={confirmEmail}
+            onChange={e => setConfirmEmail(e.target.value)}
+            required
+            autoComplete="off"
+            placeholder={userEmail}
+            className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all font-mono"
+          />
+        </div>
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || confirmEmail.trim() !== userEmail.trim()}
           className="w-full py-2.5 bg-[#fc6e20] hover:bg-[#e85b0d] disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-2"
         >
           {loading ? <><Loader2 size={14} className="animate-spin" /> Setting Password…</> : 'Set Password'}

@@ -1,6 +1,4 @@
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { getClientPortalSites } from '@/lib/auth/client-portal'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { MapPin, ArrowRight, TrendingUp, Sparkles, HardHat, Layers, Check, CircleDot } from 'lucide-react'
 import Link from 'next/link'
@@ -11,24 +9,7 @@ export const metadata = {
 }
 
 export default async function ClientPortalProjectsPage() {
-  const session = await auth();
-  if (!session?.user) redirect('/login');
-
-  const clientRecord = await prisma.client.findFirst({
-    where: {
-      OR: [
-        { email: session.user.email },
-        { companyId: session.user.companyId }
-      ]
-    }
-  });
-
-  const client = clientRecord || { id: session.user.id, companyId: session.user.companyId };
-
-  // Exact prompt query requirement
-  const rawProjects = await prisma.site.findMany({ where: { companyId: client.companyId }, orderBy: { createdAt: 'desc' } });
-
-  const projects = rawProjects;
+  const projects = await getClientPortalSites();
 
   const milestonesTemplate = [
     { name: 'Site Mobilization & Excavation', threshold: 10 },

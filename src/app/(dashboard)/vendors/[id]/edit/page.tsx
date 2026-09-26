@@ -1,51 +1,26 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { updateVendorAction } from '@/actions/vendors'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
+/* The live-authorized vendor update, then back to the list as before. */
 async function updateVendor(formData: FormData) {
   'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  const companyId = session.user.companyId
-  const id = formData.get('id') as string
-  const name = formData.get('name') as string
-  const email = formData.get('email') as string
-  const phone = formData.get('phone') as string
-  const gst = formData.get('gst') as string
-  const category = formData.get('category') as string
-  const paymentTerms = formData.get('paymentTerms') as string
-  const address = formData.get('address') as string
-  const amountPayable = formData.get('amountPayable') as string
-  const isActive = formData.get('isActive') === 'true'
-
-  if (!id || !name) return
-
-  await prisma.vendor.updateMany({
-    where: { id, companyId },
-    data: {
-      name,
-      email: email || null,
-      phone: phone || null,
-      gst: gst || null,
-      category: category || null,
-      paymentTerms: paymentTerms || null,
-      address: address || null,
-      amountPayable: amountPayable ? parseFloat(amountPayable) : 0,
-      isActive,
-    },
-  })
-
+  await updateVendorAction(formData)
   redirect('/vendors')
 }
 
-export default async function EditVendorPage({ params }: { params: { id: string } }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+export default async function EditVendorPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  // Same live permission and module `updateVendorAction` enforces.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'materials.update', module: 'MATERIALS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/vendors/${id}/edit`)
+  const { companyId } = gate.access
 
+  // Exactly this vendor of this company, company-wide or on a live site of it.
   const vendor = await prisma.vendor.findFirst({
-    where: { id: params.id, companyId: session.user.companyId },
+    where: { id, companyId, OR: [{ siteId: null }, { site: { companyId, deletedAt: null } }] },
   })
 
   if (!vendor) redirect('/vendors')

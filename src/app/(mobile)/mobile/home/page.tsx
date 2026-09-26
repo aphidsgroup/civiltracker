@@ -1,5 +1,5 @@
-import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import {
   Building2, ChevronDown, Bell, ArrowRight, Wallet,
@@ -23,45 +23,58 @@ function getGreeting() {
 
 
 export default async function MobileHome({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
-  const session = await auth()
-  const companyId = session?.user?.companyId
-  const userId = session?.user?.id
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'sites.view', module: 'SITES' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/mobile/home')
+  // A CLIENT never reads tenant sites here, whatever its permissions become.
+  if (gate.access.user.role === 'CLIENT') exitDeniedPage({ status: 'denied', redirectTo: '/client-portal' }, '/mobile/home')
+  const { user, companyId, can, moduleEnabled } = gate.access
+  const userId = user.id
+  const companyName = user.companyName ?? ''
+
+  // Each tile is read only for a live role holding its permission with the module on.
+  const show = {
+    siteExpenses: can('expenses.view') && moduleEnabled('EXPENSES'),
+    ownExpenses: (can('expenses.view') || can('expenses.create')) && moduleEnabled('EXPENSES'),
+    labour: (can('labour.view') || can('attendance.mark')) && moduleEnabled('LABOUR'),
+    advances: can('payments.view') || (can('reports.clientReceivable') && moduleEnabled('REPORTS')),
+    dpr: can('dpr.view') && moduleEnabled('DPR'),
+  }
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const todayEnd = new Date(today)
   todayEnd.setHours(23, 59, 59, 999)
 
-  const member = await prisma.companyMember.findFirst({
-    where: { userId, companyId },
-  })
-  const siteIds = member?.siteIds ?? []
-
   const resolvedParams = await searchParams
-  const requestedSiteId = resolvedParams?.siteId
+  const requestedSiteId = typeof resolvedParams?.siteId === 'string' ? resolvedParams.siteId : undefined
 
-  // Fetch all sites user has access to
-  const allSitesRecords = siteIds.length > 0
-    ? await prisma.site.findMany({ where: { id: { in: siteIds }, companyId, deletedAt: null, status: 'ACTIVE' }, include: { company: true }, orderBy: { name: 'asc' } })
-    : await prisma.site.findMany({ where: { companyId, deletedAt: null, status: 'ACTIVE' }, include: { company: true }, orderBy: { name: 'asc' } })
+  // The picker is the principal's live assigned-site scope: every live company site for
+  // an admin or project role, and for a field role only the sites it is the engineer of
+  // or that its active membership lists. A field role with no assignment gets none, and
+  // a stale assignment to another tenant's or a deleted site simply drops out.
+  const allSitesRecords = await prisma.site.findMany({
+    where: { ...(await assignedSiteWhere(gate.access)), status: 'ACTIVE' },
+    orderBy: { name: 'asc' },
+  })
 
   const allSites = allSitesRecords.map(s => ({
     id: s.id,
     name: s.name,
-    companyName: s.company.name
+    companyName,
   }))
 
-  const activeSiteRecord = requestedSiteId 
+  const activeSiteRecord = requestedSiteId
     ? allSitesRecords.find(s => s.id === requestedSiteId) || allSitesRecords[0]
     : allSitesRecords[0]
 
   const activeSite = activeSiteRecord ? {
     id: activeSiteRecord.id,
     name: activeSiteRecord.name,
-    companyName: activeSiteRecord.company.name
+    companyName,
   } : null
 
   const siteId = activeSite?.id
+  const onSite = siteId ? { siteId, companyId } : null
 
   const [
     todayExpenseAgg,
@@ -74,46 +87,47 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
     clientAdvancesAgg,
     todayDpr,
   ] = await Promise.all([
-    siteId ? prisma.expense.aggregate({
-      where: { siteId, createdAt: { gte: today, lte: todayEnd } },
+    onSite && show.siteExpenses ? prisma.expense.aggregate({
+      where: { ...onSite, deletedAt: null, createdAt: { gte: today, lte: todayEnd } },
       _sum: { amount: true },
     }) : Promise.resolve({ _sum: { amount: null } }),
 
-    siteId ? prisma.expense.count({
-      where: { siteId, approvalStatus: 'PENDING' },
+    onSite && show.siteExpenses ? prisma.expense.count({
+      where: { ...onSite, deletedAt: null, approvalStatus: 'PENDING' },
     }) : Promise.resolve(0),
 
-    siteId ? prisma.labourAttendance.count({
-      where: { siteId, date: { gte: today, lte: todayEnd }, status: 'PRESENT' },
+    // Attendance rows carry no company column; the site was bound to the company above.
+    onSite && show.labour ? prisma.labourAttendance.count({
+      where: { siteId: onSite.siteId, date: { gte: today, lte: todayEnd }, status: 'PRESENT' },
     }) : Promise.resolve(0),
 
-    siteId ? prisma.labour.count({ where: { siteId, isActive: true } }) : Promise.resolve(0),
+    onSite && show.labour ? prisma.labour.count({ where: { ...onSite, isActive: true } }) : Promise.resolve(0),
 
-    siteId ? prisma.sitePhoto.count({
-      where: { siteId, createdAt: { gte: today, lte: todayEnd } },
+    onSite ? prisma.sitePhoto.count({
+      where: { ...onSite, createdAt: { gte: today, lte: todayEnd } },
     }) : Promise.resolve(0),
 
-    siteId ? prisma.expense.findMany({
-      where: { siteId, approvalStatus: 'PENDING', createdById: userId },
+    onSite && show.ownExpenses ? prisma.expense.findMany({
+      where: { ...onSite, deletedAt: null, approvalStatus: 'PENDING', createdById: userId },
       orderBy: { createdAt: 'desc' },
       take: 2,
       select: { id: true, description: true, amount: true, paidTo: true, createdAt: true, category: true },
     }) : Promise.resolve([]),
 
-    siteId ? prisma.expense.findMany({
-      where: { siteId },
+    onSite && show.siteExpenses ? prisma.expense.findMany({
+      where: { ...onSite, deletedAt: null },
       orderBy: { createdAt: 'desc' },
       take: 2,
       select: { id: true, description: true, amount: true, paidTo: true, approvalStatus: true, createdAt: true, category: true },
     }) : Promise.resolve([]),
 
-    siteId ? prisma.payment.aggregate({
-      where: { siteId, type: 'ADVANCE' },
+    onSite && show.advances ? prisma.payment.aggregate({
+      where: { ...onSite, type: 'ADVANCE' },
       _sum: { amount: true },
     }) : Promise.resolve({ _sum: { amount: null } }),
 
-    siteId ? prisma.dailyProgressReport.findFirst({
-      where: { siteId, date: { gte: today, lte: todayEnd } }
+    onSite && show.dpr ? prisma.dailyProgressReport.findFirst({
+      where: { ...onSite, date: { gte: today, lte: todayEnd } }
     }) : Promise.resolve(null),
   ])
 
@@ -134,8 +148,8 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
     ? Math.floor((new Date(targetDate).getTime() - new Date(startDate).getTime()) / 86400000)
     : null
 
-  const firstName = session?.user?.name?.split(' ')[0] ?? 'Engineer'
-  const roleTitle = session?.user?.role?.replace(/_/g, ' ') ?? 'Site Engineer'
+  const firstName = user.name?.split(' ')[0] || 'Engineer'
+  const roleTitle = user.role.replace(/_/g, ' ')
 
 
   return (

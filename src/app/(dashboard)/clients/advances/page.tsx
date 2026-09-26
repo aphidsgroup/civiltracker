@@ -1,65 +1,13 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { revalidatePath } from 'next/cache'
 import { IndianRupee, PlusCircle, Building2, Calendar, FileText, TrendingUp } from 'lucide-react'
-
-async function createAdvanceAction(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  const siteId = formData.get('siteId') as string
-  const amount = parseFloat(formData.get('amount') as string)
-  const purpose = (formData.get('purpose') as string)?.trim()
-  const receivedAt = formData.get('receivedAt') as string
-
-  if (!siteId || !amount || amount <= 0 || !purpose || !receivedAt) {
-    throw new Error('All fields are required.')
-  }
-
-  const companyId = session.user.companyId
-
-  const site = await prisma.site.findFirst({
-    where: { id: siteId, companyId },
-    select: { id: true, name: true, clientId: true },
-  })
-  if (!site) throw new Error('Site not found.')
-
-  let clientId: string
-  if (site.clientId) {
-    clientId = site.clientId
-  } else {
-    const genericClient = await prisma.client.create({
-      data: { companyId, name: `Client – ${site.name}`, phone: '' },
-    })
-    clientId = genericClient.id
-    await prisma.site.update({ where: { id: site.id }, data: { clientId: genericClient.id } })
-  }
-
-  await prisma.payment.create({
-    data: {
-      companyId,
-      clientId,
-      siteId,
-      amount,
-      type: 'ADVANCE',
-      mode: 'BANK_TRANSFER',
-      notes: purpose,
-      status: 'CONFIRMED',
-      paidAt: new Date(receivedAt),
-    },
-  })
-
-  revalidatePath('/clients/advances')
-}
+import { createClientAdvanceFromFormAction } from '@/actions/client-advance'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export default async function ClientAdvancesPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-
-  const companyId = session.user.companyId
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'payments.view', module: 'CLIENTS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/clients/advances')
+  const { companyId } = gate.access
 
   const [advances, sites] = await Promise.all([
     prisma.payment.findMany({
@@ -71,7 +19,7 @@ export default async function ClientAdvancesPage() {
       take: 100,
     }),
     prisma.site.findMany({
-      where: { companyId, deletedAt: null, status: 'ACTIVE' },
+      where: { ...liveCompanySiteWhere(companyId), status: 'ACTIVE' },
       select: { id: true, name: true, location: true },
       orderBy: { name: 'asc' },
     }),
@@ -198,7 +146,7 @@ export default async function ClientAdvancesPage() {
               </div>
             </div>
 
-            <form action={createAdvanceAction} className="p-6 space-y-4">
+            <form action={createClientAdvanceFromFormAction} className="p-6 space-y-4">
               {/* Site */}
               <div>
                 <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">

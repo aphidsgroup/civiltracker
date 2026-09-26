@@ -1,6 +1,6 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus, FileText, AlertTriangle, Users } from 'lucide-react'
@@ -8,10 +8,16 @@ import { Plus, FileText, AlertTriangle, Users } from 'lucide-react'
 export const dynamic = 'force-dynamic'
 
 export default async function SiteDprPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
-  const { id: siteId } = await params
+  const { id } = await params
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'dpr.view', module: 'DPR' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}/dpr`)
+  const { companyId } = gate.access
+
+  // The page reads nothing until the id names a live site of exactly this company that the
+  // principal may see.
+  const site = await prisma.site.findFirst({ where: { id, ...(await assignedSiteWhere(gate.access)) }, select: { id: true } })
+  if (!site) redirect('/sites')
+  const siteId = site.id
 
   const dprs = await prisma.dailyProgressReport.findMany({
     where: { companyId, siteId },
