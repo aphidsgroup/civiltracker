@@ -47,61 +47,71 @@ export async function enableChecklistForProject(siteId: string, templateId: stri
   return { success: true }
 }
 
-export async function toggleTaskStatus(siteId: string, taskId: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED', isClientDone = false, isNeglected = false) {
+const TASK_STATUSES = ['PENDING', 'IN_PROGRESS', 'COMPLETED'] as const
+type TaskStatus = (typeof TASK_STATUSES)[number]
+
+/*
+ * Changes a checklist task's status. The site is bound to the caller's checklist scope
+ * (field roles: assigned live sites) before anything is read; then the task is re-read on
+ * that site's checklist, updated and audited on one transaction client, so an audit
+ * failure rolls the status back. Audit history is append-only: a tick appends a
+ * CHECKLIST TICK event, an untick a CHECKLIST UNTICK event, any other change a CHECKLIST
+ * UPDATE event, and no audit row is ever deleted or rewritten.
+ */
+export async function toggleTaskStatus(siteId: string, taskId: string, status: TaskStatus, isClientDone = false, isNeglected = false) {
+  if (typeof siteId !== 'string' || !siteId || typeof taskId !== 'string' || !taskId) {
+    throw new Error('Invalid checklist task')
+  }
+  if (typeof status !== 'string' || !(TASK_STATUSES as readonly string[]).includes(status)) {
+    throw new Error('Invalid checklist task status')
+  }
+  if (typeof isClientDone !== 'boolean' || typeof isNeglected !== 'boolean') {
+    throw new Error('Invalid checklist task flags')
+  }
+
   // Field staff may tick progress; the client-done and neglected flags are manager-only.
   const setsManagerFlags = isClientDone || isNeglected
-  const { user, site, task } = await requireChecklistTask(siteId, taskId, setsManagerFlags ? 'manage' : 'progress')
+  const { user, site } = await requireChecklistSite(siteId, setsManagerFlags ? 'manage' : 'progress')
   const canManage = hasPermission(user.role, 'tasks.manage')
 
-  await prisma.projectChecklistTask.update({
-    where: { id: task.id },
-    data: {
-      status,
-      ...(canManage ? { isClientDone, isNeglected } : {}),
-      completedAt: status === 'COMPLETED' ? new Date() : null,
-      completedById: status === 'COMPLETED' ? user.id : null,
-    },
-  })
+  await prisma.$transaction(async (tx) => {
+    const task = await tx.projectChecklistTask.findFirst({
+      where: { id: taskId, category: { stage: { checklist: { siteId: site.id, companyId: site.companyId } } } },
+      select: { id: true, name: true, status: true, isClientDone: true, isNeglected: true },
+    })
+    if (!task) throw new Error('FORBIDDEN: Checklist task not found or access denied')
 
-  if (status === 'COMPLETED') {
-    // Task ticked — create TICK entry, storing taskId so we can delete it on untick
-    await prisma.auditLog.create({
+    const next = {
+      status,
+      isClientDone: canManage ? isClientDone : task.isClientDone,
+      isNeglected: canManage ? isNeglected : task.isNeglected,
+    }
+    await tx.projectChecklistTask.update({
+      where: { id: task.id },
+      data: {
+        status,
+        ...(canManage ? { isClientDone, isNeglected } : {}),
+        completedAt: status === 'COMPLETED' ? new Date() : null,
+        completedById: status === 'COMPLETED' ? user.id : null,
+      },
+      select: { id: true },
+    })
+
+    const action = status === 'COMPLETED' ? 'TICK' : task.status === 'COMPLETED' ? 'UNTICK' : 'UPDATE'
+    await tx.auditLog.create({
       data: {
         userId: user.id,
         companyId: site.companyId,
         module: 'CHECKLIST',
-        action: 'TICK',
-        recordId: siteId,
-        after: { taskId, taskName: task.name, status: 'COMPLETED' }
-      }
+        action,
+        recordId: site.id,
+        before: { taskId: task.id, siteId: site.id, status: task.status, isClientDone: task.isClientDone, isNeglected: task.isNeglected },
+        after: { taskId: task.id, taskName: task.name, siteId: site.id, ...next },
+      },
     })
-  } else {
-    // Task unticked — fetch all checklist entries for this site, delete matching ones
-    const allEntries = await prisma.auditLog.findMany({
-      where: { module: 'CHECKLIST', recordId: site.id, companyId: site.companyId },
-      select: { id: true, action: true, after: true }
-    })
+  })
 
-    const toDelete = allEntries
-      .filter(e => {
-        // Delete if it's any UNTICK entry (legacy cleanup)
-        if (e.action === 'UNTICK') return true
-        // Delete TICK entries that belong to this specific task
-        if (e.action === 'TICK') {
-          const data = e.after as { taskId?: string } | null
-          return data?.taskId === taskId
-        }
-        return false
-      })
-      .map(e => e.id)
-
-    if (toDelete.length > 0) {
-      await prisma.auditLog.deleteMany({ where: { id: { in: toDelete } } })
-    }
-  }
-
-
-  revalidatePath(`/sites/${siteId}`)
+  revalidatePath(`/sites/${site.id}`)
   revalidatePath(`/activity`)
   return { success: true }
 }

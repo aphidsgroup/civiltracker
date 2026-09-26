@@ -59,16 +59,22 @@ describe('project checklist tenant authorization', () => {
   })
 
   it('rejects a task not linked to the authorized site before status mutation', async () => {
-    mocks.requireChecklistTask.mockRejectedValue(new Error('FORBIDDEN: Checklist task not found or access denied'))
+    mocks.prisma.projectChecklistTask.findFirst.mockResolvedValue(null)
     await expect(actions.toggleTaskStatus('site_1', 'foreign_task', 'COMPLETED')).rejects.toThrow(/access denied/i)
+    expect(mocks.requireChecklistSite).toHaveBeenCalledWith('site_1', 'progress')
+    expect(mocks.prisma.projectChecklistTask.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'foreign_task', category: { stage: { checklist: { siteId: 'site_1', companyId: 'company_1' } } } },
+    }))
     expect(mocks.prisma.projectChecklistTask.update).not.toHaveBeenCalled()
     expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   })
 
-  it('scopes audit cleanup to the verified site and tenant', async () => {
+  it('audits an untick on the verified site and tenant without touching history', async () => {
     await actions.toggleTaskStatus('site_1', 'task_1', 'PENDING')
-    expect(mocks.prisma.auditLog.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { module: 'CHECKLIST', recordId: 'site_1', companyId: 'company_1' },
+    expect(mocks.prisma.auditLog.findMany).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ module: 'CHECKLIST', recordId: 'site_1', companyId: 'company_1' }),
     }))
   })
 

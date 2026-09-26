@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
     projectChecklistCategory: { findFirst: vi.fn(), update: vi.fn() },
     projectChecklistTask: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     auditLog: { create: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() },
+    $transaction: vi.fn(),
   },
 }))
 
@@ -73,6 +74,7 @@ beforeEach(() => {
   mocks.prisma.projectChecklistTask.findFirst.mockResolvedValue({ id: 'task_1', name: 'Pour slab' })
   mocks.prisma.projectChecklistTask.findMany.mockResolvedValue([])
   mocks.prisma.auditLog.findMany.mockResolvedValue([])
+  mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
 })
 
 /** Every checklist read or mutation that takes a site id. */
