@@ -1,6 +1,5 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { requireSuperAdminPage } from '@/lib/pages/super-admin-page-access'
 import { Activity, ScrollText, ShieldAlert } from 'lucide-react'
 
 const MODULE_META: Record<string, { label: string; icon: string; color: string }> = {
@@ -44,8 +43,7 @@ function getDescription(log: { module: string; action: string; after: unknown; b
 }
 
 export default async function SystemLogsPage() {
-  const session = await auth()
-  if (session?.user?.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  await requireSuperAdminPage()
 
   const logs = await prisma.auditLog.findMany({
     include: {

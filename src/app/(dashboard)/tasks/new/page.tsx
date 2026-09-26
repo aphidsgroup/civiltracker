@@ -1,52 +1,20 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
-
-async function createTask(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  const companyId = session.user.companyId
-  const siteId = formData.get('siteId') as string
-  const name = formData.get('name') as string
-  const description = formData.get('description') as string
-  const assignedToId = formData.get('assignedToId') as string
-  const startDateStr = formData.get('startDate') as string
-  const dueDateStr = formData.get('dueDate') as string
-
-  if (!name || !siteId) return
-
-  await prisma.task.create({
-    data: {
-      companyId,
-      siteId,
-      name,
-      description: description || null,
-      assignedToId: assignedToId || null,
-      startDate: startDateStr ? new Date(startDateStr) : null,
-      dueDate: dueDateStr ? new Date(dueDateStr) : null,
-      createdById: session.user.id,
-      status: 'NOT_STARTED',
-      stage: 'FOUNDATION', // default
-    },
-  })
-
-  redirect('/tasks')
-}
+import { createTaskAction } from '@/actions/tasks'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export default async function NewTaskPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'tasks.manage', module: 'TASKS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/tasks/new')
+  const { companyId } = gate.access
 
   const [sites, staff] = await Promise.all([
     prisma.site.findMany({
-      where: { companyId: session.user.companyId, status: 'ACTIVE', deletedAt: null },
+      where: { ...liveCompanySiteWhere(companyId), status: 'ACTIVE' },
       select: { id: true, name: true }
     }),
     prisma.companyMember.findMany({
-      where: { companyId: session.user.companyId, isActive: true },
+      where: { companyId, isActive: true },
       include: { user: { select: { name: true } } }
     })
   ])
@@ -59,7 +27,7 @@ export default async function NewTaskPage() {
       
       <div className="p-6 max-w-2xl">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <form action={createTask}>
+          <form action={createTaskAction}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Task Name / Title *</label>

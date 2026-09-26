@@ -1,79 +1,11 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Truck, AlertCircle, CheckCircle2, DollarSign } from 'lucide-react'
-import { revalidatePath } from 'next/cache'
 import { VendorCardList } from './VendorCardList'
-import { logActivity } from '@/lib/audit'
+import { deactivateVendorAction, markVendorPaidAction, updateVendorAction } from '@/actions/vendors'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export const dynamic = 'force-dynamic'
-
-async function updateVendor(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) return
-  const id = formData.get('id') as string
-  await prisma.vendor.updateMany({
-    where: { id, companyId: session.user.companyId },
-    data: {
-      name: formData.get('name') as string,
-      phone: (formData.get('phone') as string) || null,
-      email: (formData.get('email') as string) || null,
-      gst: (formData.get('gst') as string) || null,
-      category: (formData.get('category') as string) || null,
-      address: (formData.get('address') as string) || null,
-      paymentTerms: (formData.get('paymentTerms') as string) || null,
-      amountPayable: parseFloat(formData.get('amountPayable') as string) || 0,
-      isActive: formData.get('isActive') === 'true',
-    }
-  })
-  revalidatePath('/vendors')
-}
-
-async function markVendorPaid(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) return
-  const id = formData.get('id') as string
-  await prisma.vendor.updateMany({
-    where: { id, companyId: session.user.companyId },
-    data: { amountPayable: 0 }
-  })
-  revalidatePath('/vendors')
-}
-
-async function deactivateVendor(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) return
-  const id = formData.get('id') as string
-  const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
-
-  const vendor = await prisma.vendor.findUnique({
-    where: { id, companyId: session.user.companyId },
-    select: { id: true, name: true, category: true, amountPayable: true, isActive: true },
-  })
-  if (!vendor) throw new Error('Vendor not found.')
-  if (typed !== vendor.name.trim()) {
-    throw new Error('Remove confirmation text did not match the vendor name.')
-  }
-
-  await prisma.vendor.update({ where: { id, companyId: session.user.companyId }, data: { isActive: false } })
-
-  await logActivity({
-    userId: session.user.id,
-    companyId: session.user.companyId,
-    action: 'UPDATE',
-    module: 'VENDOR',
-    recordId: vendor.id,
-    description: `${session.user.name ?? session.user.email} deactivated vendor "${vendor.name}"`,
-    before: { isActive: vendor.isActive, category: vendor.category, amountPayable: Number(vendor.amountPayable), name: vendor.name },
-    after: { isActive: false, category: vendor.category, amountPayable: Number(vendor.amountPayable), name: vendor.name },
-  })
-
-  revalidatePath('/vendors')
-}
 
 function fmt(n: number) {
   if (n >= 100000) return '₹' + (n / 100000).toFixed(2) + 'L'
@@ -82,14 +14,15 @@ function fmt(n: number) {
 }
 
 export default async function VendorsPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'vendors.view', module: 'MATERIALS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/vendors')
+  const { companyId } = gate.access
 
   const vendors = await prisma.vendor.findMany({
     where: {
-      companyId: session.user.companyId,
+      companyId,
       isActive: true,
-      OR: [{ siteId: null }, { site: { deletedAt: null } }]
+      OR: [{ siteId: null }, { site: { companyId, deletedAt: null } }]
     },
     include: { site: { select: { name: true } } },
     orderBy: { name: 'asc' },
@@ -157,9 +90,9 @@ export default async function VendorsPage() {
         ) : (
           <VendorCardList
             vendors={rows}
-            updateAction={updateVendor}
-            markPaidAction={markVendorPaid}
-            deactivateAction={deactivateVendor}
+            updateAction={updateVendorAction}
+            markPaidAction={markVendorPaidAction}
+            deactivateAction={deactivateVendorAction}
           />
         )}
       </div>

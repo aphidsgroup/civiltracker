@@ -1,6 +1,6 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect, notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
+import { requireSuperAdminPage } from '@/lib/pages/super-admin-page-access'
 import Link from 'next/link'
 import { ArrowLeft, User, Building2, Clock } from 'lucide-react'
 import { deleteUser } from '@/actions/super-admin'
@@ -8,8 +8,7 @@ import SetPasswordPanel from '@/components/super-admin/SetPasswordPanel'
 import DangerConfirmSubmit from '@/components/ui/DangerConfirmSubmit'
 
 export default async function SAUserDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (session?.user?.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  await requireSuperAdminPage()
 
   const { id: userId } = await params
 

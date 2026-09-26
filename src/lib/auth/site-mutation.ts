@@ -47,6 +47,22 @@ export async function requireSiteMutation(siteId: string, permission: Permission
   return { user, site }
 }
 
+/**
+ * Binds an optional form site id for a record that may stay company-wide: blank becomes
+ * `null`, anything else must be a site that is not soft deleted and belongs to exactly
+ * `companyId`. Call it only after the mutation gate.
+ */
+export async function bindOptionalSite(raw: FormDataEntryValue | null, companyId: string): Promise<string | null> {
+  const siteId = typeof raw === 'string' ? raw.trim() : ''
+  if (!siteId) return null
+  const site = await prisma.site.findFirst({
+    where: { id: siteId, companyId, deletedAt: null },
+    select: { id: true },
+  })
+  if (!site) throw new Error('FORBIDDEN: Site not found or access denied')
+  return site.id
+}
+
 /** Field roles, which read and write only the sites they are assigned to. */
 const ASSIGNED_SITE_ROLES: ReadonlySet<string> = new Set(['SITE_ENGINEER', 'SUPERVISOR'])
 
@@ -108,6 +124,12 @@ export function parsePositiveAmount(raw: FormDataEntryValue | null): number {
   const value = text === '' ? NaN : Number(text)
   if (!Number.isFinite(value) || value <= 0) throw new Error('Invalid payment amount')
   return value
+}
+
+/** An optional form string: blank becomes `null`. */
+export function optionalText(raw: FormDataEntryValue | null): string | null {
+  const text = typeof raw === 'string' ? raw.trim() : ''
+  return text || null
 }
 
 /** A required non-blank form string. */

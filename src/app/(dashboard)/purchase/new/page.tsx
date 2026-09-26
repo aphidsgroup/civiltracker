@@ -1,42 +1,16 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
-
-async function createPO(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  const companyId = session.user.companyId
-  const vendorId = formData.get('vendorId') as string
-  const poNumber = formData.get('poNumber') as string
-  const totalAmount = formData.get('totalAmount') as string
-  const notes = formData.get('notes') as string
-
-  if (!poNumber || !totalAmount) return
-
-  await prisma.purchaseOrder.create({
-    data: {
-      companyId,
-      vendorId: vendorId || null,
-      poNumber,
-      totalAmount: parseFloat(totalAmount),
-      notes: notes || null,
-      status: 'DRAFT',
-      createdById: session.user.id,
-    },
-  })
-
-  redirect('/purchase')
-}
+import { createPurchaseOrderAction } from '@/actions/purchase'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export default async function NewPurchaseOrderPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'materials.update', module: 'MATERIALS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/purchase/new')
+  const { companyId } = gate.access
 
+  // Only the vendors the action will accept: active, company-wide or on a live site.
   const vendors = await prisma.vendor.findMany({
-    where: { companyId: session.user.companyId, isActive: true },
+    where: { companyId, isActive: true, OR: [{ siteId: null }, { site: { companyId, deletedAt: null } }] },
     select: { id: true, name: true, category: true }
   })
   const now = new Date()
@@ -52,7 +26,7 @@ export default async function NewPurchaseOrderPage() {
       
       <div className="p-6 max-w-2xl">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <form action={createPO}>
+          <form action={createPurchaseOrderAction}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">PO Number *</label>

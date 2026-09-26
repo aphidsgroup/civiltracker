@@ -1,7 +1,6 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { requireSuperAdminPage } from '@/lib/pages/super-admin-page-access'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { Building2, Users, HardDrive, MessageCircle, TrendingUp, AlertCircle } from 'lucide-react'
 
 import { unstable_cache } from 'next/cache'
@@ -25,8 +24,7 @@ async function getCachedSuperAdminData() {
 }
 
 export default async function SuperAdminDashboard() {
-  const session = await auth()
-  if (session?.user?.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  await requireSuperAdminPage()
 
   const cachedDataFetcher = unstable_cache(
     async () => getCachedSuperAdminData(),

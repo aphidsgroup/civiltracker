@@ -1,6 +1,5 @@
-import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import { CheckCircle2, ChevronRight, Copy, Eye } from 'lucide-react'
 import { CloneTemplateBtn } from './CloneTemplateBtn'
@@ -8,19 +7,22 @@ import { CloneTemplateBtn } from './CloneTemplateBtn'
 export const dynamic = 'force-dynamic'
 
 export default async function ChecklistsIndexPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'tasks.manage', module: 'TASKS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/checklists')
 
-  const companyId = session.user.companyId
+  const { companyId } = gate.access
+  // "Sites" counts only this company's project checklists, never other tenants' usage.
+  const counts = { select: { stages: true, projects: { where: { companyId } } } } as const
 
   const [globalTemplates, companyTemplates] = await Promise.all([
+    // A master is global *and* owned by no company; a tenant row flagged global is neither.
     prisma.checklistTemplate.findMany({
-      where: { isGlobal: true },
+      where: { isGlobal: true, companyId: null },
       include: {
         stages: {
           include: { categories: { include: { tasks: true } } }
         },
-        _count: { select: { stages: true, projects: true } }
+        _count: counts
       },
       orderBy: { createdAt: 'asc' }
     }),
@@ -30,7 +32,7 @@ export default async function ChecklistsIndexPage() {
         stages: {
           include: { categories: { include: { tasks: true } } }
         },
-        _count: { select: { stages: true, projects: true } }
+        _count: counts
       },
       orderBy: { createdAt: 'desc' }
     })

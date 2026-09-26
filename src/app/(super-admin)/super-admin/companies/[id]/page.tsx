@@ -1,13 +1,12 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect, notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
+import { requireSuperAdminPage } from '@/lib/pages/super-admin-page-access'
 import Link from 'next/link'
 import { deleteCompany } from '@/actions/super-admin'
 import DangerConfirmSubmit from '@/components/ui/DangerConfirmSubmit'
 
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session?.user || session.user.role !== 'SUPER_ADMIN') redirect('/login')
+  await requireSuperAdminPage()
 
   const { id } = await params
 

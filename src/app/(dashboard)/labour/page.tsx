@@ -1,104 +1,21 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Users, UserCheck, UserMinus, HardHat, Plus, AlertCircle } from 'lucide-react'
-import { revalidatePath } from 'next/cache'
 import { LabourCardList } from './LabourCardList'
-import { logActivity } from '@/lib/audit'
-import { LabourTrade } from '@prisma/client'
+import { deactivateLabourAction, markLabourPaidAction, updateLabourRosterAction } from '@/actions/labour'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export const metadata = { title: 'Labour | Civil Tracker' }
 export const dynamic = 'force-dynamic'
 
-async function updateLabour(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) return
-  const id = formData.get('id') as string
-  const name = formData.get('name') as string
-  const phone = formData.get('phone') as string
-  const trade = formData.get('trade') as string
-  const dailyWage = parseFloat(formData.get('dailyWage') as string) || 0
-  const overtimeRate = parseFloat(formData.get('overtimeRate') as string) || 0
-  const openingAdvance = parseFloat(formData.get('openingAdvance') as string) || 0
-  const siteId = formData.get('siteId') as string
-  const status = formData.get('status') as string
-  await prisma.labour.updateMany({
-    where: { id, companyId: session.user.companyId },
-    data: { name, phone: phone || null, trade: trade as LabourTrade, dailyWage, overtimeRate, openingAdvance, siteId, isActive: status === 'active' }
-  })
-  revalidatePath('/labour')
-}
-
-async function markLabourPaid(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) return
-  const id = formData.get('id') as string
-  const amount = parseFloat(formData.get('amount') as string)
-  if (isNaN(amount) || amount <= 0) return
-  const latest = await prisma.labourAttendance.findFirst({
-    where: { labourId: id },
-    orderBy: { date: 'desc' },
-  })
-  if (latest) {
-    await prisma.labourAttendance.update({
-      where: { id: latest.id },
-      data: { advance: Number(latest.advance) + amount }
-    })
-  } else {
-    await prisma.labour.updateMany({
-      where: { id, companyId: session.user.companyId },
-      data: { openingAdvance: amount }
-    })
-  }
-  revalidatePath('/labour')
-}
-
-async function deactivateLabour(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) return
-  const id = formData.get('id') as string
-  const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
-
-  const worker = await prisma.labour.findUnique({
-    where: { id, companyId: session.user.companyId },
-    select: { id: true, name: true, trade: true, siteId: true, isActive: true },
-  })
-  if (!worker) throw new Error('Worker not found.')
-  if (typed !== worker.name.trim()) {
-    throw new Error('Remove confirmation text did not match the worker name.')
-  }
-
-  await prisma.labour.update({
-    where: { id, companyId: session.user.companyId },
-    data: { isActive: false },
-  })
-
-  await logActivity({
-    userId: session.user.id,
-    companyId: session.user.companyId,
-    action: 'UPDATE',
-    module: 'LABOUR',
-    recordId: worker.id,
-    description: `${session.user.name ?? session.user.email} deactivated worker "${worker.name}"`,
-    before: { isActive: worker.isActive, trade: worker.trade, siteId: worker.siteId, name: worker.name },
-    after: { isActive: false, trade: worker.trade, siteId: worker.siteId, name: worker.name },
-  })
-
-  revalidatePath('/labour')
-}
-
 export default async function LabourPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'labour.view', module: 'LABOUR' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/labour')
+  const { companyId } = gate.access
 
   const [labour, sites] = await Promise.all([
     prisma.labour.findMany({
-      where: { companyId },
+      where: { companyId, site: liveCompanySiteWhere(companyId) },
       include: {
         site: { select: { id: true, name: true } },
         attendance: { select: { status: true, advance: true, overtimeHours: true } }
@@ -106,7 +23,7 @@ export default async function LabourPage() {
       orderBy: { name: 'asc' },
     }),
     prisma.site.findMany({
-      where: { companyId, deletedAt: null },
+      where: liveCompanySiteWhere(companyId),
       select: { id: true, name: true },
       orderBy: { name: 'asc' }
     })
@@ -204,9 +121,9 @@ export default async function LabourPage() {
         <LabourCardList
           workers={workers}
           sites={sites}
-          updateAction={updateLabour}
-          markPaidAction={markLabourPaid}
-          deactivateAction={deactivateLabour}
+          updateAction={updateLabourRosterAction}
+          markPaidAction={markLabourPaidAction}
+          deactivateAction={deactivateLabourAction}
         />
       )}
     </div>

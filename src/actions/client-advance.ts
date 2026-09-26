@@ -103,3 +103,14 @@ export async function createClientAdvance(data: {
   revalidatePath('/mobile/add-client-advance')
   return { success: true, id: advance.id }
 }
+
+/* The `/clients/advances` form entry point; the same live gate and bindings apply. */
+export async function createClientAdvanceFromFormAction(formData: FormData) {
+  const amount = typeof formData.get('amount') === 'string' ? Number(formData.get('amount')) : NaN
+  await createClientAdvance({
+    siteId: String(formData.get('siteId') ?? ''),
+    amount,
+    purpose: String(formData.get('purpose') ?? ''),
+    receivedAt: String(formData.get('receivedAt') ?? ''),
+  })
+}

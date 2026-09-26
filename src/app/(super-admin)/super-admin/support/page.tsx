@@ -1,14 +1,11 @@
-import { requireUser } from '@/lib/auth/require-user'
 import { getSupportApprovalOverview } from '@/lib/approvals/support-overview'
-import { redirect } from 'next/navigation'
+import { requireSuperAdminPage } from '@/lib/pages/super-admin-page-access'
 import { LifeBuoy, Clock, CheckCircle, Building } from 'lucide-react'
 
 export default async function SupportPage() {
   // The live principal decides, never the JWT role claim: a demoted or deactivated
   // super admin is turned away on the next render, before any approval read.
-  const user = await requireUser().catch(() => null)
-  if (!user) redirect('/login')
-  if (user.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  const user = await requireSuperAdminPage()
 
   const { pendingApprovals, totalPending, totalApproved, totalCompanies } = await getSupportApprovalOverview(user)
 
