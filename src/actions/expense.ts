@@ -1,6 +1,6 @@
 'use server'
 
-import { requirePermission, hasPermission } from '@/lib/auth/permissions'
+import { requirePermission, hasPermission, requireModuleEnabled } from '@/lib/auth/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
@@ -62,6 +62,12 @@ export async function createExpenseAction(data: {
   if (!user.companyId && user.role !== 'SUPER_ADMIN') {
     throw new Error('Unauthorized: No active company context')
   }
+
+  // The live company's modules, before the site or the upload is read: every expense needs
+  // EXPENSES, and filing a bill against an upload needs BILLS, the module that upload was
+  // stored under. The approval is raised by the entity flow, so APPROVALS is not required.
+  await requireModuleEnabled('EXPENSES')
+  if (mediaAssetId) await requireModuleEnabled('BILLS')
 
   // Live, in-tenant site only (any company for a SUPER_ADMIN, but never soft deleted).
   // The expense and approval are both bound to the company that owns this site.
@@ -240,6 +246,7 @@ export async function createExpenseFromFormAction(formData: FormData) {
   if (user.role === 'SUPER_ADMIN' || !user.companyId) {
     throw new Error('Forbidden: No active company context')
   }
+  await requireModuleEnabled('EXPENSES')
 
   await createExpenseAction(parseExpenseForm(formData))
   redirect('/expenses')

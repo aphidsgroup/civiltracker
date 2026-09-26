@@ -1,17 +1,16 @@
-import { requireUser } from '@/lib/auth/require-user'
-import { hasPermission } from '@/lib/permissions'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { prisma } from '@/lib/prisma'
 import { FileText, Table, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
 export default async function ExportHistoryPage() {
-  const user = await requireUser()
-  if (user.role !== 'SUPER_ADMIN') {
-    if (!hasPermission(user.role, 'reports.export')) throw new Error('Unauthorized')
-  }
+  // Live reports.export with REPORTS on the live company, decided before any export row
+  // is read. SUPER_ADMIN has no tenant and is sent to its own dashboard.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'reports.export', module: 'REPORTS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/reports/export-history')
 
   const exportsList = await prisma.reportExport.findMany({
-    where: { companyId: user.companyId! },
+    where: { companyId: gate.access.companyId },
     orderBy: { createdAt: 'desc' },
     take: 50,
     include: {

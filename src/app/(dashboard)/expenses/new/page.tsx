@@ -1,24 +1,26 @@
-import { requireUser } from '@/lib/auth/require-user'
-import { getRoleRedirect, hasPermission } from '@/lib/permissions'
+import { getRoleRedirect } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import { EXPENSE_CATEGORIES, PAYMENT_MODES } from '@/lib/constants'
 import { createExpenseFromFormAction } from '@/actions/expense'
 import { Check } from 'lucide-react'
 
 export default async function NewExpensePage() {
-  // Live principal, never the JWT claims; revoked members throw here.
-  const user = await requireUser()
-  if (user.role === 'SUPER_ADMIN') redirect('/super-admin/dashboard')
-  if (!user.companyId) redirect('/login')
-  // Recording an expense raises an approval, so both grants are required up front.
-  if (!hasPermission(user.role, 'expenses.create') || !hasPermission(user.role, 'approvals.view')) {
-    redirect(getRoleRedirect(user.role))
+  // Live principal, `expenses.create` and the EXPENSES module, never the JWT claims, before
+  // any read. Recording an expense raises an approval, so approval participation is
+  // required up front too.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'expenses.create', module: 'EXPENSES' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/expenses/new')
+  const { can, user } = gate.access
+  if (!can('approvals.view')) {
+    exitDeniedPage({ status: 'denied', redirectTo: getRoleRedirect(user.role) }, '/expenses/new')
   }
 
+  // The same policy the expense action enforces: ACTIVE live sites of the live company,
+  // and for a field role only the sites it is assigned to.
   const sites = await prisma.site.findMany({
-    where: { companyId: user.companyId, deletedAt: null, status: 'ACTIVE' },
+    where: { ...(await assignedSiteWhere(gate.access)), status: 'ACTIVE' },
     orderBy: { name: 'asc' }
   })
 

@@ -1,22 +1,24 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { requirePermission } from '@/lib/auth/require-permission'
-import { requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
+import { requireAssignedSiteMutation, requireTenantMutation } from '@/lib/auth/site-mutation'
 import { slugify } from '@/lib/utils'
+import { parseCreateSiteInput } from '@/lib/validation/sites'
 import { SiteStatus } from '@prisma/client'
 import { logActivity } from '@/lib/audit'
 
 const SITE_NOT_FOUND = 'FORBIDDEN: Site not found or access denied'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function createSite(data: any) {
-  const user = await requirePermission('sites.create')
+/**
+ * Live `sites.create` + SITES before the payload is even parsed; then the payload is
+ * validated as an exact field set (`parseCreateSiteInput`) and any assignee must be an
+ * active member of the live company, all before the first write. Status and company are
+ * server-owned.
+ */
+export async function createSite(input: unknown) {
+  const user = await requireTenantMutation('sites.create', 'SITES')
   const companyId = user.companyId
-
-  if (!companyId) {
-    throw new Error('User does not belong to a company')
-  }
+  const data = parseCreateSiteInput(input)
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
@@ -31,6 +33,18 @@ export async function createSite(data: any) {
 
   if (company._count.sites >= company.siteLimit) {
     throw new Error(`Site limit reached (${company.siteLimit}). Please upgrade your plan.`)
+  }
+
+  const assigneeIds = [...new Set([data.assignedPmId, data.assignedEngineerId].filter((id): id is string => id !== null))]
+  if (assigneeIds.length > 0) {
+    const members = await prisma.companyMember.findMany({
+      where: { companyId, isActive: true, userId: { in: assigneeIds }, user: { isActive: true, deletedAt: null } },
+      select: { userId: true },
+    })
+    const memberIds = new Set(members.map((member) => member.userId))
+    if (!assigneeIds.every((id) => memberIds.has(id))) {
+      throw new Error('Invalid site: assignee is not an active member of this company')
+    }
   }
 
   const slug = slugify(data.name)
@@ -55,12 +69,12 @@ export async function createSite(data: any) {
       mapLink: data.mapLink,
       projectType: data.projectType,
       contractType: data.contractType,
-      areaSqft: data.areaSqft ? Number(data.areaSqft) : null,
-      floors: data.floors ? Number(data.floors) : null,
-      budget: data.budget ? Number(data.budget) : 0,
-      contractValue: data.contractValue ? Number(data.contractValue) : null,
-      startDate: data.startDate ? new Date(data.startDate) : null,
-      targetEndDate: data.targetEndDate ? new Date(data.targetEndDate) : null,
+      areaSqft: data.areaSqft,
+      floors: data.floors,
+      budget: data.budget,
+      contractValue: data.contractValue,
+      startDate: data.startDate,
+      targetEndDate: data.targetEndDate,
       assignedPmId: data.assignedPmId,
       assignedEngineerId: data.assignedEngineerId,
       status: SiteStatus.PLANNING,

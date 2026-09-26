@@ -123,7 +123,7 @@ beforeEach(() => {
   }
   members = [{ userId: 'user_field', companyId: 'company_1', isActive: true, siteIds: ['site_listed'] }]
   mocks.requireUser.mockResolvedValue(principal('SITE_ENGINEER'))
-  mocks.prisma.company.findUnique.mockResolvedValue({ modulesJson: ['EXPENSES', 'APPROVALS'], status: 'ACTIVE' })
+  mocks.prisma.company.findUnique.mockResolvedValue({ modulesJson: ['EXPENSES', 'BILLS', 'APPROVALS'], status: 'ACTIVE' })
   mocks.prisma.companyMember.findFirst.mockImplementation((args) => inMemoryDelegate(members).findFirst(args))
   mocks.prisma.site.findFirst.mockImplementation(inMemoryDelegate(SITES).findFirst)
   mocks.prisma.expense.findFirst.mockImplementation(inMemoryDelegate(EXPENSES).findFirst)

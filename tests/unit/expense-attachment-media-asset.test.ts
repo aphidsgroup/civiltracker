@@ -63,6 +63,8 @@ const mocks = vi.hoisted(() => {
     logActivity: vi.fn(),
     prisma: {
       $transaction: vi.fn(),
+      // Module gates have their own suite; every module is enabled here.
+      company: { findUnique: vi.fn(async () => ({ modulesJson: ['EXPENSES', 'BILLS'], status: 'ACTIVE' })) },
       site: { findFirst: vi.fn() },
       companyMember: { findFirst: vi.fn() },
       mediaAsset: { findFirst: vi.fn(), findUnique: vi.fn() },

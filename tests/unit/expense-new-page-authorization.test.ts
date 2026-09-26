@@ -23,6 +23,11 @@ const mocks = vi.hoisted(() => {
 
   const prisma = {
     $transaction: vi.fn(),
+    // Module gates have their own suite; every module is enabled here.
+    company: {
+      findFirst: vi.fn(async () => ({ modulesJson: ['EXPENSES', 'APPROVALS'] })),
+      findUnique: vi.fn(async () => ({ modulesJson: ['EXPENSES', 'APPROVALS'], status: 'ACTIVE' })),
+    },
     site: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     companyMember: { findFirst: vi.fn() },
     expense: { create: vi.fn() },
@@ -75,7 +80,12 @@ vi.mock('@/lib/auth/require-user', () => ({ requireUser: mocks.requireUser }))
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma, default: mocks.prisma }))
 vi.mock('@/lib/audit', () => ({ logActivity: mocks.logActivity }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
-vi.mock('next/navigation', () => ({ redirect: mocks.redirect }))
+vi.mock('next/navigation', () => ({
+  redirect: mocks.redirect,
+  notFound: vi.fn(() => {
+    throw new Error('NEXT_NOT_FOUND')
+  }),
+}))
 
 const { default: NewExpensePage } = await import('@/app/(dashboard)/expenses/new/page')
 const { createExpenseFromFormAction } = await import('@/actions/expense')
@@ -186,13 +196,18 @@ describe('NewExpensePage read authorization', () => {
     expectNoSiteReads()
   })
 
-  it('lists only live, active sites of the live principal company', async () => {
+  it('lists only live, active sites of the live principal company that it is assigned to', async () => {
     await NewExpensePage()
 
     expect(mocks.prisma.site.findMany).toHaveBeenCalledTimes(1)
     expect(mocks.prisma.site.findMany.mock.calls[0][0].where).toEqual({
       companyId: 'company_1',
       deletedAt: null,
+      OR: [
+        { assignedEngineerId: 'user_site_engineer' },
+        { engineerId: 'user_site_engineer' },
+        { id: { in: ['site_1'] } },
+      ],
       status: 'ACTIVE',
     })
   })
