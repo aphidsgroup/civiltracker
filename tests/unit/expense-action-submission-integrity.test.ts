@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
   const prisma = {
     $transaction: vi.fn(),
     site: { findFirst: vi.fn(), findUnique: vi.fn() },
+    companyMember: { findFirst: vi.fn() },
     expense: { create: vi.fn(), findFirst: vi.fn() },
     billAttachment: { create: vi.fn() },
     approval: { create: vi.fn() },
@@ -165,6 +166,8 @@ beforeEach(() => {
   mocks.requireUser.mockResolvedValue(SITE_ENGINEER)
   grantOnly('expenses.create', 'bills.upload', 'approvals.view')
   mocks.prisma.$transaction.mockImplementation(mocks.runTransaction)
+  // The engineer is assigned to site_1; the assigned-site policy has its own suite.
+  mocks.prisma.companyMember.findFirst.mockResolvedValue({ siteIds: ['site_1'] })
   liveSites({ site_1: { companyId: 'company_1' } })
   mocks.tx.mediaAsset.findFirst.mockResolvedValue({
     cloudinaryPublicId: 'bills/inv7',

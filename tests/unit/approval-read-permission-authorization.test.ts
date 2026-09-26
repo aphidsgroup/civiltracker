@@ -64,13 +64,16 @@ const { getApprovalsAction, getApprovalStatsAction, getApprovalByIdAction } = aw
  */
 const ROLES_WITHOUT_APPROVAL_READ = ['VENDOR', 'SUBCONTRACTOR', 'CLIENT', 'SUPERVISOR'] as const
 
-/** Roles the matrix does grant `approvals.view`, which must keep working unchanged. */
+/**
+ * Roles the matrix does grant `approvals.view`, which must keep working unchanged.
+ * SITE_ENGINEER also holds it, but its reads are further narrowed to its assigned sites;
+ * that policy is covered by `approval-read-assigned-site.test.ts`.
+ */
 const ROLES_WITH_APPROVAL_READ = [
   'COMPANY_ADMIN',
   'PROJECT_MANAGER',
   'ACCOUNTANT',
   'PURCHASE_MANAGER',
-  'SITE_ENGINEER',
 ] as const
 
 function principal(role: string, companyId: string | undefined = 'company_1') {

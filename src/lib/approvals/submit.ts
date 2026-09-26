@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { hasPermission } from '@/lib/permissions'
 import type { Permission } from '@/lib/permissions'
+import { assignedSiteScope, readsAssignedSitesOnly } from '@/lib/auth/site-mutation'
 import { requireApprovalReader } from '@/lib/approvals/read-guard'
 import { findLinkedApprovalEntity } from '@/lib/approvals/detail'
 import { approvalRequiresSite } from '@/lib/approvals/site-binding'
@@ -57,18 +58,19 @@ export function assertApprovalSubmitPermission(user: SessionUser, entityType: Ap
 }
 
 /**
- * Resolves the site an approval request is raised on: in the caller company (any company
- * for a SUPER_ADMIN) and never soft deleted. Returns null when the site is out of reach.
+ * Resolves the site an expense, bill or approval request is written on: never soft
+ * deleted, and in exactly the caller company (any company for a SUPER_ADMIN). A field
+ * role (SITE_ENGINEER / SUPERVISOR) is further bound to its `assignedSiteScope`. Returns
+ * null when the site is out of reach, including for a tenant role without a company.
  */
 export async function findApprovalSubmitSite(user: SessionUser, siteId: string) {
-  return prisma.site.findFirst({
-    where: {
-      id: siteId,
-      ...(user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }),
-      deletedAt: null,
-    },
-    select: { id: true, companyId: true, name: true },
-  })
+  const select = { id: true, companyId: true, name: true }
+  if (user.role === 'SUPER_ADMIN') {
+    return prisma.site.findFirst({ where: { id: siteId, deletedAt: null }, select })
+  }
+  if (!user.companyId) return null
+  const scope = await assignedSiteScope(user, user.companyId)
+  return prisma.site.findFirst({ where: { id: siteId, ...scope }, select })
 }
 
 type ApprovalWriteClient = Pick<Prisma.TransactionClient, 'approval' | 'approvalTimeline'>
@@ -147,6 +149,11 @@ export async function submitApprovalRequest(user: SessionUser, data: ApprovalReq
   // attached to a company-level request.
   if (!data.siteId && approvalRequiresSite(data.entityType)) {
     throw new Error(`Forbidden: ${data.entityType} approvals require a site and this request carries no site`)
+  }
+
+  // A company-level request sits on no site, so no site assignment can cover it.
+  if (!data.siteId && readsAssignedSitesOnly(user.role)) {
+    throw new Error('Forbidden: Site-less approvals are outside an assigned-site scope')
   }
 
   // A soft-deleted site is refused here for every type, a site-pinned PURCHASE_ORDER

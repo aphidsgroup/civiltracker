@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => {
   const prisma = {
     $transaction: vi.fn(),
     site: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    companyMember: { findFirst: vi.fn() },
     expense: { create: vi.fn() },
     approval: { create: vi.fn() },
     approvalTimeline: { create: vi.fn() },
@@ -143,6 +144,8 @@ beforeEach(() => {
   mocks.auth.mockResolvedValue({ user: { id: 'user_site_engineer', companyId: 'company_1', role: 'COMPANY_ADMIN' } })
   mocks.requireUser.mockResolvedValue(SITE_ENGINEER)
   mocks.prisma.$transaction.mockImplementation(mocks.runTransaction)
+  // The engineer is assigned to site_1; the assigned-site policy has its own suite.
+  mocks.prisma.companyMember.findFirst.mockResolvedValue({ siteIds: ['site_1'] })
 
   const sites = inMemoryDelegate(SITES)
   mocks.prisma.site.findFirst.mockImplementation(sites.findFirst)
@@ -252,8 +255,23 @@ describe('createExpenseFromFormAction', () => {
   it('writes the expense, its approval and the timeline in one transaction on the resolved tenant', async () => {
     await expect(createExpenseFromFormAction(expenseForm())).rejects.toThrow('NEXT_REDIRECT:/expenses')
 
+    // The field role is bound to its assigned sites, read from its live active membership.
+    expect(mocks.prisma.companyMember.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user_site_engineer', companyId: 'company_1', isActive: true } })
+    )
     expect(mocks.prisma.site.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'site_1', companyId: 'company_1', deletedAt: null } })
+      expect.objectContaining({
+        where: {
+          id: 'site_1',
+          companyId: 'company_1',
+          deletedAt: null,
+          OR: [
+            { assignedEngineerId: 'user_site_engineer' },
+            { engineerId: 'user_site_engineer' },
+            { id: { in: ['site_1'] } },
+          ],
+        },
+      })
     )
     expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
     expect(mocks.committed.map((entry) => entry.model)).toEqual(['expense', 'approval', 'approvalTimeline'])

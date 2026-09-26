@@ -64,6 +64,7 @@ const mocks = vi.hoisted(() => {
     prisma: {
       $transaction: vi.fn(),
       site: { findFirst: vi.fn() },
+      companyMember: { findFirst: vi.fn() },
       mediaAsset: { findFirst: vi.fn(), findUnique: vi.fn() },
       expense: { create: vi.fn() },
       billAttachment: { create: vi.fn() },
@@ -139,6 +140,8 @@ beforeEach(() => {
   mocks.committed.length = 0
   mocks.requireUser.mockResolvedValue(ENGINEER)
   mocks.prisma.$transaction.mockImplementation(mocks.runTransaction)
+  // The engineer is assigned to both sites; the assigned-site policy has its own suite.
+  mocks.prisma.companyMember.findFirst.mockResolvedValue({ siteIds: ['site_1', 'site_2'] })
   mocks.prisma.site.findFirst.mockImplementation(inMemoryDelegate(SITES).findFirst)
   mocks.tx.mediaAsset.findFirst.mockImplementation(inMemoryDelegate(ASSETS).findFirst)
   mocks.tx.billAttachment.findFirst.mockImplementation(inMemoryDelegate(ATTACHMENTS).findFirst)

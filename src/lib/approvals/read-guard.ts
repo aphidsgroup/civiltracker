@@ -1,4 +1,6 @@
+import type { Prisma } from '@prisma/client'
 import { requireUser } from '@/lib/auth/require-user'
+import { assignedSiteScope, readsAssignedSitesOnly } from '@/lib/auth/site-mutation'
 import { hasPermission } from '@/lib/permissions'
 import type { Permission } from '@/lib/permissions'
 import type { SessionUser } from '@/types'
@@ -36,4 +38,20 @@ export async function requireApprovalReader(): Promise<SessionUser> {
   }
 
   return user
+}
+
+/**
+ * The assigned-site half of every approval read, composed into the list, stats, detail
+ * and comment queries next to the tenant and site-binding predicates.
+ *
+ * A field role (SITE_ENGINEER / SUPERVISOR) only reads approvals pinned to a site inside
+ * its `assignedSiteScope`: a live site of exactly its company that it is the engineer of
+ * or that its active membership lists. A company-level (site-less) approval belongs to
+ * no assigned site and matches nothing here. A field role with no company is refused
+ * before any approval query. Every other role adds no predicate.
+ */
+export async function approvalAssignedSiteFilter(user: SessionUser): Promise<Prisma.ApprovalWhereInput> {
+  if (!readsAssignedSitesOnly(user.role)) return {}
+  if (!user.companyId) throw new Error('Forbidden: Tenant context required')
+  return { site: { is: await assignedSiteScope(user, user.companyId) } }
 }

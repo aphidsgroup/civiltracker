@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma'
+import { approvalAssignedSiteFilter } from '@/lib/approvals/read-guard'
 import {
   approvalRequiresSite,
   approvalSiteScopeFilter,
@@ -185,6 +186,9 @@ async function findApprovalDetailRow(user: SessionUser, id: string) {
       // actioned, so it must not be detailed either. A SUPER_ADMIN read carries no
       // company here and relies on the exact binding check below.
       ...approvalSiteScopeFilter(companyId),
+      // A field role only details approvals on its assigned sites: any other row
+      // answers like a missing one, before its entity, comments or timeline are read.
+      ...(await approvalAssignedSiteFilter(user)),
     },
     include: {
       site: { select: { name: true, location: true, companyId: true, deletedAt: true } },

@@ -5,7 +5,7 @@ import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/audit'
-import { requireApprovalReader } from '@/lib/approvals/read-guard'
+import { approvalAssignedSiteFilter, requireApprovalReader } from '@/lib/approvals/read-guard'
 import {
   APPROVAL_DETAIL_NOT_FOUND,
   filterApprovalsWithLinkedEntity,
@@ -55,9 +55,18 @@ function approvalQueryCompanyId(user: SessionUser) {
   return user.role === 'SUPER_ADMIN' ? null : user.companyId!
 }
 
-function approvalQueryScope(user: SessionUser): Prisma.ApprovalWhereInput {
+/**
+ * Tenant, exact site binding and — for a field role — the assigned-site policy, all at
+ * query level, so an approval outside any of them is never loaded.
+ */
+async function approvalQueryScope(user: SessionUser): Promise<Prisma.ApprovalWhereInput> {
   const companyId = approvalQueryCompanyId(user)
-  return { ...(companyId ? { companyId } : {}), deletedAt: null, ...approvalSiteScopeFilter(companyId) }
+  return {
+    ...(companyId ? { companyId } : {}),
+    deletedAt: null,
+    ...approvalSiteScopeFilter(companyId),
+    ...(await approvalAssignedSiteFilter(user)),
+  }
 }
 
 /**
@@ -75,7 +84,7 @@ async function findActionableApproval(user: SessionUser, id: string, entityTypes
   const approval = await prisma.approval.findFirst({
     where: {
       id,
-      ...approvalQueryScope(user),
+      ...(await approvalQueryScope(user)),
       ...(entityTypes.length < APPROVAL_ENTITY_TYPES.length ? { entityType: { in: entityTypes } } : {}),
     },
     include: { site: APPROVAL_SITE_BINDING_SELECT },
@@ -175,7 +184,7 @@ export async function getApprovalsAction(filter?: {
   // Malformed legacy rows and rows bound to a soft-deleted or another tenant's site are
   // excluded by the query itself: they must not be listed, because every downstream
   // action on them is refused anyway.
-  const where: Record<string, unknown> = { ...approvalQueryScope(user) }
+  const where: Record<string, unknown> = { ...(await approvalQueryScope(user)) }
 
   if (filter?.status && filter.status !== 'ALL') {
     where.currentStatus = filter.status as ApprovalStatus
@@ -636,7 +645,7 @@ export async function getApprovalStatsAction() {
   // one batched lookup per entity type.
   const rows = await prisma.approval.findMany({
     where: {
-      ...approvalQueryScope(user),
+      ...(await approvalQueryScope(user)),
       AND: [
         {
           OR: [
