@@ -1,7 +1,6 @@
 import React from 'react'
-import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import AttendanceRegisterClient from '@/components/labour/AttendanceRegisterClient'
 import { CalendarCheck, HardHat, Sparkles } from 'lucide-react'
 
@@ -9,10 +8,12 @@ export const metadata = {
   title: 'Labour Attendance Register | Civil Tracker',
   description: 'Mark daily labour attendance, overtime, and advance payments across project sites.',
 }
+export const dynamic = 'force-dynamic'
 
 export default async function LabourAttendancePage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
-  const user = await requireUser()
-  if (!user.companyId) redirect('/login')
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'attendance.mark', module: 'LABOUR' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/labour/attendance')
+  const { companyId } = gate.access
 
   const resolvedParams = await searchParams
   let targetDate = new Date()
@@ -24,20 +25,24 @@ export default async function LabourAttendancePage({ searchParams }: { searchPar
   }
   targetDate.setHours(0, 0, 0, 0)
 
-  const [labourList, sites] = await Promise.all([
-    prisma.labour.findMany({
-      where: { companyId: user.companyId, isActive: true },
-      include: {
-        site: true,
-        attendance: { where: { date: targetDate }, take: 1 }
-      },
-      orderBy: { name: 'asc' }
-    }),
-    prisma.site.findMany({
-      where: { companyId: user.companyId, deletedAt: null },
-      select: { id: true, name: true }
-    })
-  ])
+  // The same assigned-site policy the muster-roll actions enforce: a field role sees only
+  // the live sites it is assigned to, the workers on them, and only the attendance logged
+  // on them — a log from a site it is not assigned to never lends its advance or overtime.
+  const siteWhere = await assignedSiteWhere(gate.access)
+  const sites = await prisma.site.findMany({
+    where: siteWhere,
+    select: { id: true, name: true }
+  })
+  const siteIds = sites.map(site => site.id)
+
+  const labourList = await prisma.labour.findMany({
+    where: { companyId, isActive: true, site: siteWhere },
+    include: {
+      site: { select: { id: true, name: true } },
+      attendance: { where: { date: targetDate, siteId: { in: siteIds } }, take: 1 }
+    },
+    orderBy: { name: 'asc' }
+  })
 
   const formattedLabour = labourList.map(l => ({
     id: l.id,

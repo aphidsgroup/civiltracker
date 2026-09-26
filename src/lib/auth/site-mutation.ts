@@ -63,8 +63,11 @@ export async function bindOptionalSite(raw: FormDataEntryValue | null, companyId
   return site.id
 }
 
-/** Field roles, which read and write only the sites they are assigned to. */
-const ASSIGNED_SITE_ROLES: ReadonlySet<string> = new Set(['SITE_ENGINEER', 'SUPERVISOR'])
+/**
+ * Field roles, which read and write only the sites they are assigned to. SUBCONTRACTOR
+ * holds `attendance.mark`, so it is bound here too rather than marking company-wide.
+ */
+const ASSIGNED_SITE_ROLES: ReadonlySet<string> = new Set(['SITE_ENGINEER', 'SUPERVISOR', 'SUBCONTRACTOR'])
 
 export function readsAssignedSitesOnly(role: string) {
   return ASSIGNED_SITE_ROLES.has(role)
@@ -98,7 +101,7 @@ export async function assignedSiteScope(user: Pick<SessionUser, 'id' | 'role'>, 
  * touch records on several sites (a batch, or a record found by its own id): bind every
  * record's site to `scope`, never trust a site id the client sent alongside it.
  *
- * Policy: SITE_ENGINEER and SUPERVISOR act only on their assigned live sites; every other
+ * Policy: SITE_ENGINEER, SUPERVISOR and SUBCONTRACTOR act only on their assigned live sites; every other
  * role holding the permission acts on every live site of its company. SUPER_ADMIN is
  * refused by `requireTenantMutation` (no tenant context).
  */

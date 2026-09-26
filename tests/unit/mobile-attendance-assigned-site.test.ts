@@ -123,7 +123,8 @@ function writes() {
   ].reduce((sum, fn) => sum + fn.mock.calls.length, 0)
 }
 
-const FIELD_ROLES = ['SITE_ENGINEER', 'SUPERVISOR']
+// SUBCONTRACTOR holds attendance.mark and is bound to its assigned sites like the others.
+const FIELD_ROLES = ['SITE_ENGINEER', 'SUPERVISOR', 'SUBCONTRACTOR']
 
 describe('muster-roll actions: field roles only on assigned live sites', () => {
   const ON_UNASSIGNED_SITE = [
@@ -200,6 +201,23 @@ describe('muster-roll actions: field roles only on assigned live sites', () => {
     await mobile.updateWorkerAction({ id: 'lab_theirs', name: 'Kumar', trade: 'MASON', dailyWage: 800, siteId: 'site_mine' })
     expect(mocks.tx.labour.updateMany.mock.calls[0][0].where).toEqual({ id: 'lab_theirs', companyId: 'company_1', site: { companyId: 'company_1', deletedAt: null } })
     expect(mocks.prisma.companyMember.findFirst).not.toHaveBeenCalled()
+  })
+
+  it('a SUBCONTRACTOR acts on the site its active membership lists, under its own scope', async () => {
+    mocks.requireUser.mockResolvedValue(principal('SUBCONTRACTOR'))
+    await expect(mobile.addMobileWorkerAction({ name: 'Arun', trade: 'MASON', dailyRate: 700, siteId: 'site_listed' })).resolves.toMatchObject({ success: true })
+    expect(mocks.prisma.companyMember.findFirst).toHaveBeenCalledWith({
+      where: { userId: 'user_subcontractor', companyId: 'company_1', isActive: true },
+      select: { siteIds: true },
+    })
+  })
+
+  it('a SUBCONTRACTOR with no assignment can act on no site at all', async () => {
+    mocks.requireUser.mockResolvedValue(principal('SUBCONTRACTOR'))
+    mocks.prisma.companyMember.findFirst.mockResolvedValue(null)
+    await expect(mobile.addMobileWorkerAction({ name: 'Arun', trade: 'MASON', dailyRate: 700, siteId: 'site_listed' })).rejects.toThrow(/Site not found or access denied/)
+    await expect(mobile.removeLabourAttendanceAction('lab_mine', 'Ravi')).rejects.toThrow(/Labour not found or access denied/)
+    expect(writes()).toBe(0)
   })
 
   it.each(['COMPANY_ADMIN', 'PROJECT_MANAGER'])('%s marks the roll on any live site of its company', async (role) => {
@@ -300,6 +318,14 @@ describe('POST /api/attendance', () => {
       expect.objectContaining({ labourId: 'lab_mine_2', siteId: 'site_mine', status: 'HALF_DAY', markedById: ENGINEER }),
     ])
     expect(upserts[1].update).toEqual({ status: 'HALF_DAY', markedById: ENGINEER })
+  })
+
+  it('refuses a SUBCONTRACTOR marking a worker on a site it is not assigned to', async () => {
+    mocks.requireUser.mockResolvedValue(principal('SUBCONTRACTOR'))
+    const { status, json } = await post({ attendance: [{ labourId: 'lab_mine', status: 'PRESENT' }] })
+    expect(status).toBe(403)
+    expect(json.error).toMatch(/Labour not found or access denied/)
+    expect(mocks.tx.labourAttendance.upsert).not.toHaveBeenCalled()
   })
 
   it('writes nothing further when a row fails mid-transaction', async () => {
