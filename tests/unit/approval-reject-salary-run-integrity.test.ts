@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     approvalTimeline: { create: vi.fn() },
     expense: { findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     salaryRun: { findFirst: vi.fn(), updateMany: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
 
   const tx = {
@@ -30,6 +31,7 @@ const mocks = vi.hoisted(() => {
       findFirst: vi.fn((args: unknown) => prisma.salaryRun.findFirst(args)),
       updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)),
     },
+    auditLog: { create: vi.fn((args: unknown) => prisma.auditLog.create(args)) },
   }
 
   return {
@@ -68,6 +70,7 @@ beforeEach(() => {
   mocks.prisma.approval.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.expense.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
   // The rejection re-resolves the linked run on the transaction client before it writes.
   // It resolves by default so that the only thing failing these flows is the scoped
   // `updateMany` a test primes with a zero row count.
@@ -123,9 +126,11 @@ describe('rejectApprovalAction linked SALARY_RUN integrity', () => {
     expect(mocks.tx.approval.updateMany).toHaveBeenCalledTimes(1)
     expect(mocks.tx.approvalTimeline.create).toHaveBeenCalledTimes(1)
     expect(mocks.tx.salaryRun.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
     // Nothing reached the database outside the transaction client.
     expect(mocks.prisma.salaryRun.updateMany).toHaveBeenCalledTimes(1)
     expect(mocks.prisma.approvalTimeline.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledTimes(1)
   })
 
   it('rolls the rejection back and skips timeline and audit when the salary run matches no row', async () => {
@@ -139,6 +144,7 @@ describe('rejectApprovalAction linked SALARY_RUN integrity', () => {
     expect(mocks.prisma.approvalTimeline.create).toHaveBeenCalledTimes(
       mocks.tx.approvalTimeline.create.mock.calls.length
     )
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
@@ -164,6 +170,7 @@ describe('rejectApprovalAction linked SALARY_RUN integrity', () => {
         where: { id: 'salary_on_site_2', companyId: 'company_1', siteId: 'site_1' },
       })
     )
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
   })
 
@@ -171,6 +178,7 @@ describe('rejectApprovalAction linked SALARY_RUN integrity', () => {
     await rejectApprovalAction('approval_salary', 'Headcount mismatch')
 
     expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
-    expect(mocks.logActivity).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.logActivity).not.toHaveBeenCalled()
   })
 })

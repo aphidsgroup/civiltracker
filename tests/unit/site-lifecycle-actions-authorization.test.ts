@@ -126,9 +126,11 @@ describe('site lifecycle actions: live permission and module gate', () => {
     await expect(updateSiteDetails(editForm())).resolves.toEqual({ success: true })
     await expect(softDeleteSite('site_1', 'Tower A')).rejects.toThrow(/sites\.delete/)
     await expect(restoreSite('site_dead')).rejects.toThrow(/sites\.delete/)
-    expect(mocks.prisma.site.updateMany).toHaveBeenCalledTimes(1)
-    expect(mocks.tx.site.updateMany).not.toHaveBeenCalled()
-    expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
+    // Only the edit reached a write, and it ran with its audit record in one transaction.
+    expect(mocks.prisma.site.updateMany).not.toHaveBeenCalled()
+    expect(mocks.tx.site.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -149,7 +151,7 @@ describe('site lifecycle actions: exact tenant site binding', () => {
 
   it('updates only the live site of the live company', async () => {
     await updateSiteDetails(editForm())
-    const where = mocks.prisma.site.updateMany.mock.calls[0][0].where
+    const where = mocks.tx.site.updateMany.mock.calls[0][0].where
     expect(where).toEqual({ id: 'site_1', companyId: 'company_1', deletedAt: null })
   })
 
@@ -204,11 +206,12 @@ describe('updateSiteDetails input validation', () => {
     ['a negative area', { areaSqft: '-10' }],
   ])('rejects %s without writing', async (_name, overrides) => {
     await expect(updateSiteDetails(editForm(overrides))).rejects.toThrow(/invalid|required/i)
-    expect(mocks.prisma.site.updateMany).not.toHaveBeenCalled()
+    expect(siteWrites()).toBe(0)
+    expect(mocks.tx.auditLog.create).not.toHaveBeenCalled()
   })
 
   it('writes a validated status and budget', async () => {
     await updateSiteDetails(editForm({ budget: '0', status: 'COMPLETED' }))
-    expect(mocks.prisma.site.updateMany.mock.calls[0][0].data).toMatchObject({ budget: 0, status: 'COMPLETED', name: 'Tower A2' })
+    expect(mocks.tx.site.updateMany.mock.calls[0][0].data).toMatchObject({ budget: 0, status: 'COMPLETED', name: 'Tower A2' })
   })
 })

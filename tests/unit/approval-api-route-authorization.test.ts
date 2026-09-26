@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => {
     material: { findFirst: vi.fn() },
     document: { findFirst: vi.fn() },
     purchaseOrder: { findFirst: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
 
   // The interactive transaction client forwards to the shared delegates, so a write
@@ -53,6 +54,7 @@ const mocks = vi.hoisted(() => {
     material: { findFirst: vi.fn((args: unknown) => prisma.material.findFirst(args)) },
     document: { findFirst: vi.fn((args: unknown) => prisma.document.findFirst(args)) },
     purchaseOrder: { findFirst: vi.fn((args: unknown) => prisma.purchaseOrder.findFirst(args)) },
+    auditLog: { create: vi.fn((args: unknown) => prisma.auditLog.create(args)) },
   }
 
   return {
@@ -140,6 +142,7 @@ function expectNoWrites() {
   expect(mocks.prisma.expense.update).not.toHaveBeenCalled()
   expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
   expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()
+  expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   expect(mocks.logActivity).not.toHaveBeenCalled()
 }
 
@@ -159,6 +162,7 @@ beforeEach(() => {
   mocks.prisma.approvalTimeline.create.mockResolvedValue({ id: 'timeline_1' })
   mocks.prisma.expense.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
   mocks.prisma.site.findFirst.mockResolvedValue({ id: 'site_1', companyId: 'company_1' })
   // Linked entities resolve by default so the happy paths reach the transition; a test
   // that needs an unreachable entity overrides the delegate it cares about.
@@ -380,6 +384,9 @@ describe('POST /api/approvals/[id]/approve uses the hardened transition', () => 
     expect(mocks.tx.approvalTimeline.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ note: 'Approved by finance' }) })
     )
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ action: 'APPROVE', companyId: 'company_1', recordId: 'expense_1' }),
+    })
   })
 
   it('refuses a malformed site-null site-bound approval before any write', async () => {
@@ -441,6 +448,7 @@ describe('POST /api/approvals/[id]/approve uses the hardened transition', () => 
     )
 
     expect(response.status).toBe(404)
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
   })
@@ -481,6 +489,9 @@ describe('POST /api/approvals/[id]/reject uses the hardened transition', () => {
         where: { id: 'expense_1', companyId: 'company_1', deletedAt: null, siteId: 'site_1' },
       })
     )
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ action: 'REJECT', companyId: 'company_1', recordId: 'expense_1' }),
+    })
   })
 
   it('refuses a malformed site-null site-bound approval before any write', async () => {
@@ -513,6 +524,7 @@ describe('POST /api/approvals/[id]/reject uses the hardened transition', () => {
         where: { id: 'salary_1', companyId: 'company_1', siteId: 'site_1' },
       })
     )
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
   })
 })

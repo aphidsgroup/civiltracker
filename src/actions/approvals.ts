@@ -4,7 +4,7 @@ import { requireUser } from '@/lib/auth/require-user'
 import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
-import { logActivity } from '@/lib/audit'
+import { auditLogData } from '@/lib/audit-data'
 import { approvalAssignedSiteFilter, requireApprovalReader } from '@/lib/approvals/read-guard'
 import {
   APPROVAL_DETAIL_NOT_FOUND,
@@ -301,9 +301,10 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
     throw new Error(`Forbidden: Role ${user.role} is not authorized to approve ${approval.entityType}`)
   }
 
-  // The conditional transition, its timeline entry and the linked entity mutation are
-  // one unit of work: a linked row that cannot be reached inside the approval tenant
-  // rolls the approval back to its open status instead of leaving the two out of sync.
+  // The conditional transition, its timeline entry, the linked entity mutation and the
+  // mandatory audit record are one unit of work: a linked row that cannot be reached
+  // inside the approval tenant, or an audit write that fails, rolls the approval back to
+  // its open status instead of leaving the approval, entity and audit trail out of sync.
   const budgetSiteId = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await assertLinkedApprovalEntityInTenant(tx, approval, 'approved')
 
@@ -342,6 +343,7 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
 
     // The site guard above already refused a site-bound approval without a site, so
     // every linked write below is unconditionally scoped to the approval site.
+    let syncSiteId: string | null = null
     if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
       const linked = await tx.expense.updateMany({
         where: {
@@ -355,10 +357,8 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
       if (linked.count !== 1) {
         throw new Error('Linked expense not found in the approval tenant and cannot be approved')
       }
-      return approval.siteId
-    }
-
-    if (approval.entityType === 'SALARY_RUN') {
+      syncSiteId = approval.siteId
+    } else if (approval.entityType === 'SALARY_RUN') {
       const linked = await tx.salaryRun.updateMany({
         where: {
           id: approval.entityId,
@@ -372,21 +372,23 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
       }
     }
 
-    return null
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId: approval.companyId,
+        action: 'APPROVE',
+        module: approval.entityType,
+        recordId: approval.entityId,
+        description: `${user.name ?? user.email} approved ${approvalEntityLabel(approval.entityType)} request "${approval.title}"`,
+        before: { status: approval.currentStatus },
+        after: { status: 'APPROVED', note },
+      }),
+    })
+
+    return syncSiteId
   })
 
   const updated = { id, currentStatus: 'APPROVED' as ApprovalStatus }
-
-  await logActivity({
-    userId: user.id,
-    companyId: approval.companyId,
-    action: 'APPROVE',
-    module: approval.entityType,
-    recordId: approval.entityId,
-    description: `${user.name ?? user.email} approved ${approvalEntityLabel(approval.entityType)} request "${approval.title}"`,
-    before: { status: approval.currentStatus },
-    after: { status: 'APPROVED', note },
-  })
 
   // Budget aggregation lives outside the database transaction so an external sync
   // failure cannot roll back a committed approval.
@@ -415,8 +417,8 @@ export async function rejectApprovalAction(id: string, reason: string) {
     throw new Error(`Forbidden: Role ${user.role} is not authorized to reject ${approval.entityType}`)
   }
 
-  // Same unit of work as approval: transition, timeline and the linked entity move
-  // together or not at all.
+  // Same unit of work as approval: transition, timeline, the linked entity and the
+  // mandatory audit record move together or not at all.
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await assertLinkedApprovalEntityInTenant(tx, approval, 'rejected')
 
@@ -481,20 +483,22 @@ export async function rejectApprovalAction(id: string, reason: string) {
         throw new Error('Linked salary run not found in the approval tenant and cannot be rejected')
       }
     }
+
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId: approval.companyId,
+        action: 'REJECT',
+        module: approval.entityType,
+        recordId: approval.entityId,
+        description: `${user.name ?? user.email} rejected ${approvalEntityLabel(approval.entityType)} request "${approval.title}"`,
+        before: { status: approval.currentStatus },
+        after: { status: 'REJECTED', reason },
+      }),
+    })
   })
 
   const updated = { id, currentStatus: 'REJECTED' as ApprovalStatus }
-
-  await logActivity({
-    userId: user.id,
-    companyId: approval.companyId,
-    action: 'REJECT',
-    module: approval.entityType,
-    recordId: approval.entityId,
-    description: `${user.name ?? user.email} rejected ${approvalEntityLabel(approval.entityType)} request "${approval.title}"`,
-    before: { status: approval.currentStatus },
-    after: { status: 'REJECTED', reason },
-  })
 
   revalidatePath('/approvals')
   revalidatePath(`/approvals/${id}`)
@@ -514,10 +518,11 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
     throw new Error('Disbursement confirmation text must exactly match PAID')
   }
 
-  // Disbursement moves money, so the conditional transition, its timeline entry and the
-  // linked entity mutation are one unit of work: a linked row that cannot be reached
-  // inside the approval tenant rolls the approval back to APPROVED instead of leaving a
-  // PAID request pointing at an unpaid record.
+  // Disbursement moves money, so the conditional transition, its timeline entry, the
+  // linked entity mutation and the mandatory audit record are one unit of work: a linked
+  // row that cannot be reached inside the approval tenant, or an audit write that fails,
+  // rolls the approval back to APPROVED instead of leaving a PAID request pointing at an
+  // unpaid record or an unaudited disbursement.
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await assertLinkedApprovalEntityInTenant(tx, approval, 'marked paid')
 
@@ -579,23 +584,25 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
         throw new Error('Linked salary run not found in the approval tenant and cannot be marked paid')
       }
     }
+
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId: approval.companyId,
+        action: 'PAID',
+        module: approval.entityType,
+        recordId: approval.entityId,
+        description: `${user.name ?? user.email} marked ${approvalEntityLabel(approval.entityType)} request "${approval.title}" as paid/disbursed`,
+        before: { status: approval.currentStatus },
+        after: { status: 'PAID', paymentData: paymentData ?? null },
+      }),
+    })
   })
 
   const updated = { id }
 
-  // Audit and revalidation are external effects: they only describe a disbursement that
-  // actually committed.
-  await logActivity({
-    userId: user.id,
-    companyId: approval.companyId,
-    action: 'PAID',
-    module: approval.entityType,
-    recordId: approval.entityId,
-    description: `${user.name ?? user.email} marked ${approvalEntityLabel(approval.entityType)} request "${approval.title}" as paid/disbursed`,
-    before: { status: approval.currentStatus },
-    after: { status: 'PAID', paymentData: paymentData ?? null },
-  })
-
+  // Revalidation is an external effect: it only describes a disbursement that actually
+  // committed.
   revalidatePath('/approvals')
   revalidatePath(`/approvals/${id}`)
   revalidatePath('/mobile/approvals')

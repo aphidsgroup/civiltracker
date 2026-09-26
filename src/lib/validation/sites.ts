@@ -1,3 +1,4 @@
+import { SiteStatus } from '@prisma/client'
 import { z } from 'zod'
 
 import { slugify } from '@/lib/utils'
@@ -173,6 +174,58 @@ export function parseUpdateSiteInput(input: unknown): UpdateSiteInput {
   const result = schema.safeParse(input)
   if (!result.success) throw siteIssue(result.error)
   return result.data as UpdateSiteInput
+}
+
+/**
+ * Statuses the Edit Site form may move a site to. Any other stored status (PLANNING,
+ * CANCELLED) may only be posted back unchanged; the update service enforces that
+ * against the stored row.
+ */
+export const SITE_FORM_EDITABLE_STATUSES: ReadonlySet<SiteStatus> = new Set<SiteStatus>(['ACTIVE', 'ON_HOLD', 'COMPLETED'])
+
+const SITE_STATUS_VALUES: ReadonlySet<string> = new Set(Object.values(SiteStatus))
+
+const SITE_DETAILS_FORM_KEYS: ReadonlySet<string> = new Set(['id', 'status', ...SITE_FIELD_NAMES])
+
+export type SiteDetailsFormInput = {
+  siteId: string
+  status: SiteStatus | undefined
+  site: UpdateSiteInput
+}
+
+/**
+ * Maps the Edit Site form onto the `updateSite` payload and validates it with the same
+ * per-field rules. Allowlist: `id`, `status` and the canonical site fields; any other key
+ * is refused rather than dropped, and every entry must be a single text value. Throws
+ * `Invalid site: ...`.
+ */
+export function parseSiteDetailsForm(formData: FormData): SiteDetailsFormInput {
+  const site: Array<[string, string]> = []
+  let siteId = ''
+  let status: SiteStatus | undefined
+  for (const key of new Set(formData.keys())) {
+    const values = formData.getAll(key)
+    const value = values[0]
+    if (!SITE_DETAILS_FORM_KEYS.has(key)) throw new Error(`Invalid site: ${key.slice(0, 64)} is not an editable field`)
+    if (values.length !== 1 || typeof value !== 'string') {
+      throw new Error(`Invalid site: ${key.slice(0, 64)} must be a single text value`)
+    }
+    if (key === 'id') siteId = value.trim()
+    else if (key === 'status') {
+      if (!SITE_STATUS_VALUES.has(value)) throw new Error('Invalid site: status must be a valid site status')
+      status = value as SiteStatus
+    } else site.push([key, value])
+  }
+
+  if (!siteId || siteId.length > 64) throw new Error('Invalid site: id is required')
+  if (site.length === 0 && status === undefined) throw new Error('Invalid site: payload has no fields to update')
+
+  return {
+    siteId,
+    status,
+    // `Object.fromEntries` defines own keys, so even `__proto__` reaches the allowlist.
+    site: site.length > 0 ? parseUpdateSiteInput(Object.fromEntries(site)) : {},
+  }
 }
 
 const INVALID_SELECTION = 'Invalid task selection'

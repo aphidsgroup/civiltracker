@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => {
     material: { findFirst: vi.fn() },
     document: { findFirst: vi.fn() },
     purchaseOrder: { findFirst: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
 
   // The interactive transaction client forwards to the shared delegates, so every write
@@ -55,6 +56,7 @@ const mocks = vi.hoisted(() => {
     material: { findFirst: vi.fn((args: unknown) => prisma.material.findFirst(args)) },
     document: { findFirst: vi.fn((args: unknown) => prisma.document.findFirst(args)) },
     purchaseOrder: { findFirst: vi.fn((args: unknown) => prisma.purchaseOrder.findFirst(args)) },
+    auditLog: { create: vi.fn((args: unknown) => prisma.auditLog.create(args)) },
   }
 
   return {
@@ -145,6 +147,7 @@ function expectNoWrites() {
   expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()
   expect(mocks.prisma.$executeRaw).not.toHaveBeenCalled()
   expect(mocks.prisma.$executeRawUnsafe).not.toHaveBeenCalled()
+  expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   expect(mocks.logActivity).not.toHaveBeenCalled()
   expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
 }
@@ -180,6 +183,7 @@ beforeEach(() => {
   })
   mocks.prisma.approval.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.approvalTimeline.create.mockResolvedValue({ id: 'timeline_1' })
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
 })
 
 const REFUSED_BODIES: Array<[string, string | undefined]> = [
@@ -255,6 +259,7 @@ describe.each(ROUTES)('$name requires a caller supplied confirmation', (route) =
     expect(mocks.approveApprovalAction).toHaveBeenCalledWith(route.approvalId, 'Checked against bill', 'APPROVE')
     expect(mocks.tx.approval.updateMany).toHaveBeenCalledTimes(1)
     expect(mocks.tx.approvalTimeline.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
   })
 
   it('does not reveal internal details when the action fails unexpectedly', async () => {

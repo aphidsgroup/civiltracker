@@ -49,6 +49,7 @@ const mocks = vi.hoisted(() => {
     material: delegate(),
     document: delegate(),
     purchaseOrder: delegate(),
+    auditLog: { create: vi.fn() },
   }
 
   const forward = (target: { findFirst: (a: unknown) => unknown; updateMany: (a: unknown) => unknown }) => ({
@@ -70,6 +71,7 @@ const mocks = vi.hoisted(() => {
     material: forward(prisma.material),
     document: forward(prisma.document),
     purchaseOrder: forward(prisma.purchaseOrder),
+    auditLog: { create: vi.fn((args: unknown) => prisma.auditLog.create(args)) },
   }
 
   return {
@@ -249,6 +251,7 @@ function expectNoWrites() {
   expect(mocks.prisma.approvalComment.create).not.toHaveBeenCalled()
   expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
   expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()
+  expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   expect(mocks.logActivity).not.toHaveBeenCalled()
   expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
 }
@@ -584,6 +587,7 @@ describe('approvals bound to a soft-deleted site fail closed everywhere', () => 
 
       expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
       expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
+      expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
       expect(mocks.logActivity).not.toHaveBeenCalled()
       expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
     }

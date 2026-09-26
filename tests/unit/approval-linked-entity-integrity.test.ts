@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => {
     material: entityDelegate(),
     document: entityDelegate(),
     purchaseOrder: entityDelegate(),
+    auditLog: { create: vi.fn() },
   }
 
   // Every delegate on the interactive client forwards to the shared spy, so a read or
@@ -54,6 +55,7 @@ const mocks = vi.hoisted(() => {
     material: forward(prisma.material),
     document: forward(prisma.document),
     purchaseOrder: forward(prisma.purchaseOrder),
+    auditLog: { create: vi.fn((args: unknown) => prisma.auditLog.create(args)) },
   }
 
   return {
@@ -142,6 +144,7 @@ function expectNoTransitionAndNoTrace() {
   expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
   expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
   expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()
+  expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   expect(mocks.logActivity).not.toHaveBeenCalled()
   expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
   expect(mocks.revalidatePath).not.toHaveBeenCalled()
@@ -164,6 +167,7 @@ beforeEach(() => {
   mocks.prisma.approvalTimeline.create.mockResolvedValue({ id: 'timeline_1' })
   mocks.prisma.expense.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
   // Every delegate resolves by default, so the only thing that can stop a flow below is
   // the assertion under test.
   for (const delegate of ALL_DELEGATES) {
@@ -356,7 +360,9 @@ describe('resolution does not invent status writes for types that carry none', (
         // The transition itself still happened.
         expect(mocks.prisma.approval.updateMany).toHaveBeenCalledTimes(1)
         expect(mocks.prisma.approvalTimeline.create).toHaveBeenCalledTimes(1)
-        expect(mocks.logActivity).toHaveBeenCalledTimes(1)
+        expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+        expect(mocks.prisma.auditLog.create).toHaveBeenCalledTimes(1)
+        expect(mocks.logActivity).not.toHaveBeenCalled()
       }
     )
 
@@ -389,6 +395,7 @@ describe('the entity specific status writes and count gates are preserved', () =
         data: expect.objectContaining({ approvalStatus: 'APPROVED' }),
       })
     )
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
   })
 
@@ -409,6 +416,7 @@ describe('the entity specific status writes and count gates are preserved', () =
         data: { status: 'DRAFT' },
       })
     )
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
   })
 
@@ -422,6 +430,7 @@ describe('the entity specific status writes and count gates are preserved', () =
       /linked expense not found/i
     )
 
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })

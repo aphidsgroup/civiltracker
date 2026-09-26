@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     material: { findFirst: vi.fn(), findUnique: vi.fn() },
     document: { findFirst: vi.fn(), findUnique: vi.fn() },
     purchaseOrder: { findFirst: vi.fn(), findUnique: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
 
   // The interactive transaction client is a distinct object whose delegates forward to
@@ -40,6 +41,8 @@ const mocks = vi.hoisted(() => {
     material: { findFirst: vi.fn((args: unknown) => prisma.material.findFirst(args)) },
     document: { findFirst: vi.fn((args: unknown) => prisma.document.findFirst(args)) },
     purchaseOrder: { findFirst: vi.fn((args: unknown) => prisma.purchaseOrder.findFirst(args)) },
+    // Every transition writes its mandatory audit record on the transaction client.
+    auditLog: { create: vi.fn((args: unknown) => prisma.auditLog.create(args)) },
   }
 
   return {
@@ -88,6 +91,7 @@ function expectNoApprovalMutations() {
   expect(mocks.prisma.approval.update).not.toHaveBeenCalled()
   expect(mocks.prisma.approval.updateMany).not.toHaveBeenCalled()
   expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
+  expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   expect(mocks.logActivity).not.toHaveBeenCalled()
   expect(mocks.prisma.expense.update).not.toHaveBeenCalled()
   expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
@@ -107,6 +111,7 @@ beforeEach(() => {
   mocks.prisma.approval.update.mockResolvedValue({ id: 'approval_1' })
   mocks.prisma.expense.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
   // Each transition resolves its linked entity inside the transaction before it moves,
   // so every delegate resolves by default and only the case under test can refuse.
   mocks.prisma.expense.findFirst.mockResolvedValue({ id: 'expense_1' })
@@ -357,6 +362,7 @@ describe('approveApprovalAction atomic tenant bound transition', () => {
     await expect(approveApprovalAction('approval_1', undefined, 'APPROVE')).rejects.toThrow(/no longer/i)
 
     expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.prisma.expense.update).not.toHaveBeenCalled()
     expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
@@ -450,6 +456,7 @@ describe('rejectApprovalAction atomic tenant bound transition', () => {
     await expect(rejectApprovalAction('approval_1', 'Not budgeted')).rejects.toThrow(/no longer/i)
 
     expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
   })
@@ -488,6 +495,7 @@ describe('linked entity writes are atomic with the approval transition', () => {
   })
 
   function expectNoPostTransactionEffects() {
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
@@ -500,6 +508,7 @@ describe('linked entity writes are atomic with the approval transition', () => {
     expect(mocks.tx.approval.updateMany).toHaveBeenCalledTimes(1)
     expect(mocks.tx.approvalTimeline.create).toHaveBeenCalledTimes(1)
     expect(mocks.tx.expense.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
     expect(mocks.syncSiteBudget).toHaveBeenCalledWith('site_1')
   })
 
@@ -510,6 +519,7 @@ describe('linked entity writes are atomic with the approval transition', () => {
     expect(mocks.tx.approval.updateMany).toHaveBeenCalledTimes(1)
     expect(mocks.tx.approvalTimeline.create).toHaveBeenCalledTimes(1)
     expect(mocks.tx.expense.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
   })
 
   it('rolls the approval back when the linked expense update matches no row', async () => {

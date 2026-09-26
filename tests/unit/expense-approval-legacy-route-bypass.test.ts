@@ -10,7 +10,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * company pointing at that id. That bypassed the live principal, the exact approval
  * company/site binding, the linked entity re-resolution, the conditional status gate,
  * the transaction, the timeline entry, the audit record and the null-site fail-closed
- * rule — all of which live in the hardened approval actions.
+ * rule — all of which live in the hardened approval actions. The audit record is a
+ * durable `auditLog` row written on the transaction client, so a failed audit write rolls
+ * the whole transition back and the route never claims success.
  *
  * Nothing here mocks `@/actions/approvals`, so the assertions only pass when the routes
  * really derive an approval id from a company/site scoped lookup and then delegate to the
@@ -30,6 +32,7 @@ const mocks = vi.hoisted(() => {
       updateMany: vi.fn(),
     },
     approvalTimeline: { create: vi.fn() },
+    auditLog: { create: vi.fn() },
     expense: { findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     salaryRun: { findFirst: vi.fn(), updateMany: vi.fn() },
     dailyProgressReport: { findFirst: vi.fn() },
@@ -46,6 +49,7 @@ const mocks = vi.hoisted(() => {
       updateMany: vi.fn((args: unknown) => prisma.approval.updateMany(args)),
     },
     approvalTimeline: { create: vi.fn((args: unknown) => prisma.approvalTimeline.create(args)) },
+    auditLog: { create: vi.fn((args: unknown) => prisma.auditLog.create(args)) },
     expense: {
       findFirst: vi.fn((args: unknown) => prisma.expense.findFirst(args)),
       updateMany: vi.fn((args: unknown) => prisma.expense.updateMany(args)),
@@ -147,9 +151,16 @@ function expectNoWrites() {
   expect(mocks.prisma.approval.update).not.toHaveBeenCalled()
   expect(mocks.prisma.approval.updateMany).not.toHaveBeenCalled()
   expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
+  expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   expect(mocks.logActivity).not.toHaveBeenCalled()
   expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
   expectNoRawSql()
+}
+
+/** A refused or rolled back transition leaves no durable audit row and no best-effort one. */
+function expectNoAudit() {
+  expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
+  expect(mocks.logActivity).not.toHaveBeenCalled()
 }
 
 /** The raw `UPDATE "Approval" ... WHERE "entityId" = $1` is gone for good. */
@@ -173,6 +184,7 @@ beforeEach(() => {
   mocks.prisma.approval.findFirst.mockResolvedValue(approvalRow())
   mocks.prisma.approval.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.approvalTimeline.create.mockResolvedValue({ id: 'timeline_1' })
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
 })
 
 describe('POST /api/expenses/[id]/approve derives the approval from an exact tenant scope', () => {
@@ -252,10 +264,25 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
         }),
       })
     )
-    expect(mocks.logActivity).toHaveBeenCalledTimes(1)
-    expect(mocks.logActivity).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'APPROVE', companyId: 'company_1', recordId: 'expense_1' })
-    )
+    // The audit record is one durable row written on the transaction client, not the
+    // best-effort `logActivity` side channel.
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledWith({
+      data: {
+        userId: 'admin_1',
+        companyId: 'company_1',
+        action: 'APPROVE',
+        module: 'EXPENSE',
+        recordId: 'expense_1',
+        before: { status: 'PENDING' },
+        after: {
+          status: 'APPROVED',
+          note: undefined,
+          _description: 'Admin approved expense request "Site bill"',
+        },
+      },
+    })
+    expect(mocks.logActivity).not.toHaveBeenCalled()
   })
 
   it('refuses an expense outside the caller company before any lookup or write', async () => {
@@ -384,8 +411,30 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
     )
 
     expect(response.status).toBe(404)
+    expectNoAudit()
+    expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
+    expectNoRawSql()
+  })
+
+  it('fails safely and claims no success when the durable audit write fails', async () => {
+    mocks.prisma.auditLog.create.mockRejectedValue(new Error('audit store unavailable'))
+
+    const response = await approveExpense(
+      postRequest('http://localhost/api/expenses/expense_1/approve', CONFIRMED),
+      routeParams('expense_1')
+    )
+
+    // The audit write runs inside the transaction, so its failure rolls back the
+    // transition, timeline and expense write; the route answers a generic failure.
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body).toEqual({ error: 'Approval request could not be processed' })
+    expect(body).not.toHaveProperty('success')
+    expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
     expectNoRawSql()
   })
 
@@ -482,10 +531,23 @@ describe('POST /api/expenses/[id]/reject derives the approval from an exact tena
         data: expect.objectContaining({ approvalId: 'approval_1', action: 'REJECTED', toStatus: 'REJECTED' }),
       })
     )
-    expect(mocks.logActivity).toHaveBeenCalledTimes(1)
-    expect(mocks.logActivity).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'REJECT', companyId: 'company_1', recordId: 'expense_1' })
-    )
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledWith({
+      data: {
+        userId: 'admin_1',
+        companyId: 'company_1',
+        action: 'REJECT',
+        module: 'EXPENSE',
+        recordId: 'expense_1',
+        before: { status: 'PENDING' },
+        after: {
+          status: 'REJECTED',
+          reason: 'Rejected via Bills page',
+          _description: 'Admin rejected expense request "Site bill"',
+        },
+      },
+    })
+    expect(mocks.logActivity).not.toHaveBeenCalled()
   })
 
   it('refuses an expense outside the caller company before any lookup or write', async () => {
@@ -568,7 +630,26 @@ describe('POST /api/expenses/[id]/reject derives the approval from an exact tena
     )
 
     expect(response.status).toBe(409)
+    expectNoAudit()
+    expectNoRawSql()
+  })
+
+  it('fails safely and claims no success when the durable audit write fails', async () => {
+    mocks.prisma.auditLog.create.mockRejectedValue(new Error('audit store unavailable'))
+
+    const response = await rejectExpense(
+      postRequest('http://localhost/api/expenses/expense_1/reject', { reason: 'Duplicate bill' }),
+      routeParams('expense_1')
+    )
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body).toEqual({ error: 'Approval request could not be processed' })
+    expect(body).not.toHaveProperty('success')
+    expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
     expect(mocks.logActivity).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
     expectNoRawSql()
   })
 })

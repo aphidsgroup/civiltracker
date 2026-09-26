@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => {
     approvalTimeline: { create: vi.fn() },
     expense: { findFirst: vi.fn(), updateMany: vi.fn() },
     salaryRun: { findFirst: vi.fn(), updateMany: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
 
   // The disbursement writes now run on an interactive transaction client. Its delegates
@@ -26,6 +27,8 @@ const mocks = vi.hoisted(() => {
       findFirst: vi.fn((args: unknown) => prisma.salaryRun.findFirst(args)),
       updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)),
     },
+    // The mandatory disbursement audit record is written on the same transaction client.
+    auditLog: { create: vi.fn((args: unknown) => prisma.auditLog.create(args)) },
   }
 
   return {
@@ -83,6 +86,7 @@ beforeEach(() => {
   mocks.prisma.approvalTimeline.create.mockResolvedValue({ id: 'timeline_1' })
   mocks.prisma.expense.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
   // The disbursement re-resolves the linked entity on the transaction client before it
   // transitions, so the happy path has to find it inside the approval tenant and site.
   mocks.prisma.expense.findFirst.mockResolvedValue({ id: 'expense_1' })
@@ -146,6 +150,7 @@ describe('markApprovalPaidAction tenant authorization', () => {
     expect(mocks.prisma.approval.update).not.toHaveBeenCalled()
     expect(mocks.prisma.approval.updateMany).not.toHaveBeenCalled()
     expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
     expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()
@@ -158,6 +163,7 @@ describe('markApprovalPaidAction tenant authorization', () => {
     expect(mocks.prisma.approval.update).not.toHaveBeenCalled()
     expect(mocks.prisma.approval.updateMany).not.toHaveBeenCalled()
     expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
     expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()
@@ -170,6 +176,7 @@ describe('markApprovalPaidAction tenant authorization', () => {
     expect(mocks.prisma.approval.update).not.toHaveBeenCalled()
     expect(mocks.prisma.approval.updateMany).not.toHaveBeenCalled()
     expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
     expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()
@@ -182,6 +189,7 @@ describe('markApprovalPaidAction tenant authorization', () => {
     await expect(markApprovalPaidAction('other_company_approval', undefined, 'PAID')).rejects.toThrow(/approval not found/i)
     expect(mocks.prisma.approval.update).not.toHaveBeenCalled()
     expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
     expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()

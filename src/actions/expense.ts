@@ -12,11 +12,8 @@ import {
   findApprovalSubmitSite,
 } from '@/lib/approvals/submit'
 import { logActivity } from '@/lib/audit'
-
-const ATTACHMENT_NOT_FOUND = 'Forbidden: Uploaded bill not found or access denied'
-
-/** Attachment fields the browser used to send; they are storage facts, never input. */
-const CLIENT_ATTACHMENT_FIELDS = ['cloudinaryPublicId', 'secureUrl', 'format', 'bytes'] as const
+import { EXPENSE_ATTACHMENT_NOT_FOUND as ATTACHMENT_NOT_FOUND, parseExpenseActionInput } from '@/lib/validation/expenses'
+import type { ExpenseActionInput } from '@/lib/validation/expenses'
 
 /*
  * Records an expense and raises its approval. A bill attachment is named only by the id
@@ -24,36 +21,21 @@ const CLIENT_ATTACHMENT_FIELDS = ['cloudinaryPublicId', 'secureUrl', 'format', '
  * for exactly this live site and company, not yet attached to any expense, and every
  * attachment field stored is copied from that asset. A URL, public id, format or size
  * sent by the browser is refused.
+ *
+ * The parameter type is not a boundary for a Server Action: the payload is parsed by
+ * `parseExpenseActionInput` (positive bounded amount, enum category and payment mode, a
+ * real bill date, bounded trimmed text, strict media id, no unknown keys) right after
+ * the live principal is resolved and before any module, site, media or write access.
  */
-export async function createExpenseAction(data: {
-  siteId: string
-  amount: number
-  category: ExpenseCategory
-  paymentMode: PaymentMode
-  paidTo?: string
-  billNumber?: string
-  notes?: string
-  description?: string
-  billDate?: Date
-  mediaAssetId?: string
-}) {
+export async function createExpenseAction(input: ExpenseActionInput) {
   const user = await requirePermission('expenses.create')
+  const data = parseExpenseActionInput(input)
+  const mediaAssetId = data.mediaAssetId ?? ''
 
   // Every gate below is pure, so a denied principal is refused before any Prisma read.
   // The approval is raised on the internal writer rather than the public action, so the
   // participation and entity-specific submit permissions that action enforced are
   // re-applied here.
-  const input = (data ?? {}) as Record<string, unknown>
-  if (CLIENT_ATTACHMENT_FIELDS.some((field) => input[field] !== undefined)) {
-    throw new Error('Invalid expense: attach a bill by its uploaded media asset id')
-  }
-  const rawAssetId = input.mediaAssetId
-  if (rawAssetId !== undefined && rawAssetId !== null && typeof rawAssetId !== 'string') {
-    throw new Error(ATTACHMENT_NOT_FOUND)
-  }
-  const mediaAssetId = typeof rawAssetId === 'string' ? rawAssetId.trim() : ''
-  if (rawAssetId != null && (!mediaAssetId || mediaAssetId.length > 64)) throw new Error(ATTACHMENT_NOT_FOUND)
-
   const entityType = mediaAssetId ? 'BILL' : 'EXPENSE'
   if (!hasPermission(user.role, 'approvals.view')) {
     throw new Error('Forbidden: Missing required permission "approvals.view"')

@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => {
     material: { findFirst: vi.fn() },
     document: { findFirst: vi.fn() },
     purchaseOrder: { findFirst: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
   return {
     requireUser: vi.fn(),
@@ -86,6 +87,7 @@ function expectNoApprovalReadOrWrite() {
   expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
   expect(mocks.prisma.approval.updateMany).not.toHaveBeenCalled()
   expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
+  expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   expect(mocks.logActivity).not.toHaveBeenCalled()
 }
 
@@ -109,6 +111,7 @@ beforeEach(() => {
   mocks.prisma.salaryRun.findFirst.mockResolvedValue({ id: 'entity' })
   mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.dailyProgressReport.findFirst.mockResolvedValue({ id: 'entity' })
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
 })
 
 describe('approveApprovalAction permission gate', () => {

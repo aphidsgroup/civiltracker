@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
     material: { findFirst: vi.fn() },
     document: { findFirst: vi.fn() },
     purchaseOrder: { findFirst: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
 
   const tx = {
@@ -41,6 +42,7 @@ const mocks = vi.hoisted(() => {
     // The company-level PURCHASE_ORDER flows are the only ones that reach the in-transaction
     // re-resolve here; every site-bound type is refused before the transaction opens.
     purchaseOrder: { findFirst: vi.fn((args: unknown) => prisma.purchaseOrder.findFirst(args)) },
+    auditLog: { create: vi.fn((args: unknown) => prisma.auditLog.create(args)) },
   }
 
   return {
@@ -77,6 +79,7 @@ function expectNoWrites() {
   expect(mocks.prisma.expense.update).not.toHaveBeenCalled()
   expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
   expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()
+  expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   expect(mocks.logActivity).not.toHaveBeenCalled()
   expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
   expect(mocks.revalidatePath).not.toHaveBeenCalled()
@@ -116,6 +119,7 @@ beforeEach(() => {
   mocks.prisma.approval.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.expense.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
   mocks.prisma.expense.findFirst.mockResolvedValue({ id: 'entity_on_any_site', siteId: 'site_9', billAttachments: [] })
   mocks.prisma.salaryRun.findFirst.mockResolvedValue({ id: 'entity_on_any_site', items: [] })
   mocks.prisma.dailyProgressReport.findFirst.mockResolvedValue({ id: 'entity_on_any_site' })
@@ -196,6 +200,7 @@ describe('approveApprovalAction refuses a legacy approval that carries no site',
 
     expect(result).toEqual({ id: 'legacy_approval', currentStatus: 'APPROVED' })
     expect(mocks.prisma.approval.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
     expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
     expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()
     expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
@@ -232,6 +237,7 @@ describe('rejectApprovalAction refuses a legacy approval that carries no site', 
 
     expect(result).toEqual({ id: 'legacy_approval', currentStatus: 'REJECTED' })
     expect(mocks.prisma.approval.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
     expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
     expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()
   })
@@ -270,6 +276,7 @@ describe('markApprovalPaidAction refuses a legacy approval that carries no site'
     await markApprovalPaidAction('legacy_approval', undefined, 'PAID')
 
     expect(mocks.prisma.approval.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
     expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
     expect(mocks.prisma.salaryRun.updateMany).not.toHaveBeenCalled()
   })

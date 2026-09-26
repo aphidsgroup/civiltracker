@@ -3,60 +3,30 @@
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { auditLogData } from '@/lib/audit-data'
-import { SiteStatus } from '@prisma/client'
 import {
-  parseNonNegativeAmount,
-  requiredText,
+  requireAssignedScopeMutation,
   requireSiteMutation,
   requireTenantMutation,
 } from '@/lib/auth/site-mutation'
+import { updateSiteForTenant } from '@/lib/sites/update-site'
+import { parseSiteDetailsForm } from '@/lib/validation/sites'
 
 const SITE_NOT_FOUND = 'FORBIDDEN: Site not found or access denied'
 
-function parseSiteStatus(raw: FormDataEntryValue | null): SiteStatus {
-  if (typeof raw !== 'string' || !(Object.values(SiteStatus) as string[]).includes(raw)) {
-    throw new Error('Invalid site status')
-  }
-  return raw as SiteStatus
-}
-
+/**
+ * Form entry point of the Edit Site modal, on the same rules as `updateSite`: live
+ * `sites.update` + SITES before the form is parsed, then the form is validated against
+ * the canonical site field rules with an explicit key allowlist, and the audited update
+ * service binds the site to the assigned-site scope and writes the update and its audit
+ * record in one transaction. Revalidation runs only after that commit.
+ */
 export async function updateSiteDetails(formData: FormData) {
-  const id = formData.get('id') as string
-  const { site } = await requireSiteMutation(id, 'sites.update', 'SITES')
+  const { user, scope } = await requireAssignedScopeMutation('sites.update', 'SITES')
+  const { siteId, status, site } = parseSiteDetailsForm(formData)
 
-  const name = requiredText(formData.get('name'), 'Name')
-  const location = requiredText(formData.get('location'), 'Location')
-  const address = formData.get('address') as string
-  const projectType = formData.get('projectType') as string
+  const updatedId = await updateSiteForTenant(user, siteId, scope, site, status)
 
-  const clientName = formData.get('clientName') as string
-  const clientPhone = formData.get('clientPhone') as string
-  const areaSqft = parseNonNegativeAmount(formData.get('areaSqft'), 'area', null)
-
-  const startDate = formData.get('startDate') as string
-  const targetEndDate = formData.get('targetEndDate') as string
-  const budget = parseNonNegativeAmount(formData.get('budget'), 'budget', 0)
-  const status = parseSiteStatus(formData.get('status'))
-
-  const result = await prisma.site.updateMany({
-    where: { id: site.id, companyId: site.companyId, deletedAt: null },
-    data: {
-      name,
-      location,
-      address,
-      projectType,
-      clientName,
-      clientPhone,
-      areaSqft,
-      startDate: startDate ? new Date(startDate) : null,
-      targetEndDate: targetEndDate ? new Date(targetEndDate) : null,
-      budget,
-      status
-    }
-  })
-  if (result.count !== 1) throw new Error(SITE_NOT_FOUND)
-
-  revalidatePath(`/sites/${site.id}`)
+  revalidatePath(`/sites/${updatedId}`)
   revalidatePath(`/sites`)
   return { success: true }
 }

@@ -8,9 +8,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * row that had moved out of the approval tenant in the meantime left a PAID approval
  * with an unpaid entity and an audit trail claiming otherwise.
  *
- * These tests pin the transition, the timeline entry and the linked mutation to one
- * unit of work, require the linked write to match exactly one row, and keep every
- * external effect (audit, revalidation) strictly after the commit.
+ * These tests pin the transition, the timeline entry, the linked mutation and the
+ * mandatory audit record to one unit of work, require the linked write to match exactly
+ * one row, and keep every external effect (revalidation) strictly after the commit.
  */
 const mocks = vi.hoisted(() => {
   const prisma = {
@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
     approvalTimeline: { create: vi.fn() },
     expense: { findFirst: vi.fn(), updateMany: vi.fn() },
     salaryRun: { findFirst: vi.fn(), updateMany: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
 
   // Delegates on the interactive client forward to the shared spies, so a read or write
@@ -37,6 +38,7 @@ const mocks = vi.hoisted(() => {
       findFirst: vi.fn((args: unknown) => prisma.salaryRun.findFirst(args)),
       updateMany: vi.fn((args: unknown) => prisma.salaryRun.updateMany(args)),
     },
+    auditLog: { create: vi.fn((args: unknown) => prisma.auditLog.create(args)) },
   }
 
   return {
@@ -82,6 +84,7 @@ function approvedRow(overrides: Record<string, unknown> = {}) {
 
 /** Nothing observable outside the database may survive a failed disbursement. */
 function expectNoExternalEffects() {
+  expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   expect(mocks.logActivity).not.toHaveBeenCalled()
   expect(mocks.revalidatePath).not.toHaveBeenCalled()
 }
@@ -105,6 +108,7 @@ beforeEach(() => {
   mocks.prisma.approvalTimeline.create.mockResolvedValue({ id: 'timeline_1' })
   mocks.prisma.expense.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.salaryRun.updateMany.mockResolvedValue({ count: 1 })
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
   // Disbursement re-resolves the linked record inside the transaction before it moves.
   mocks.prisma.expense.findFirst.mockResolvedValue({ id: 'expense_1' })
   mocks.prisma.salaryRun.findFirst.mockResolvedValue({ id: 'salary_1' })
@@ -153,15 +157,17 @@ describe('markApprovalPaidAction runs disbursement as one unit of work', () => {
     expect(mocks.prisma.salaryRun.updateMany).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps audit and revalidation after the commit', async () => {
+  it('writes the mandatory audit record on the transaction client and revalidates after the commit', async () => {
     await markApprovalPaidAction('approval_1', undefined, 'PAID')
 
-    expect(mocks.logActivity).toHaveBeenCalledTimes(1)
+    // The audit record is part of the unit of work: issued on `tx`, never best-effort.
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ action: 'PAID', companyId: 'company_1', recordId: 'expense_1' }),
+    })
+    expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/approvals')
-    // The audit record is an external effect: it must not be issued on `tx`.
-    expect(mocks.logActivity).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'PAID', companyId: 'company_1', recordId: 'expense_1' })
-    )
   })
 })
 

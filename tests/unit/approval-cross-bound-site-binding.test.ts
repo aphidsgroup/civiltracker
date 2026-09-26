@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => {
     material: { findFirst: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
     document: { findFirst: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
     purchaseOrder: { findFirst: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
 
   const forward = (target: { findFirst: (a: unknown) => unknown; updateMany: (a: unknown) => unknown }) => ({
@@ -50,6 +51,7 @@ const mocks = vi.hoisted(() => {
     material: forward(prisma.material),
     document: forward(prisma.document),
     purchaseOrder: forward(prisma.purchaseOrder),
+    auditLog: { create: vi.fn((args: unknown) => prisma.auditLog.create(args)) },
   }
 
   return {
@@ -200,6 +202,7 @@ function expectNoMutation() {
   for (const name of ENTITY_DELEGATES) {
     expect(mocks.prisma[name].updateMany).not.toHaveBeenCalled()
   }
+  expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   expect(mocks.logActivity).not.toHaveBeenCalled()
   expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
   expect(mocks.revalidatePath).not.toHaveBeenCalled()
@@ -224,6 +227,7 @@ beforeEach(() => {
   mocks.prisma.approval.updateMany.mockImplementation(approvals.updateMany)
   mocks.prisma.approvalTimeline.create.mockResolvedValue({ id: 'timeline_1' })
   mocks.prisma.approvalComment.create.mockResolvedValue({ id: 'comment_1' })
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
 
   for (const name of ENTITY_DELEGATES) {
     const store = inMemoryDelegate(ENTITIES[name])
@@ -420,6 +424,7 @@ describe('cross-bound approvals can never be commented on or transitioned', () =
     expect(matchesWhere(approval('x_expense', { siteId: 'site_1' }), where, siteRelation)).toBe(true)
     expect(mocks.prisma.approvalTimeline.create).not.toHaveBeenCalled()
     expect(mocks.prisma.expense.updateMany).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
   })
@@ -429,6 +434,7 @@ describe('cross-bound approvals can never be commented on or transitioned', () =
 
     await expect(approveApprovalAction('ok_po', undefined, 'APPROVE')).resolves.toMatchObject({ currentStatus: 'APPROVED' })
     expect(mocks.prisma.approvalTimeline.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
   })
 
   it('still lets a tenant approve a valid expense on its own site', async () => {
