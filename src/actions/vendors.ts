@@ -3,7 +3,7 @@
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { logActivity } from '@/lib/audit'
+import { auditLogData } from '@/lib/audit-data'
 import {
   bindOptionalSite,
   optionalText,
@@ -94,33 +94,41 @@ export async function markVendorPaidAction(formData: FormData) {
   revalidatePath('/vendors')
 }
 
-/* Deactivates a vendor once its name is typed back; audited as the live principal. */
+/*
+ * Deactivates a vendor once its name is typed back; audited as the live principal. The
+ * re-read, guarded write and audit record share one transaction.
+ */
 export async function deactivateVendorAction(formData: FormData) {
   const user = await requireTenantMutation('materials.update', 'MATERIALS')
   const companyId = user.companyId
   const id = requiredText(formData.get('id'), 'Vendor')
   const typed = typeof formData.get('dangerConfirmText') === 'string' ? (formData.get('dangerConfirmText') as string).trim() : ''
 
-  const vendor = await prisma.vendor.findFirst({
-    where: boundVendorWhere(id, companyId),
-    select: { id: true, name: true, category: true, amountPayable: true, isActive: true },
-  })
-  if (!vendor) throw new Error(VENDOR_NOT_FOUND)
-  if (typed !== vendor.name.trim()) {
-    throw new Error('Remove confirmation text did not match the vendor name.')
-  }
+  await prisma.$transaction(async (tx) => {
+    const vendor = await tx.vendor.findFirst({
+      where: boundVendorWhere(id, companyId),
+      select: { id: true, name: true, category: true, amountPayable: true, isActive: true },
+    })
+    if (!vendor) throw new Error(VENDOR_NOT_FOUND)
+    if (typed !== vendor.name.trim()) {
+      throw new Error('Remove confirmation text did not match the vendor name.')
+    }
 
-  await prisma.vendor.updateMany({ where: { id: vendor.id, companyId }, data: { isActive: false } })
+    const result = await tx.vendor.updateMany({ where: boundVendorWhere(vendor.id, companyId), data: { isActive: false } })
+    if (result.count !== 1) throw new Error(VENDOR_NOT_FOUND)
 
-  await logActivity({
-    userId: user.id,
-    companyId,
-    action: 'UPDATE',
-    module: 'VENDOR',
-    recordId: vendor.id,
-    description: `${user.name ?? user.email} deactivated vendor "${vendor.name}"`,
-    before: { isActive: vendor.isActive, category: vendor.category, amountPayable: Number(vendor.amountPayable), name: vendor.name },
-    after: { isActive: false, category: vendor.category, amountPayable: Number(vendor.amountPayable), name: vendor.name },
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId,
+        action: 'UPDATE',
+        module: 'VENDOR',
+        recordId: vendor.id,
+        description: `${user.name ?? user.email} deactivated vendor "${vendor.name}"`,
+        before: { isActive: vendor.isActive, category: vendor.category, amountPayable: Number(vendor.amountPayable), name: vendor.name },
+        after: { isActive: false, category: vendor.category, amountPayable: Number(vendor.amountPayable), name: vendor.name },
+      }),
+    })
   })
 
   revalidatePath('/vendors')

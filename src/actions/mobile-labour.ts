@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/audit'
+import { auditLogData } from '@/lib/audit-data'
 import { AttendanceStatus, LabourTrade } from '@prisma/client'
 import type { Prisma } from '@prisma/client'
 import { requireAssignedScopeMutation, requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
@@ -414,34 +415,40 @@ export async function removeLabourAttendanceAction(labourId: string, confirmatio
 
   const today = startOfToday()
 
-  const labour = await prisma.labour.findFirst({
-    where: companyLabourWhere(String(labourId ?? ''), companyId, scope),
-    select: { id: true, name: true, siteId: true, trade: true }
-  })
+  // The worker re-read, the delete and the audit record share one transaction: an audit
+  // failure keeps the roster entry.
+  await prisma.$transaction(async (tx) => {
+    const labour = await tx.labour.findFirst({
+      where: companyLabourWhere(String(labourId ?? ''), companyId, scope),
+      select: { id: true, name: true, siteId: true, trade: true }
+    })
 
-  if (!labour) throw new Error(LABOUR_NOT_FOUND)
-  if ((confirmationText ?? '').trim() !== labour.name.trim()) {
-    throw new Error('Roster removal confirmation text did not match the worker name')
-  }
-
-  // Delete today's attendance record
-  await prisma.labourAttendance.deleteMany({
-    where: {
-      labourId: labour.id,
-      date: today,
-      labour: { companyId },
+    if (!labour) throw new Error(LABOUR_NOT_FOUND)
+    if ((confirmationText ?? '').trim() !== labour.name.trim()) {
+      throw new Error('Roster removal confirmation text did not match the worker name')
     }
-  })
 
-  await logActivity({
-    userId: user.id,
-    companyId,
-    action: 'DELETE',
-    module: 'ATTENDANCE',
-    recordId: labour.id,
-    description: `${user.name ?? user.email} removed worker "${labour.name}" from today's roster`,
-    before: { labourId: labour.id, name: labour.name, trade: labour.trade, siteId: labour.siteId, date: today.toISOString() },
-    after: { removedFromRoster: true, date: today.toISOString() },
+    // Delete today's attendance record
+    await tx.labourAttendance.deleteMany({
+      where: {
+        labourId: labour.id,
+        date: today,
+        labour: { companyId },
+      }
+    })
+
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId,
+        action: 'DELETE',
+        module: 'ATTENDANCE',
+        recordId: labour.id,
+        description: `${user.name ?? user.email} removed worker "${labour.name}" from today's roster`,
+        before: { labourId: labour.id, name: labour.name, trade: labour.trade, siteId: labour.siteId, date: today.toISOString() },
+        after: { removedFromRoster: true, date: today.toISOString() },
+      }),
+    })
   })
 
   revalidatePath('/mobile/attendance')
@@ -471,7 +478,7 @@ export async function removeContractorAttendanceAction(attendanceId: string, con
     throw new Error('Contractor log confirmation text did not match the contractor label')
   }
 
-  // The log is deleted and its advance reversed together, or neither.
+  // The log is deleted, its advance reversed and the deletion audited together, or none.
   await prisma.$transaction(async (tx) => {
     const removed = await tx.contractorAttendance.deleteMany({
       where: { id: record.id, companyId }
@@ -485,26 +492,28 @@ export async function removeContractorAttendanceAction(attendanceId: string, con
       })
       if (result.count !== 1) throw new Error(SUBCONTRACTOR_NOT_FOUND)
     }
-  })
 
-  await logActivity({
-    userId: user.id,
-    companyId,
-    action: 'DELETE',
-    module: 'ATTENDANCE',
-    recordId: record.id,
-    description: `${user.name ?? user.email} deleted contractor log "${expected}" from today's roster`,
-    before: {
-      contractorType: record.contractorType,
-      labourCount: record.labourCount,
-      dailyAdvance: Number(record.dailyAdvance),
-      subcontractorId: record.subcontractorId,
-      subcontractorName: record.subcontractor?.name,
-      date: record.date.toISOString(),
-      startTime: record.startTime,
-      siteId: record.siteId,
-    },
-    after: { deleted: true },
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId,
+        action: 'DELETE',
+        module: 'ATTENDANCE',
+        recordId: record.id,
+        description: `${user.name ?? user.email} deleted contractor log "${expected}" from today's roster`,
+        before: {
+          contractorType: record.contractorType,
+          labourCount: record.labourCount,
+          dailyAdvance: Number(record.dailyAdvance),
+          subcontractorId: record.subcontractorId,
+          subcontractorName: record.subcontractor?.name,
+          date: record.date.toISOString(),
+          startTime: record.startTime,
+          siteId: record.siteId,
+        },
+        after: { deleted: true },
+      }),
+    })
   })
 
   revalidatePath('/mobile/attendance')

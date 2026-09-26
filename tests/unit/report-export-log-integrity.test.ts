@@ -18,6 +18,10 @@ import type { Row } from './support/prisma-where'
  * must be a live site of the live company inside the principal's assigned-site scope.
  * Only the sanitized filters are logged.
  *
+ * `logReportExport` now lives in `@/lib/reports/export-record`, which is not a
+ * `'use server'` module, and is called by the export action only after the file has been
+ * rendered; its audit and history rows are written in one transaction.
+ *
  * `@/lib/permissions`, `@/lib/pages/tenant-page-access` and `@/lib/auth/site-mutation`
  * are real.
  */
@@ -29,6 +33,7 @@ const mocks = vi.hoisted(() => ({
     site: { findFirst: vi.fn() },
     auditLog: { create: vi.fn() },
     reportExport: { create: vi.fn() },
+    $transaction: vi.fn(),
   },
 }))
 
@@ -37,7 +42,7 @@ vi.mock('@/lib/auth/require-user', () => ({ requireUser: mocks.requireUser }))
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma, default: mocks.prisma }))
 vi.mock('next/navigation', () => ({ redirect: vi.fn(), notFound: vi.fn() }))
 
-const { logReportExport } = await import('@/actions/reports')
+const { logReportExport } = await import('@/lib/reports/export-record')
 
 const SITES: Row[] = [
   { id: 'site_1', companyId: 'company_1', deletedAt: null },
@@ -61,6 +66,7 @@ beforeEach(() => {
   mocks.prisma.site.findFirst.mockImplementation(inMemoryDelegate(SITES).findFirst)
   mocks.prisma.auditLog.create.mockResolvedValue({})
   mocks.prisma.reportExport.create.mockResolvedValue({})
+  mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
 })
 
 describe('logReportExport: allowlists', () => {
@@ -142,6 +148,11 @@ describe('logReportExport: filters', () => {
     expect(mocks.prisma.reportExport.create).toHaveBeenCalledWith({
       data: { companyId: 'company_1', generatedById: 'user_company_admin', reportType: 'site-cost', format: 'PDF', filtersJson: { siteId: 'site_1' } },
     })
+  })
+
+  it('is not exposed from the reports server-action module', async () => {
+    const reports = await import('@/actions/reports')
+    expect(reports).not.toHaveProperty('logReportExport')
   })
 
   it('logs a ledger export for an ACCOUNTANT with empty filters', async () => {

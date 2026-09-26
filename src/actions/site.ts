@@ -2,7 +2,7 @@
 
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
-import { logActivity } from '@/lib/audit'
+import { auditLogData } from '@/lib/audit-data'
 import { SiteStatus } from '@prisma/client'
 import {
   parseNonNegativeAmount,
@@ -61,34 +61,42 @@ export async function updateSiteDetails(formData: FormData) {
   return { success: true }
 }
 
+/*
+ * Soft delete and restore re-read the site, apply the guarded write and write the audit
+ * record on one transaction client: an audit failure rolls the lifecycle change back.
+ */
 export async function softDeleteSite(id: string, dangerConfirmText?: string) {
   const { user } = await requireSiteMutation(id, 'sites.delete', 'SITES')
 
-  const site = await prisma.site.findFirst({
-    where: { id, companyId: user.companyId, deletedAt: null },
-    select: { id: true, name: true, location: true, status: true, deletedAt: true, budget: true },
-  })
-  if (!site) throw new Error(SITE_NOT_FOUND)
-  if ((dangerConfirmText ?? '').trim() !== site.name.trim()) {
-    throw new Error('Delete confirmation text did not match the site name.')
-  }
+  await prisma.$transaction(async (tx) => {
+    const site = await tx.site.findFirst({
+      where: { id, companyId: user.companyId, deletedAt: null },
+      select: { id: true, name: true, location: true, status: true, deletedAt: true, budget: true },
+    })
+    if (!site) throw new Error(SITE_NOT_FOUND)
+    if ((dangerConfirmText ?? '').trim() !== site.name.trim()) {
+      throw new Error('Delete confirmation text did not match the site name.')
+    }
 
-  const deletedAt = new Date()
-  const result = await prisma.site.updateMany({
-    where: { id: site.id, companyId: user.companyId, deletedAt: null },
-    data: { deletedAt }
-  })
-  if (result.count !== 1) throw new Error(SITE_NOT_FOUND)
+    const deletedAt = new Date()
+    const result = await tx.site.updateMany({
+      where: { id: site.id, companyId: user.companyId, deletedAt: null },
+      data: { deletedAt }
+    })
+    if (result.count !== 1) throw new Error(SITE_NOT_FOUND)
 
-  await logActivity({
-    userId: user.id,
-    companyId: user.companyId,
-    action: 'DELETE',
-    module: 'SITE',
-    recordId: site.id,
-    description: `${user.name ?? user.email} scheduled site "${site.name}" for deletion`,
-    before: { deletedAt: site.deletedAt, location: site.location, status: site.status, budget: Number(site.budget), name: site.name },
-    after: { deletedAt: deletedAt.toISOString(), location: site.location, status: site.status, budget: Number(site.budget), name: site.name },
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId: user.companyId,
+        action: 'DELETE',
+        module: 'SITE',
+        recordId: site.id,
+        description: `${user.name ?? user.email} scheduled site "${site.name}" for deletion`,
+        before: { deletedAt: site.deletedAt, location: site.location, status: site.status, budget: Number(site.budget), name: site.name },
+        after: { deletedAt: deletedAt.toISOString(), location: site.location, status: site.status, budget: Number(site.budget), name: site.name },
+      }),
+    })
   })
 
   revalidatePath('/sites')
@@ -98,27 +106,31 @@ export async function softDeleteSite(id: string, dangerConfirmText?: string) {
 export async function restoreSite(id: string) {
   const user = await requireTenantMutation('sites.delete', 'SITES')
 
-  const site = await prisma.site.findFirst({
-    where: { id, companyId: user.companyId, deletedAt: { not: null } },
-    select: { id: true, name: true, location: true, status: true, deletedAt: true, budget: true },
-  })
-  if (!site) throw new Error(SITE_NOT_FOUND)
+  await prisma.$transaction(async (tx) => {
+    const site = await tx.site.findFirst({
+      where: { id, companyId: user.companyId, deletedAt: { not: null } },
+      select: { id: true, name: true, location: true, status: true, deletedAt: true, budget: true },
+    })
+    if (!site) throw new Error(SITE_NOT_FOUND)
 
-  const result = await prisma.site.updateMany({
-    where: { id: site.id, companyId: user.companyId, deletedAt: { not: null } },
-    data: { deletedAt: null }
-  })
-  if (result.count !== 1) throw new Error(SITE_NOT_FOUND)
+    const result = await tx.site.updateMany({
+      where: { id: site.id, companyId: user.companyId, deletedAt: { not: null } },
+      data: { deletedAt: null }
+    })
+    if (result.count !== 1) throw new Error(SITE_NOT_FOUND)
 
-  await logActivity({
-    userId: user.id,
-    companyId: user.companyId,
-    action: 'UPDATE',
-    module: 'SITE',
-    recordId: site.id,
-    description: `${user.name ?? user.email} restored site "${site.name}"`,
-    before: { deletedAt: site.deletedAt ? site.deletedAt.toISOString() : null, location: site.location, status: site.status, budget: Number(site.budget), name: site.name },
-    after: { deletedAt: null, location: site.location, status: site.status, budget: Number(site.budget), name: site.name },
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId: user.companyId,
+        action: 'UPDATE',
+        module: 'SITE',
+        recordId: site.id,
+        description: `${user.name ?? user.email} restored site "${site.name}"`,
+        before: { deletedAt: site.deletedAt ? site.deletedAt.toISOString() : null, location: site.location, status: site.status, budget: Number(site.budget), name: site.name },
+        after: { deletedAt: null, location: site.location, status: site.status, budget: Number(site.budget), name: site.name },
+      }),
+    })
   })
 
   revalidatePath('/sites')

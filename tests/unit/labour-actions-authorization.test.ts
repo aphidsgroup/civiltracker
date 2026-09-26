@@ -26,9 +26,10 @@ import type { RelationResolver, Row } from './support/prisma-where'
 const mocks = vi.hoisted(() => {
   const tx = {
     labour: { findFirst: vi.fn(), updateMany: vi.fn() },
-    labourAttendance: { upsert: vi.fn() },
+    labourAttendance: { upsert: vi.fn(), deleteMany: vi.fn() },
     subcontractor: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
     contractorAttendance: { create: vi.fn(), deleteMany: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
   return {
     requireUser: vi.fn(),
@@ -156,6 +157,8 @@ beforeEach(() => {
   mocks.prisma.labour.updateMany.mockImplementation(labour.updateMany)
   mocks.prisma.labour.create.mockImplementation(async (args: { data: Row }) => ({ id: 'lab_new', ...args.data }))
   mocks.prisma.labourAttendance.deleteMany.mockResolvedValue({ count: 1 })
+  mocks.tx.labourAttendance.deleteMany.mockImplementation(stageWrite('labourAttendance.deleteMany', (args: Row) => args.where, () => ({ count: 1 })))
+  mocks.tx.auditLog.create.mockImplementation(stageWrite('auditLog.create', (args: Row) => args.data, () => ({ id: 'audit_1' })))
   mocks.tx.labour.updateMany.mockImplementation(stagedCount('labour.updateMany', labour))
   mocks.tx.labourAttendance.upsert.mockImplementation(
     stageWrite('labourAttendance.upsert', (args: Row) => args, (args: Row) => ({ id: `att_${(args.create as Row).labourId}` })),
@@ -196,6 +199,7 @@ function allWrites() {
     prisma.contractorAttendance.create, prisma.contractorAttendance.delete, prisma.contractorAttendance.deleteMany,
     tx.labour.updateMany, tx.labourAttendance.upsert, tx.subcontractor.create, tx.subcontractor.updateMany,
     tx.contractorAttendance.create, tx.contractorAttendance.deleteMany,
+    tx.labourAttendance.deleteMany, tx.auditLog.create,
   ].reduce((sum, fn) => sum + fn.mock.calls.length, 0)
 }
 
@@ -539,7 +543,7 @@ describe('contractor attendance', () => {
       where: { id: 'sub_1', companyId: 'company_1' },
       data: { advance: { decrement: 200 } },
     })
-    expect(committed.map(([name]) => name)).toEqual(['contractorAttendance.deleteMany', 'subcontractor.updateMany'])
+    expect(committed.map(([name]) => name)).toEqual(['contractorAttendance.deleteMany', 'subcontractor.updateMany', 'auditLog.create'])
     expect(mocks.prisma.contractorAttendance.delete).not.toHaveBeenCalled()
   })
 
@@ -550,13 +554,14 @@ describe('contractor attendance', () => {
     await expect(mocks.tx.contractorAttendance.deleteMany.mock.results[0].value).resolves.toEqual({ count: 1 })
     expect(mocks.tx.subcontractor.updateMany).toHaveBeenCalledTimes(1)
     expect(committed).toEqual([])
+    expect(mocks.tx.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
   })
 
   it('removeContractorAttendanceAction with no advance only deletes the log', async () => {
     await mobile.removeContractorAttendanceAction('ca_free', 'Bricks Co')
     expect(mocks.tx.subcontractor.updateMany).not.toHaveBeenCalled()
-    expect(committed.map(([name]) => name)).toEqual(['contractorAttendance.deleteMany'])
+    expect(committed.map(([name]) => name)).toEqual(['contractorAttendance.deleteMany', 'auditLog.create'])
   })
 })
 
@@ -568,8 +573,10 @@ describe('removeLabourAttendanceAction', () => {
 
   it('deletes only the live tenant worker\'s attendance for today', async () => {
     await mobile.removeLabourAttendanceAction('lab_1', 'Ravi')
-    const where = mocks.prisma.labourAttendance.deleteMany.mock.calls[0][0].where
+    const where = mocks.tx.labourAttendance.deleteMany.mock.calls[0][0].where
     expect(where).toMatchObject({ labourId: 'lab_1', labour: { companyId: 'company_1' } })
     expect(where.date).toBeInstanceOf(Date)
+    expect(mocks.prisma.labourAttendance.deleteMany).not.toHaveBeenCalled()
+    expect(committed.map(([name]) => name)).toEqual(['labourAttendance.deleteMany', 'auditLog.create'])
   })
 })

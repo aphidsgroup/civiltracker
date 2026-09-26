@@ -3,7 +3,7 @@
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { logActivity } from '@/lib/audit'
+import { auditLogData } from '@/lib/audit-data'
 import {
   bindOptionalSite,
   optionalText,
@@ -103,34 +103,42 @@ export async function markSubcontractorPaidAction(formData: FormData) {
   revalidatePath('/subcontractors')
 }
 
-/* Deactivates a subcontractor once its name is typed back; audited as the live principal. */
+/*
+ * Deactivates a subcontractor once its name is typed back; audited as the live principal.
+ * The re-read, guarded write and audit record share one transaction.
+ */
 export async function deactivateSubcontractorAction(formData: FormData) {
   const user = await requireTenantMutation('materials.update', 'MATERIALS')
   const companyId = user.companyId
   const id = requiredText(formData.get('id'), 'Subcontractor')
   const typed = typeof formData.get('dangerConfirmText') === 'string' ? (formData.get('dangerConfirmText') as string).trim() : ''
 
-  const sub = await prisma.subcontractor.findFirst({
-    where: boundSubcontractorWhere(id, companyId),
-    select: { id: true, name: true, trade: true, status: true, isActive: true, raBilled: true, advance: true, retention: true },
-  })
-  if (!sub) throw new Error(SUBCONTRACTOR_NOT_FOUND)
-  if (typed !== sub.name.trim()) {
-    throw new Error('Remove confirmation text did not match the subcontractor name.')
-  }
+  await prisma.$transaction(async (tx) => {
+    const sub = await tx.subcontractor.findFirst({
+      where: boundSubcontractorWhere(id, companyId),
+      select: { id: true, name: true, trade: true, status: true, isActive: true, raBilled: true, advance: true, retention: true },
+    })
+    if (!sub) throw new Error(SUBCONTRACTOR_NOT_FOUND)
+    if (typed !== sub.name.trim()) {
+      throw new Error('Remove confirmation text did not match the subcontractor name.')
+    }
 
-  await prisma.subcontractor.updateMany({ where: { id: sub.id, companyId }, data: { isActive: false } })
+    const result = await tx.subcontractor.updateMany({ where: boundSubcontractorWhere(sub.id, companyId), data: { isActive: false } })
+    if (result.count !== 1) throw new Error(SUBCONTRACTOR_NOT_FOUND)
 
-  const snapshot = { trade: sub.trade, status: sub.status, raBilled: Number(sub.raBilled), advance: Number(sub.advance), retention: Number(sub.retention), name: sub.name }
-  await logActivity({
-    userId: user.id,
-    companyId,
-    action: 'UPDATE',
-    module: 'SUBCONTRACTOR',
-    recordId: sub.id,
-    description: `${user.name ?? user.email} deactivated subcontractor "${sub.name}"`,
-    before: { isActive: sub.isActive, ...snapshot },
-    after: { isActive: false, ...snapshot },
+    const snapshot = { trade: sub.trade, status: sub.status, raBilled: Number(sub.raBilled), advance: Number(sub.advance), retention: Number(sub.retention), name: sub.name }
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId,
+        action: 'UPDATE',
+        module: 'SUBCONTRACTOR',
+        recordId: sub.id,
+        description: `${user.name ?? user.email} deactivated subcontractor "${sub.name}"`,
+        before: { isActive: sub.isActive, ...snapshot },
+        after: { isActive: false, ...snapshot },
+      }),
+    })
   })
 
   revalidatePath('/subcontractors')

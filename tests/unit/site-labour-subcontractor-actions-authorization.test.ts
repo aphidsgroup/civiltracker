@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
   const tx = {
     labour: { findFirst: vi.fn(), updateMany: vi.fn() },
     labourAttendance: { findFirst: vi.fn(), updateMany: vi.fn() },
+    subcontractor: { findFirst: vi.fn(), updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
   }
   return {
@@ -126,8 +127,10 @@ beforeEach(() => {
   mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.tx) => unknown) => fn(mocks.tx))
 
   const subs = inMemoryDelegate(SUBS, siteRelation)
-  mocks.prisma.subcontractor.findFirst.mockImplementation(subs.findFirst)
-  mocks.prisma.subcontractor.updateMany.mockImplementation(subs.updateMany)
+  for (const delegate of [mocks.prisma.subcontractor, mocks.tx.subcontractor]) {
+    delegate.findFirst.mockImplementation(subs.findFirst)
+    delegate.updateMany.mockImplementation(subs.updateMany)
+  }
 })
 
 function labourWrites() {
@@ -138,7 +141,8 @@ function labourWrites() {
 }
 
 function subWrites() {
-  return mocks.prisma.subcontractor.updateMany.mock.calls.length + mocks.prisma.subcontractor.update.mock.calls.length
+  return mocks.prisma.subcontractor.updateMany.mock.calls.length + mocks.prisma.subcontractor.update.mock.calls.length +
+    mocks.tx.subcontractor.updateMany.mock.calls.length
 }
 
 const LABOUR_ACTIONS = [
@@ -282,6 +286,8 @@ describe('site subcontractor actions (F5)', () => {
     await expect(run()).rejects.toThrow(/UNAUTHORIZED/)
     expect(mocks.prisma.site.findFirst).not.toHaveBeenCalled()
     expect(mocks.prisma.subcontractor.findFirst).not.toHaveBeenCalled()
+    expect(mocks.tx.subcontractor.findFirst).not.toHaveBeenCalled()
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
   })
 
   it.each(SUB_ACTIONS.flatMap((action) => ['SITE_ENGINEER', 'SUPERVISOR', 'SUBCONTRACTOR', 'CLIENT', 'VENDOR'].map((role) => ({ ...action, role }))))(
@@ -366,17 +372,31 @@ describe('site subcontractor actions (F5)', () => {
   it('deactivateSiteSubcontractor checks the confirmation and deactivates within the binding', async () => {
     await expect(subActions.deactivateSiteSubcontractor('site_1', form({ id: 'sub_1', dangerConfirmText: 'nope' }))).rejects.toThrow(/did not match/)
     expect(subWrites()).toBe(0)
+    expect(mocks.tx.auditLog.create).not.toHaveBeenCalled()
     await subActions.deactivateSiteSubcontractor('site_1', form({ id: 'sub_1', dangerConfirmText: 'Bricks Co' }))
-    expect(mocks.prisma.subcontractor.updateMany).toHaveBeenCalledWith({
+    const binding = { id: 'sub_1', companyId: 'company_1', OR: [{ siteId: null }, { siteId: 'site_1' }] }
+    expect(mocks.tx.subcontractor.findFirst.mock.calls.map(([args]) => args.where)).toEqual([binding, binding])
+    expect(mocks.tx.subcontractor.updateMany).toHaveBeenCalledWith({
       where: { id: 'sub_1', companyId: 'company_1', OR: [{ siteId: null }, { siteId: 'site_1' }] },
       data: { isActive: false },
     })
-    expect(mocks.logActivity).toHaveBeenCalledTimes(1)
+    expect(mocks.prisma.subcontractor.updateMany).not.toHaveBeenCalled()
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create.mock.calls[0][0].data).toMatchObject({ action: 'UPDATE', module: 'SUBCONTRACTOR', recordId: 'sub_1', companyId: 'company_1' })
+    expect(mocks.logActivity).not.toHaveBeenCalled()
+  })
+
+  it('deactivateSiteSubcontractor propagates an audit write failure out of the transaction', async () => {
+    mocks.tx.auditLog.create.mockRejectedValue(new Error('audit down'))
+    await expect(subActions.deactivateSiteSubcontractor('site_1', form({ id: 'sub_1', dangerConfirmText: 'Bricks Co' }))).rejects.toThrow('audit down')
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
   it.each(SUB_ACTIONS)('$name fails when the guarded write matches no row', async ({ run }) => {
     mocks.prisma.subcontractor.updateMany.mockResolvedValue({ count: 0 })
+    mocks.tx.subcontractor.updateMany.mockResolvedValue({ count: 0 })
     await expect(run()).rejects.toThrow(/access denied/)
+    expect(mocks.tx.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })

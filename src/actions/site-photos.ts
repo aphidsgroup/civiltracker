@@ -5,7 +5,7 @@ import { hasPermission } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 import { UPLOAD_POLICIES } from '@/lib/uploads/upload-policy'
 import { revalidatePath } from 'next/cache'
-import { logActivity } from '@/lib/audit'
+import { auditLogData } from '@/lib/audit-data'
 
 const PHOTO_NOT_FOUND = 'FORBIDDEN: Photo not found or access denied'
 
@@ -14,7 +14,7 @@ const PHOTO_NOT_FOUND = 'FORBIDDEN: Photo not found or access denied'
  * or a holder of `sites.update` (Company Admin / Project Manager) may delete, with the
  * SITE_PHOTO policy's module (TASKS) enabled, and only a photo on a live site of exactly the live company
  * within the principal's `assignedSiteScope` (field roles: their assigned sites). The
- * photo and its media row are deleted company-scoped in one transaction; the external
+ * photo and its media row are deleted company-scoped, and audited, in one transaction; the external
  * asset is destroyed only after that commits, and only when no photo still references it.
  */
 export async function deleteSitePhotoAction(photoId: string, confirmationText?: string) {
@@ -45,30 +45,33 @@ export async function deleteSitePhotoAction(photoId: string, confirmationText?: 
     })
     if (result.count !== 1) throw new Error(PHOTO_NOT_FOUND)
 
+    // The audit record shares the transaction: a failed audit write keeps the photo.
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId,
+        action: 'DELETE',
+        module: 'SITE_PHOTO',
+        recordId: photo.id,
+        description: `${user.name ?? user.email} permanently deleted site photo "${expected}"`,
+        before: {
+          caption: photo.caption,
+          category: photo.category,
+          siteId: photo.siteId,
+          taskId: photo.taskId,
+          cloudinaryPublicId: photo.cloudinaryPublicId,
+          secureUrl: photo.secureUrl,
+        },
+        after: { deleted: true },
+      }),
+    })
+
     // Another photo (of any tenant) may share the public id; keep the asset if so.
     const remaining = await tx.sitePhoto.count({ where: { cloudinaryPublicId: photo.cloudinaryPublicId } })
     if (remaining > 0) return false
 
     await tx.mediaAsset.deleteMany({ where: { cloudinaryPublicId: photo.cloudinaryPublicId, companyId } })
     return true
-  })
-
-  await logActivity({
-    userId: user.id,
-    companyId,
-    action: 'DELETE',
-    module: 'SITE_PHOTO',
-    recordId: photo.id,
-    description: `${user.name ?? user.email} permanently deleted site photo "${expected}"`,
-    before: {
-      caption: photo.caption,
-      category: photo.category,
-      siteId: photo.siteId,
-      taskId: photo.taskId,
-      cloudinaryPublicId: photo.cloudinaryPublicId,
-      secureUrl: photo.secureUrl,
-    },
-    after: { deleted: true },
   })
 
   // The database has committed; a failed external delete only leaves an orphaned asset.

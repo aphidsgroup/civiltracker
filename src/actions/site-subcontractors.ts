@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
-import { logActivity } from '@/lib/audit'
+import { auditLogData } from '@/lib/audit-data'
 import {
   parseNonNegativeAmount,
   parsePositiveAmount,
@@ -84,27 +84,34 @@ export async function deactivateSiteSubcontractor(siteId: string, formData: Form
   const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
 
   const where = siteSubcontractorWhere(id, user.companyId, site.id)
-  const sub = await prisma.subcontractor.findFirst({
-    where,
-    select: { id: true, name: true, trade: true, status: true, isActive: true, raBilled: true, advance: true, retention: true },
-  })
-  if (!sub) throw new Error(SUB_NOT_FOUND)
-  if (typed !== sub.name.trim()) {
-    throw new Error('Remove confirmation text did not match the subcontractor name.')
-  }
 
-  const result = await prisma.subcontractor.updateMany({ where, data: { isActive: false } })
-  if (result.count !== 1) throw new Error(SUB_NOT_FOUND)
+  // The re-read, guarded write and audit record share one transaction: an audit failure
+  // rolls the deactivation back.
+  await prisma.$transaction(async (tx) => {
+    const sub = await tx.subcontractor.findFirst({
+      where,
+      select: { id: true, name: true, trade: true, status: true, isActive: true, raBilled: true, advance: true, retention: true },
+    })
+    if (!sub) throw new Error(SUB_NOT_FOUND)
+    if (typed !== sub.name.trim()) {
+      throw new Error('Remove confirmation text did not match the subcontractor name.')
+    }
 
-  await logActivity({
-    userId: user.id,
-    companyId: user.companyId,
-    action: 'UPDATE',
-    module: 'SUBCONTRACTOR',
-    recordId: sub.id,
-    description: `${user.name ?? user.email} deactivated subcontractor "${sub.name}"`,
-    before: { isActive: sub.isActive, trade: sub.trade, status: sub.status, raBilled: Number(sub.raBilled), advance: Number(sub.advance), retention: Number(sub.retention), name: sub.name },
-    after: { isActive: false, trade: sub.trade, status: sub.status, raBilled: Number(sub.raBilled), advance: Number(sub.advance), retention: Number(sub.retention), name: sub.name },
+    const result = await tx.subcontractor.updateMany({ where, data: { isActive: false } })
+    if (result.count !== 1) throw new Error(SUB_NOT_FOUND)
+
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId: user.companyId,
+        action: 'UPDATE',
+        module: 'SUBCONTRACTOR',
+        recordId: sub.id,
+        description: `${user.name ?? user.email} deactivated subcontractor "${sub.name}"`,
+        before: { isActive: sub.isActive, trade: sub.trade, status: sub.status, raBilled: Number(sub.raBilled), advance: Number(sub.advance), retention: Number(sub.retention), name: sub.name },
+        after: { isActive: false, trade: sub.trade, status: sub.status, raBilled: Number(sub.raBilled), advance: Number(sub.advance), retention: Number(sub.retention), name: sub.name },
+      }),
+    })
   })
 
   revalidatePath(`/sites/${site.id}/subcontractors`)

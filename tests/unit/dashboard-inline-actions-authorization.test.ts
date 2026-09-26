@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
     task: { create: vi.fn() },
     client: { create: vi.fn(), findFirst: vi.fn() },
     payment: { create: vi.fn() },
+    auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   },
 }))
@@ -380,7 +381,8 @@ describe('labour list actions', () => {
 
     await labour.deactivateLabourAction(form({ id: 'labour_1', dangerConfirmText: 'Ramesh' }))
     expect(mocks.prisma.labour.updateMany.mock.calls[0][0]).toMatchObject({ where: { id: 'labour_1', companyId: 'company_1' }, data: { isActive: false } })
-    expect(mocks.logActivity).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user_company_admin', companyId: 'company_1' }))
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: 'user_company_admin', companyId: 'company_1', recordId: 'labour_1' }) })
+    expect(mocks.logActivity).not.toHaveBeenCalled()
   })
 
   it('deactivation refuses a foreign worker', async () => {

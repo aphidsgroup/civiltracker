@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
   const tx = {
     sitePhoto: { deleteMany: vi.fn(), count: vi.fn() },
     mediaAsset: { deleteMany: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
   return {
     requireUser: vi.fn(),

@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { LabourTrade } from '@prisma/client'
 import type { Prisma } from '@prisma/client'
-import { logActivity } from '@/lib/audit'
+import { auditLogData } from '@/lib/audit-data'
 import {
   optionalText,
   parseNonNegativeAmount,
@@ -194,7 +194,8 @@ export async function markLabourPaidAction(formData: FormData) {
 
 /*
  * Deactivates a worker of the principal's assigned scope once their name is typed back;
- * audited as the live principal.
+ * audited as the live principal. The re-read, guarded write and audit record share one
+ * transaction, so a deactivation without its audit trail rolls back.
  */
 export async function deactivateLabourAction(formData: FormData) {
   const { user, scope } = await requireAssignedScopeMutation('labour.manage', 'LABOUR')
@@ -202,26 +203,31 @@ export async function deactivateLabourAction(formData: FormData) {
   const id = requiredText(formData.get('id'), 'Labour')
   const typed = optionalText(formData.get('dangerConfirmText')) ?? ''
 
-  const worker = await prisma.labour.findFirst({
-    where: boundLabourWhere(id, companyId, scope),
-    select: { id: true, name: true, trade: true, siteId: true, isActive: true },
-  })
-  if (!worker) throw new Error(LABOUR_NOT_FOUND)
-  if (typed !== worker.name.trim()) {
-    throw new Error('Remove confirmation text did not match the worker name.')
-  }
+  await prisma.$transaction(async (tx) => {
+    const worker = await tx.labour.findFirst({
+      where: boundLabourWhere(id, companyId, scope),
+      select: { id: true, name: true, trade: true, siteId: true, isActive: true },
+    })
+    if (!worker) throw new Error(LABOUR_NOT_FOUND)
+    if (typed !== worker.name.trim()) {
+      throw new Error('Remove confirmation text did not match the worker name.')
+    }
 
-  await prisma.labour.updateMany({ where: { id: worker.id, companyId }, data: { isActive: false } })
+    const result = await tx.labour.updateMany({ where: boundLabourWhere(worker.id, companyId, scope), data: { isActive: false } })
+    if (result.count !== 1) throw new Error(LABOUR_NOT_FOUND)
 
-  await logActivity({
-    userId: user.id,
-    companyId,
-    action: 'UPDATE',
-    module: 'LABOUR',
-    recordId: worker.id,
-    description: `${user.name ?? user.email} deactivated worker "${worker.name}"`,
-    before: { isActive: worker.isActive, trade: worker.trade, siteId: worker.siteId, name: worker.name },
-    after: { isActive: false, trade: worker.trade, siteId: worker.siteId, name: worker.name },
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId,
+        action: 'UPDATE',
+        module: 'LABOUR',
+        recordId: worker.id,
+        description: `${user.name ?? user.email} deactivated worker "${worker.name}"`,
+        before: { isActive: worker.isActive, trade: worker.trade, siteId: worker.siteId, name: worker.name },
+        after: { isActive: false, trade: worker.trade, siteId: worker.siteId, name: worker.name },
+      }),
+    })
   })
 
   revalidatePath('/labour')

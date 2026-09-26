@@ -23,10 +23,18 @@ import type { Row } from './support/prisma-where'
  * under `salary.view` with LABOUR on; the site-less ledgers fail closed for field roles.
  * Export requires `reports.export` before any read and forwards only a validated site id.
  *
- * `@/lib/permissions`, `@/lib/pages/tenant-page-access` and `@/lib/auth/site-mutation`
- * are real.
+ * A completed export records its audit and history rows on one transaction client
+ * (`@/lib/reports/export-record`), so the transaction mock hands the callback its own
+ * `auditLog` and `reportExport` delegates and a callback failure rejects the transaction.
+ *
+ * `@/lib/permissions`, `@/lib/pages/tenant-page-access`, `@/lib/auth/site-mutation` and
+ * `@/lib/reports/export-record` are real.
  */
 const mocks = vi.hoisted(() => ({
+  tx: {
+    auditLog: { create: vi.fn() },
+    reportExport: { create: vi.fn() },
+  },
   auth: vi.fn(),
   requireUser: vi.fn(),
   redirect: vi.fn((url: string) => {
@@ -47,6 +55,7 @@ const mocks = vi.hoisted(() => ({
     client: { findMany: vi.fn() },
     auditLog: { create: vi.fn() },
     reportExport: { create: vi.fn() },
+    $transaction: vi.fn(),
   },
 }))
 
@@ -101,8 +110,14 @@ const P = <T,>(value: T) => Promise.resolve(value)
 type Delegate = Record<string, ReturnType<typeof vi.fn>>
 
 function calledReads() {
-  return Object.entries(mocks.prisma as Record<string, Delegate>)
-    .flatMap(([model, delegate]) => Object.entries(delegate).map(([op, fn]) => ({ name: `${model}.${op}`, fn })))
+  const { $transaction, ...delegates } = mocks.prisma
+  return [
+    ...Object.entries(delegates as Record<string, Delegate>)
+      .flatMap(([model, delegate]) => Object.entries(delegate).map(([op, fn]) => ({ name: `${model}.${op}`, fn }))),
+    ...Object.entries(mocks.tx as Record<string, Delegate>)
+      .flatMap(([model, delegate]) => Object.entries(delegate).map(([op, fn]) => ({ name: `tx.${model}.${op}`, fn }))),
+    { name: '$transaction', fn: $transaction },
+  ]
     .filter(({ name, fn }) => name !== 'company.findFirst' && fn.mock.calls.length > 0)
     .map(({ name }) => name)
 }
@@ -123,8 +138,9 @@ beforeEach(() => {
   mocks.prisma.companyMember.findFirst.mockImplementation(inMemoryDelegate(MEMBERS).findFirst)
   mocks.prisma.vendor.findMany.mockResolvedValue([{ id: 'v1', name: 'Vendor', totalPurchase: new Prisma.Decimal(10), amountPayable: new Prisma.Decimal(5) }])
   mocks.prisma.client.findMany.mockResolvedValue([{ id: 'c1', name: 'Client', contractValue: new Prisma.Decimal(10), amountPaid: new Prisma.Decimal(4), amountDue: new Prisma.Decimal(6) }])
-  mocks.prisma.auditLog.create.mockResolvedValue({})
-  mocks.prisma.reportExport.create.mockResolvedValue({})
+  mocks.tx.auditLog.create.mockResolvedValue({})
+  mocks.tx.reportExport.create.mockResolvedValue({})
+  mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.tx) => unknown) => fn(mocks.tx))
   mocks.sumValidOpenApprovalAmountsBySite.mockResolvedValue(new Map())
   mocks.generatePDFBuffer.mockResolvedValue(Buffer.from('pdf'))
   mocks.generateExcelBuffer.mockResolvedValue(Buffer.from('xlsx'))
@@ -272,12 +288,24 @@ describe('exportReportAction', () => {
     const [, , filters, , rows] = mocks.generatePDFBuffer.mock.calls[0]
     expect(filters).toEqual({ siteId: 'site_1' })
     expect(rows.map((row: unknown[]) => row[0])).toEqual(['Name site_1'])
+    expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ companyId: 'company_1', action: 'REPORT_EXPORTED_PDF', after: { reportType: 'site-cost', filters: { siteId: 'site_1' } } }),
+    })
+    expect(mocks.tx.reportExport.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ companyId: 'company_1', reportType: 'site-cost', format: 'PDF', filtersJson: { siteId: 'site_1' } }),
+    })
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
+    expect(mocks.prisma.reportExport.create).not.toHaveBeenCalled()
   })
 
   it('refuses a foreign site filter at the export audit gate, writing no audit and generating no file', async () => {
     await expect(exportReportAction('site-cost', 'EXCEL', { siteId: 'site_other' })).rejects.toThrow(/FORBIDDEN/)
 
     expect(wheres(mocks.prisma.site.findFirst)).toEqual([expect.objectContaining({ companyId: 'company_1', id: 'site_other' })])
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
+    expect(mocks.tx.auditLog.create).not.toHaveBeenCalled()
+    expect(mocks.tx.reportExport.create).not.toHaveBeenCalled()
     expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.prisma.reportExport.create).not.toHaveBeenCalled()
     expect(mocks.generateExcelBuffer).not.toHaveBeenCalled()

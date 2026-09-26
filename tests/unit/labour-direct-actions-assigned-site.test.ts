@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
   const tx = {
     labour: { findFirst: vi.fn(), updateMany: vi.fn() },
     labourAttendance: { findFirst: vi.fn(), updateMany: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
   return {
     requireUser: vi.fn(),
@@ -110,7 +111,7 @@ function allWrites() {
   const { prisma, tx } = mocks
   return [
     prisma.labour.create, prisma.labour.updateMany, prisma.labourAttendance.updateMany,
-    tx.labour.updateMany, tx.labourAttendance.updateMany, mocks.logActivity,
+    tx.labour.updateMany, tx.labourAttendance.updateMany, tx.auditLog.create, mocks.logActivity,
   ].reduce((sum, fn) => sum + fn.mock.calls.length, 0)
 }
 
@@ -130,6 +131,7 @@ beforeEach(() => {
   mocks.prisma.labour.create.mockImplementation(async (args: { data: Row }) => ({ id: 'lab_new', ...args.data }))
   mocks.tx.labourAttendance.findFirst.mockResolvedValue(null)
   mocks.tx.labourAttendance.updateMany.mockResolvedValue({ count: 1 })
+  mocks.tx.auditLog.create.mockResolvedValue({})
   mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.tx) => unknown) => fn(mocks.tx))
 })
 
@@ -212,8 +214,12 @@ describe.each(FIELD_ROLES)('direct labour mutations for a field %s', (role) => {
 
   it('deactivateLabourAction deactivates an assigned worker', async () => {
     await labourActions.deactivateLabourAction(form({ id: 'lab_mine', dangerConfirmText: 'Ravi' }))
-    expect(mocks.prisma.labour.updateMany).toHaveBeenCalledWith({ where: { id: 'lab_mine', companyId: 'company_1' }, data: { isActive: false } })
-    expect(mocks.logActivity).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.labour.updateMany).toHaveBeenCalledWith({
+      where: { id: 'lab_mine', companyId: 'company_1', site: expect.objectContaining({ companyId: 'company_1', deletedAt: null, OR: expect.any(Array) }) },
+      data: { isActive: false },
+    })
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.logActivity).not.toHaveBeenCalled()
   })
 
   it('a deactivated membership grants no site', async () => {
@@ -239,7 +245,7 @@ describe('privileged company roles keep company-wide labour management', () => {
     expect(mocks.tx.labourAttendance.updateMany).toHaveBeenCalledTimes(1)
 
     await labourActions.deactivateLabourAction(form({ id: 'lab_theirs', dangerConfirmText: 'Kumar' }))
-    expect(mocks.logActivity).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
     expect(mocks.prisma.companyMember.findFirst).not.toHaveBeenCalled()
   })
 
