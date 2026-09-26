@@ -30,10 +30,10 @@ const mocks = vi.hoisted(() => ({
     mediaAsset: { findFirst: vi.fn() },
     $transaction: vi.fn(),
     checklistTemplate: { findFirst: vi.fn() },
-    projectChecklist: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
+    projectChecklist: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
     projectChecklistCategory: { findFirst: vi.fn(), update: vi.fn() },
-    projectChecklistTask: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-    sitePhoto: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+    projectChecklistTask: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), deleteMany: vi.fn(), count: vi.fn() },
+    sitePhoto: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), count: vi.fn() },
     auditLog: { create: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() },
   },
 }))
@@ -46,7 +46,7 @@ vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 const actions = await import('@/actions/checklists')
 
 const SITES: Row[] = [
-  { id: 'site_1', companyId: 'company_1', deletedAt: null, clientUserId: 'user_client' },
+  { id: 'site_1', companyId: 'company_1', deletedAt: null, clientUserId: 'user_client', name: 'Tower A' },
   { id: 'site_dead', companyId: 'company_1', deletedAt: new Date('2026-01-01'), clientUserId: 'user_client' },
 ]
 
@@ -68,9 +68,19 @@ beforeEach(() => {
   mocks.prisma.mediaAsset.findFirst.mockResolvedValue({ secureUrl: 'https://res.cloudinary.com/demo/x.jpg', cloudinaryPublicId: 'x' })
   mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
   mocks.prisma.checklistTemplate.findFirst.mockResolvedValue({ id: 'tpl_1', stages: [] })
-  mocks.prisma.projectChecklist.findFirst.mockImplementation(async (args: { select?: unknown }) => (args?.select ? { id: 'checklist_1' } : null))
+  mocks.prisma.projectChecklist.findFirst.mockImplementation(async (args: { select?: unknown }) => (args?.select
+    ? { id: 'checklist_1', templateId: 'tpl_1', createdAt: new Date('2026-01-01'), _count: { stages: 0 } }
+    : null))
+  mocks.prisma.projectChecklist.deleteMany.mockResolvedValue({ count: 1 })
   mocks.prisma.projectChecklistCategory.findFirst.mockResolvedValue({ id: 'cat_1' })
-  mocks.prisma.projectChecklistTask.findFirst.mockResolvedValue({ id: 'task_1', name: 'Pour slab' })
+  mocks.prisma.projectChecklistTask.findFirst.mockResolvedValue({
+    id: 'task_1', name: 'Pour slab', categoryId: 'cat_1',
+    category: { name: 'Slab', stage: { name: 'Structure', checklistId: 'checklist_1' } },
+    _count: { sitePhotos: 0, attachments: 0 },
+  })
+  mocks.prisma.projectChecklistTask.deleteMany.mockResolvedValue({ count: 1 })
+  mocks.prisma.projectChecklistTask.count.mockResolvedValue(0)
+  mocks.prisma.sitePhoto.count.mockResolvedValue(0)
   mocks.prisma.projectChecklistTask.findMany.mockResolvedValue([])
   mocks.prisma.auditLog.findMany.mockResolvedValue([])
 })
@@ -81,8 +91,8 @@ const MUTATIONS = {
   toggleCategoryNeglect: (site = 'site_1') => actions.toggleCategoryNeglect(site, 'cat_1', true),
   addCustomTask: (site = 'site_1') => actions.addCustomTask(site, 'cat_1', 'Extra'),
   editChecklistTask: (site = 'site_1') => actions.editChecklistTask(site, 'task_1', 'Renamed'),
-  deleteChecklistTask: (site = 'site_1') => actions.deleteChecklistTask(site, 'task_1'),
-  deleteProjectChecklist: (site = 'site_1') => actions.deleteProjectChecklist(site),
+  deleteChecklistTask: (site = 'site_1') => actions.deleteChecklistTask(site, 'task_1', 'Pour slab'),
+  deleteProjectChecklist: (site = 'site_1') => actions.deleteProjectChecklist(site, 'Tower A'),
   uploadChecklistPhotoAction: (site = 'site_1') => actions.uploadChecklistPhotoAction('task_1', site, 'asset_1'),
 }
 
@@ -92,9 +102,10 @@ const STRUCTURAL: MutationName[] = ['enableChecklistForProject', 'toggleCategory
 
 function writeCount() {
   return [
-    mocks.prisma.projectChecklist.create, mocks.prisma.projectChecklist.delete,
+    mocks.prisma.projectChecklist.create, mocks.prisma.projectChecklist.delete, mocks.prisma.projectChecklist.deleteMany,
     mocks.prisma.projectChecklistCategory.update,
     mocks.prisma.projectChecklistTask.create, mocks.prisma.projectChecklistTask.update, mocks.prisma.projectChecklistTask.delete,
+    mocks.prisma.projectChecklistTask.deleteMany,
     mocks.prisma.sitePhoto.create, mocks.prisma.auditLog.create, mocks.prisma.auditLog.deleteMany,
   ].reduce((sum, fn) => sum + fn.mock.calls.length, 0)
 }

@@ -8,9 +8,12 @@ const mocks = vi.hoisted(() => ({
   requireChecklistPhoto: vi.fn(),
   prisma: {
     projectChecklistCategory: { findFirst: vi.fn(), update: vi.fn() },
-    projectChecklistTask: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-    projectChecklist: { findFirst: vi.fn(), delete: vi.fn() },
+    projectChecklistTask: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
+    projectChecklist: { findFirst: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
     sitePhoto: { findFirst: vi.fn(), update: vi.fn() },
+    site: { findFirst: vi.fn() },
+    auditLog: { create: vi.fn() },
+    $transaction: vi.fn(),
   },
   revalidatePath: vi.fn(),
 }))
@@ -40,6 +43,8 @@ beforeEach(() => {
   mocks.prisma.projectChecklistTask.findFirst.mockResolvedValue(null)
   mocks.prisma.projectChecklist.findFirst.mockResolvedValue(null)
   mocks.prisma.sitePhoto.findFirst.mockResolvedValue(null)
+  mocks.prisma.site.findFirst.mockResolvedValue({ name: 'Tower A' })
+  mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
 })
 
 describe('remaining project checklist tenant authorization', () => {
@@ -47,12 +52,13 @@ describe('remaining project checklist tenant authorization', () => {
     ['toggleCategoryNeglect', () => actions.toggleCategoryNeglect('site_1', 'foreign_category', true), () => mocks.prisma.projectChecklistCategory.update],
     ['addCustomTask', () => actions.addCustomTask('site_1', 'foreign_category', 'Task'), () => mocks.prisma.projectChecklistTask.create],
     ['editChecklistTask', () => actions.editChecklistTask('site_1', 'foreign_task', 'Name'), () => mocks.prisma.projectChecklistTask.update],
-    ['deleteChecklistTask', () => actions.deleteChecklistTask('site_1', 'foreign_task'), () => mocks.prisma.projectChecklistTask.delete],
-    ['deleteProjectChecklist', () => actions.deleteProjectChecklist('site_1'), () => mocks.prisma.projectChecklist.delete],
+    ['deleteChecklistTask', () => actions.deleteChecklistTask('site_1', 'foreign_task', 'Pour slab'), () => mocks.prisma.projectChecklistTask.deleteMany],
+    ['deleteProjectChecklist', () => actions.deleteProjectChecklist('site_1', 'Tower A'), () => mocks.prisma.projectChecklist.deleteMany],
     ['approvePhotoAction', () => actions.approvePhotoAction('foreign_photo'), () => mocks.prisma.sitePhoto.update],
     ['rejectPhotoAction', () => actions.rejectPhotoAction('foreign_photo'), () => mocks.prisma.sitePhoto.update],
   ])('%s rejects a foreign target before mutation', async (_name, invoke, mutation) => {
     await expect(invoke()).rejects.toThrow(/access denied/i)
     expect(mutation()).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   })
 })

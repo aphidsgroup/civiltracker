@@ -29,9 +29,10 @@ const mocks = vi.hoisted(() => ({
     companyMember: { findFirst: vi.fn() },
     site: { findFirst: vi.fn(), findMany: vi.fn() },
     checklistTemplate: { findFirst: vi.fn() },
-    projectChecklist: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
+    projectChecklist: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
     projectChecklistCategory: { findFirst: vi.fn(), update: vi.fn() },
-    projectChecklistTask: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    projectChecklistTask: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), deleteMany: vi.fn(), count: vi.fn() },
+    sitePhoto: { count: vi.fn() },
     auditLog: { create: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -69,7 +70,12 @@ beforeEach(() => {
   mocks.prisma.site.findFirst.mockImplementation(sites.findFirst)
   mocks.prisma.site.findMany.mockImplementation(sites.findMany)
   mocks.prisma.checklistTemplate.findFirst.mockResolvedValue({ id: 'tpl_1', stages: [] })
-  mocks.prisma.projectChecklist.findFirst.mockImplementation(async (args: { select?: unknown }) => (args?.select ? { id: 'checklist_1' } : null))
+  mocks.prisma.projectChecklist.findFirst.mockImplementation(async (args: { select?: unknown }) => (args?.select
+    ? { id: 'checklist_1', templateId: 'tpl_1', createdAt: new Date('2026-01-01'), _count: { stages: 0 } }
+    : null))
+  mocks.prisma.projectChecklist.deleteMany.mockResolvedValue({ count: 1 })
+  mocks.prisma.projectChecklistTask.count.mockResolvedValue(0)
+  mocks.prisma.sitePhoto.count.mockResolvedValue(0)
   mocks.prisma.projectChecklistCategory.findFirst.mockResolvedValue({ id: 'cat_1' })
   mocks.prisma.projectChecklistTask.findFirst.mockResolvedValue({ id: 'task_1', name: 'Pour slab' })
   mocks.prisma.projectChecklistTask.findMany.mockResolvedValue([])
@@ -85,8 +91,8 @@ const SITE_CALLS = {
   toggleCategoryNeglect: (site: string) => actions.toggleCategoryNeglect(site, 'cat_1', true),
   addCustomTask: (site: string) => actions.addCustomTask(site, 'cat_1', 'New task'),
   editChecklistTask: (site: string) => actions.editChecklistTask(site, 'task_1', 'Renamed'),
-  deleteChecklistTask: (site: string) => actions.deleteChecklistTask(site, 'task_1'),
-  deleteProjectChecklist: (site: string) => actions.deleteProjectChecklist(site),
+  deleteChecklistTask: (site: string) => actions.deleteChecklistTask(site, 'task_1', 'Pour slab'),
+  deleteProjectChecklist: (site: string) => actions.deleteProjectChecklist(site, 'Theirs'),
   enableChecklistForProject: (site: string) => actions.enableChecklistForProject(site, 'tpl_1'),
 }
 
@@ -95,8 +101,8 @@ function checklistDataQueries() {
   return [
     prisma.checklistTemplate.findFirst, prisma.projectChecklist.findFirst, prisma.projectChecklistCategory.findFirst,
     prisma.projectChecklistTask.findFirst, prisma.projectChecklistTask.findMany, prisma.auditLog.findMany,
-    prisma.projectChecklist.create, prisma.projectChecklist.delete, prisma.projectChecklistCategory.update,
-    prisma.projectChecklistTask.create, prisma.projectChecklistTask.update, prisma.projectChecklistTask.delete,
+    prisma.projectChecklist.create, prisma.projectChecklist.delete, prisma.projectChecklist.deleteMany, prisma.projectChecklistCategory.update,
+    prisma.projectChecklistTask.create, prisma.projectChecklistTask.update, prisma.projectChecklistTask.delete, prisma.projectChecklistTask.deleteMany,
     prisma.auditLog.create, prisma.auditLog.deleteMany,
   ].reduce((sum, fn) => sum + fn.mock.calls.length, 0)
 }
@@ -156,7 +162,7 @@ describe('checklist scope for other roles', () => {
     mocks.requireUser.mockResolvedValue(principal(role))
     await expect(actions.getPendingTasks('site_theirs')).resolves.toEqual([])
     await expect(actions.toggleTaskStatus('site_theirs', 'task_1', 'COMPLETED')).resolves.toEqual({ success: true })
-    await expect(actions.deleteProjectChecklist('site_theirs')).resolves.toEqual({ success: true })
+    await expect(actions.deleteProjectChecklist('site_theirs', 'Theirs')).resolves.toEqual({ success: true })
     expect(mocks.prisma.companyMember.findFirst).not.toHaveBeenCalled()
   })
 
@@ -164,7 +170,7 @@ describe('checklist scope for other roles', () => {
     mocks.requireUser.mockResolvedValue(principal(role))
     for (const siteId of ['site_dead', 'site_other']) {
       await expect(actions.getPendingTasks(siteId)).rejects.toThrow(/FORBIDDEN/)
-      await expect(actions.deleteProjectChecklist(siteId)).rejects.toThrow(/FORBIDDEN/)
+      await expect(actions.deleteProjectChecklist(siteId, 'Theirs')).rejects.toThrow(/FORBIDDEN/)
     }
     expect(checklistDataQueries()).toBe(0)
   })

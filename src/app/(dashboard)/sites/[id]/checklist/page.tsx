@@ -131,7 +131,7 @@ export default async function ProjectChecklistPage({ params }: { params: Promise
 
       <div className="p-6 max-w-6xl mx-auto">
         {/* Pass initial data to a Client Component for interactive editing */}
-        <ChecklistClient siteId={site.id} checklist={checklist} />
+        <ChecklistClient siteId={site.id} siteName={site.name} checklist={checklist} />
       </div>
     </div>
   )

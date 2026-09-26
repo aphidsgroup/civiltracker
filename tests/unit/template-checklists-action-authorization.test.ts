@@ -22,9 +22,11 @@ const mocks = vi.hoisted(() => ({
   prisma: {
     company: { findUnique: vi.fn() },
     checklistTemplate: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
-    checklistStage: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
-    checklistCategory: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
-    checklistTask: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
+    checklistStage: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
+    checklistCategory: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
+    checklistTask: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn(), deleteMany: vi.fn(), count: vi.fn() },
+    auditLog: { create: vi.fn() },
+    $transaction: vi.fn(),
   },
 }))
 
@@ -59,9 +61,9 @@ const ACTIONS: Array<[string, () => Promise<unknown>]> = [
   ['addStage', () => actions.addStage('template_1', 'Stage')],
   ['addCategory', () => actions.addCategory('stage_1', 'Category', 'template_1')],
   ['addTask', () => actions.addTask('category_1', 'Task', 'template_1')],
-  ['deleteStage', () => actions.deleteStage('stage_1', 'template_1')],
-  ['deleteCategory', () => actions.deleteCategory('category_1', 'template_1')],
-  ['deleteTask', () => actions.deleteTask('task_1', 'template_1')],
+  ['deleteStage', () => actions.deleteStage('stage_1', 'template_1', 'Foundation')],
+  ['deleteCategory', () => actions.deleteCategory('category_1', 'template_1', 'Excavation')],
+  ['deleteTask', () => actions.deleteTask('task_1', 'template_1', 'Mark out')],
 ]
 
 const CHECKLIST_DELEGATES = ['checklistTemplate', 'checklistStage', 'checklistCategory', 'checklistTask'] as const
@@ -85,6 +87,7 @@ beforeEach(() => {
   mocks.prisma.checklistStage.findFirst.mockResolvedValue({ id: 'stage_1' })
   mocks.prisma.checklistCategory.findFirst.mockResolvedValue({ id: 'category_1' })
   mocks.prisma.checklistTask.findFirst.mockResolvedValue({ id: 'task_1' })
+  mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
 })
 
 describe('template checklist actions: live principal gate', () => {
@@ -133,9 +136,9 @@ describe('template checklist actions: tenant resource binding', () => {
     ['addStage', () => actions.addStage('foreign_template', 'Stage'), () => mocks.prisma.checklistStage.create],
     ['addCategory', () => actions.addCategory('stage_1', 'Category', 'foreign_template'), () => mocks.prisma.checklistCategory.create],
     ['addTask', () => actions.addTask('category_1', 'Task', 'foreign_template'), () => mocks.prisma.checklistTask.create],
-    ['deleteStage', () => actions.deleteStage('stage_1', 'foreign_template'), () => mocks.prisma.checklistStage.delete],
-    ['deleteCategory', () => actions.deleteCategory('category_1', 'foreign_template'), () => mocks.prisma.checklistCategory.delete],
-    ['deleteTask', () => actions.deleteTask('task_1', 'foreign_template'), () => mocks.prisma.checklistTask.delete],
+    ['deleteStage', () => actions.deleteStage('stage_1', 'foreign_template', 'Foundation'), () => mocks.prisma.checklistStage.deleteMany],
+    ['deleteCategory', () => actions.deleteCategory('category_1', 'foreign_template', 'Excavation'), () => mocks.prisma.checklistCategory.deleteMany],
+    ['deleteTask', () => actions.deleteTask('task_1', 'foreign_template', 'Mark out'), () => mocks.prisma.checklistTask.deleteMany],
   ])('%s rejects a foreign, global or deleted template before mutation', async (_name, invoke, mutation) => {
     mocks.prisma.checklistTemplate.findFirst.mockResolvedValue(null)
     await expect(invoke()).rejects.toThrow(/access denied/i)
@@ -148,9 +151,9 @@ describe('template checklist actions: tenant resource binding', () => {
   it.each([
     ['addCategory', () => actions.addCategory('foreign_stage', 'C', 'template_1'), 'checklistStage', () => mocks.prisma.checklistCategory.create],
     ['addTask', () => actions.addTask('foreign_category', 'T', 'template_1'), 'checklistCategory', () => mocks.prisma.checklistTask.create],
-    ['deleteStage', () => actions.deleteStage('foreign_stage', 'template_1'), 'checklistStage', () => mocks.prisma.checklistStage.delete],
-    ['deleteCategory', () => actions.deleteCategory('foreign_category', 'template_1'), 'checklistCategory', () => mocks.prisma.checklistCategory.delete],
-    ['deleteTask', () => actions.deleteTask('foreign_task', 'template_1'), 'checklistTask', () => mocks.prisma.checklistTask.delete],
+    ['deleteStage', () => actions.deleteStage('foreign_stage', 'template_1', 'Foundation'), 'checklistStage', () => mocks.prisma.checklistStage.deleteMany],
+    ['deleteCategory', () => actions.deleteCategory('foreign_category', 'template_1', 'Excavation'), 'checklistCategory', () => mocks.prisma.checklistCategory.deleteMany],
+    ['deleteTask', () => actions.deleteTask('foreign_task', 'template_1', 'Mark out'), 'checklistTask', () => mocks.prisma.checklistTask.deleteMany],
   ] as const)('%s rejects a tree item outside the owned template before mutation', async (_name, invoke, finder, mutation) => {
     mocks.prisma[finder].findFirst.mockResolvedValue(null)
     await expect(invoke()).rejects.toThrow(/access denied/i)

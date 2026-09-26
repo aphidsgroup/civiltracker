@@ -8,7 +8,6 @@ import {
   requireChecklistPhoto,
   requireChecklistSite,
   requireChecklistTask,
-  requireProjectChecklist,
 } from '@/lib/auth/checklist-site'
 import { requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
 import { hasPermission } from '@/lib/permissions'
@@ -138,16 +137,125 @@ export async function editChecklistTask(siteId: string, taskId: string, newName:
   return { success: true }
 }
 
-export async function deleteChecklistTask(siteId: string, taskId: string) {
-  const { site, task } = await requireChecklistTask(siteId, taskId, 'manage')
-  await prisma.projectChecklistTask.delete({ where: { id: task.id } })
+/*
+ * Permanent deletes are confirmed here, not only in the page: the caller passes the text
+ * the operator typed, and it must equal the target's current canonical value (the task
+ * name, or the site name for a whole checklist) read inside the transaction that deletes.
+ * The site is bound to the caller's checklist scope with `tasks.manage` and TASKS first;
+ * the target is then re-read on exactly that site's checklist, deleted with the same
+ * guard, and audited on the same client, so a delete without its audit trail rolls back.
+ * The cascade (tasks, attachments, checklist photos) only runs after every check passes;
+ * no audit row is deleted, and the audit snapshot records what the cascade removed.
+ */
+const TASK_DELETE_MISMATCH = 'Delete confirmation text did not match the task name.'
+const CHECKLIST_DELETE_MISMATCH = 'Delete confirmation text did not match the site name.'
+
+function readConfirmation(confirmation: unknown): string {
+  return typeof confirmation === 'string' ? confirmation.trim() : ''
+}
+
+export async function deleteChecklistTask(siteId: string, taskId: string, confirmation: string) {
+  const { user, site } = await requireChecklistSite(siteId, 'manage')
+  const typed = readConfirmation(confirmation)
+  if (!typed) throw new Error(TASK_DELETE_MISMATCH)
+
+  await prisma.$transaction(async (tx) => {
+    const task = await tx.projectChecklistTask.findFirst({
+      where: { id: taskId, category: { stage: { checklist: { siteId: site.id, companyId: site.companyId } } } },
+      select: {
+        id: true, name: true, categoryId: true, status: true, isClientDone: true, isNeglected: true, completedAt: true,
+        category: { select: { name: true, stage: { select: { name: true, checklistId: true } } } },
+        _count: { select: { sitePhotos: true, attachments: true } },
+      },
+    })
+    if (!task) throw new Error('FORBIDDEN: Checklist task not found or access denied')
+    if (typed !== task.name.trim()) throw new Error(TASK_DELETE_MISMATCH)
+
+    const deleted = await tx.projectChecklistTask.deleteMany({ where: { id: task.id, categoryId: task.categoryId } })
+    if (deleted.count !== 1) throw new Error('FORBIDDEN: Checklist task not found or access denied')
+
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        companyId: site.companyId,
+        module: 'CHECKLIST',
+        action: 'DELETE',
+        recordId: site.id,
+        before: {
+          taskId: task.id,
+          taskName: task.name,
+          siteId: site.id,
+          checklistId: task.category.stage.checklistId,
+          stageName: task.category.stage.name,
+          categoryName: task.category.name,
+          status: task.status,
+          isClientDone: task.isClientDone,
+          isNeglected: task.isNeglected,
+          completedAt: task.completedAt?.toISOString() ?? null,
+          photoCount: task._count.sitePhotos,
+          attachmentCount: task._count.attachments,
+        },
+        after: { _description: `${user.name ?? user.email} permanently deleted checklist task "${task.name}"` },
+      },
+    })
+  })
+
   revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
 
-export async function deleteProjectChecklist(siteId: string) {
-  const { site, checklist } = await requireProjectChecklist(siteId, 'manage')
-  await prisma.projectChecklist.delete({ where: { id: checklist.id } })
+export async function deleteProjectChecklist(siteId: string, confirmation: string) {
+  const { user, site } = await requireChecklistSite(siteId, 'manage')
+  const typed = readConfirmation(confirmation)
+  if (!typed) throw new Error(CHECKLIST_DELETE_MISMATCH)
+
+  await prisma.$transaction(async (tx) => {
+    const live = await tx.site.findFirst({
+      where: { id: site.id, companyId: site.companyId, deletedAt: null },
+      select: { name: true },
+    })
+    if (!live) throw new Error('FORBIDDEN: Site not found or access denied')
+
+    const checklist = await tx.projectChecklist.findFirst({
+      where: { siteId: site.id, companyId: site.companyId },
+      select: { id: true, templateId: true, createdAt: true, _count: { select: { stages: true } } },
+    })
+    if (!checklist) throw new Error('FORBIDDEN: Project checklist not found or access denied')
+    if (typed !== live.name.trim()) throw new Error(CHECKLIST_DELETE_MISMATCH)
+
+    const inChecklist = { category: { stage: { checklistId: checklist.id } } }
+    const taskCount = await tx.projectChecklistTask.count({ where: inChecklist })
+    const completedCount = await tx.projectChecklistTask.count({ where: { ...inChecklist, status: 'COMPLETED' } })
+    const photoCount = await tx.sitePhoto.count({ where: { task: inChecklist } })
+
+    const deleted = await tx.projectChecklist.deleteMany({
+      where: { id: checklist.id, siteId: site.id, companyId: site.companyId },
+    })
+    if (deleted.count !== 1) throw new Error('FORBIDDEN: Project checklist not found or access denied')
+
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        companyId: site.companyId,
+        module: 'CHECKLIST',
+        action: 'DELETE',
+        recordId: site.id,
+        before: {
+          checklistId: checklist.id,
+          templateId: checklist.templateId,
+          siteId: site.id,
+          siteName: live.name,
+          createdAt: checklist.createdAt.toISOString(),
+          stageCount: checklist._count.stages,
+          taskCount,
+          completedCount,
+          photoCount,
+        },
+        after: { _description: `${user.name ?? user.email} permanently deleted the checklist of site "${live.name}"` },
+      },
+    })
+  })
+
   revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
