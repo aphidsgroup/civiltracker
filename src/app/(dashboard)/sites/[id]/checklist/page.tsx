@@ -1,6 +1,6 @@
 import prisma from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import { enableChecklistForProject, toggleTaskStatus, toggleCategoryNeglect, addCustomTask } from '@/actions/checklists'
 import { ChecklistClient } from './ChecklistClient'
@@ -13,10 +13,10 @@ export default async function ProjectChecklistPage({ params }: { params: Promise
   if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}/checklist`)
   const { companyId } = gate.access
 
-  // The page reads nothing until the id names a live site of exactly this company; the
-  // layout's own lookup renders in parallel and is not a guard for this page.
+  // The page reads nothing until the id names a live site of exactly this company that the
+  // principal may see; the layout's own lookup renders in parallel and is not a guard.
   const site = await prisma.site.findFirst({
-    where: { id, ...liveCompanySiteWhere(companyId) },
+    where: { id, ...(await assignedSiteWhere(gate.access)) },
     select: { id: true, name: true },
   })
 

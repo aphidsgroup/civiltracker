@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import { Users, UserCheck, UserMinus, HardHat, Plus, AlertCircle } from 'lucide-react'
 import { LabourCardList } from '@/app/(dashboard)/labour/LabourCardList'
@@ -15,9 +15,11 @@ export default async function SiteLabourPage({ params }: { params: Promise<{ id:
   if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}/labour`)
   const { companyId } = gate.access
 
-  // The page reads nothing until the id names a live site of exactly this company; the
-  // layout's own lookup renders in parallel and is not a guard for this page.
-  const site = await prisma.site.findFirst({ where: { id, ...liveCompanySiteWhere(companyId) }, select: { id: true } })
+  // The page reads nothing until the id names a live site of exactly this company that the
+  // principal may see; the layout's own lookup renders in parallel and is not a guard. The
+  // reassignment picker offers only sites under the same scope.
+  const siteScope = await assignedSiteWhere(gate.access)
+  const site = await prisma.site.findFirst({ where: { id, ...siteScope }, select: { id: true } })
   if (!site) redirect('/sites')
   const siteId = site.id
 
@@ -35,7 +37,7 @@ export default async function SiteLabourPage({ params }: { params: Promise<{ id:
       orderBy: { name: 'asc' },
     }),
     prisma.site.findMany({
-      where: liveCompanySiteWhere(companyId),
+      where: siteScope,
       select: { id: true, name: true },
       orderBy: { name: 'asc' }
     })

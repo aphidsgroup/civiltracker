@@ -1,5 +1,5 @@
 import { requirePermission } from '@/lib/auth/require-permission'
-import { requireUser } from '@/lib/auth/require-user'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -158,9 +158,11 @@ export async function assignClientSites(formData: FormData) {
 }
 
 export default async function ClientAccountsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const user = await requireUser()
-  if (!user.companyId) redirect('/login')
-  const { companyId } = user
+  // The list carries every client login's contact details, so it opens only under the
+  // same company.manage grant as the actions on it, decided on the live principal.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'company.manage' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/client-accounts')
+  const { companyId } = gate.access
 
   const members = await prisma.companyMember.findMany({
     where: { companyId, role: 'CLIENT' },

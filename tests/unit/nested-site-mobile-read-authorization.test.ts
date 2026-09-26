@@ -323,12 +323,12 @@ describe('SiteLabourPage', () => {
 })
 
 describe('SiteMaterialsPage', () => {
-  it('lets a SITE_ENGINEER, who holds materials.view, read the materials of the resolved site', async () => {
+  it('lets a SITE_ENGINEER, who holds materials.view, read the materials of its assigned site', async () => {
     mocks.requireUser.mockResolvedValue(principal('SITE_ENGINEER'))
 
-    await SiteMaterialsPage({ params: P({ id: 'site_1' }) })
+    await SiteMaterialsPage({ params: P({ id: 'site_assigned' }) })
 
-    expect(wheres(mocks.prisma.material.findMany)).toEqual([{ companyId: 'company_1', siteId: 'site_1', isActive: true }])
+    expect(wheres(mocks.prisma.material.findMany)).toEqual([{ companyId: 'company_1', siteId: 'site_assigned', isActive: true }])
   })
 })
 

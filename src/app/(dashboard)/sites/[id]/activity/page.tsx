@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma'
-import { exitDeniedPage, liveCompanySiteWhere, parsePageSize, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteWhere, exitDeniedPage, parsePageSize, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { FileText, Image as ImageIcon, Users, IndianRupee, Clock, CheckSquare } from 'lucide-react'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -70,9 +70,9 @@ export default async function SiteActivityPage({
   const { type, limit } = await searchParams
   const take = parsePageSize(limit)
 
-  // The page reads nothing until the id names a live site of exactly this company; the
-  // layout's own lookup renders in parallel and is not a guard for this page.
-  const site = await prisma.site.findFirst({ where: { id, ...liveCompanySiteWhere(companyId) }, select: { id: true } })
+  // The page reads nothing until the id names a live site of exactly this company that the
+  // principal may see; the layout's own lookup renders in parallel and is not a guard.
+  const site = await prisma.site.findFirst({ where: { id, ...(await assignedSiteWhere(gate.access)) }, select: { id: true } })
   if (!site) redirect('/sites')
   const siteId = site.id
 

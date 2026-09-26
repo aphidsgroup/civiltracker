@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { Prisma, ApprovalStatus } from '@prisma/client'
 import { redirect } from 'next/navigation'
-import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import BillApprovalList from '@/components/bills/BillApprovalList'
 
@@ -18,9 +18,9 @@ export default async function SiteBillsPage({ params, searchParams }: { params: 
   const { tab } = await searchParams
   const activeTab = TABS.find((t) => t === tab) ?? 'PENDING'
 
-  // The page reads nothing until the id names a live site of exactly this company; the
-  // layout's own lookup renders in parallel and is not a guard for this page.
-  const site = await prisma.site.findFirst({ where: { id, ...liveCompanySiteWhere(companyId) }, select: { id: true } })
+  // The page reads nothing until the id names a live site of exactly this company that the
+  // principal may see; the layout's own lookup renders in parallel and is not a guard.
+  const site = await prisma.site.findFirst({ where: { id, ...(await assignedSiteWhere(gate.access)) }, select: { id: true } })
   if (!site) redirect('/sites')
   const siteId = site.id
 

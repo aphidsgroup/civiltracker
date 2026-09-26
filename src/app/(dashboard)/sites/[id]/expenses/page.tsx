@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import { exitDeniedPage, liveCompanySiteWhere, parsePageSize, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteWhere, exitDeniedPage, parsePageSize, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import ResponsiveTable from '@/components/responsive/ResponsiveTable'
@@ -17,9 +17,9 @@ export default async function SiteExpensesPage({ params, searchParams }: { param
   const { limit } = await searchParams
   const take = parsePageSize(limit)
 
-  // The page reads nothing until the id names a live site of exactly this company; the
-  // layout's own lookup renders in parallel and is not a guard for this page.
-  const site = await prisma.site.findFirst({ where: { id, ...liveCompanySiteWhere(companyId) }, select: { id: true } })
+  // The page reads nothing until the id names a live site of exactly this company that the
+  // principal may see; the layout's own lookup renders in parallel and is not a guard.
+  const site = await prisma.site.findFirst({ where: { id, ...(await assignedSiteWhere(gate.access)) }, select: { id: true } })
   if (!site) redirect('/sites')
   const siteId = site.id
 

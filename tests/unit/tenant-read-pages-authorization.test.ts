@@ -490,7 +490,15 @@ describe('MobileHome', () => {
     await MobileHome({ searchParams: P({}) })
 
     expect(wheres(mocks.prisma.companyMember.findFirst)[0]).toEqual({ userId: 'user_site_engineer', companyId: 'company_1', isActive: true })
-    expect(wheres(mocks.prisma.site.findMany)[0]).toMatchObject({ companyId: 'company_1', deletedAt: null, id: { in: ['site_1', 'site_other', 'site_dead'] } })
+    expect(wheres(mocks.prisma.site.findMany)[0]).toMatchObject({
+      companyId: 'company_1',
+      deletedAt: null,
+      OR: [
+        { assignedEngineerId: 'user_site_engineer' },
+        { engineerId: 'user_site_engineer' },
+        { id: { in: ['site_1', 'site_other', 'site_dead'] } },
+      ],
+    })
     expect(await mocks.prisma.site.findMany.mock.results[0].value).toEqual([expect.objectContaining({ id: 'site_1' })])
   })
 
@@ -511,7 +519,10 @@ describe('MobileHome', () => {
     for (const fn of [mocks.prisma.expense.aggregate, mocks.prisma.expense.count, mocks.prisma.expense.findMany]) {
       expect(fn).not.toHaveBeenCalled()
     }
-    expect(mocks.prisma.labourAttendance.count).toHaveBeenCalled()
+    // This SUPERVISOR has no active membership or engineer assignment, so no site is
+    // resolved and no site-scoped figure is read at all.
+    expect(await mocks.prisma.site.findMany.mock.results[0].value).toEqual([])
+    expect(mocks.prisma.labourAttendance.count).not.toHaveBeenCalled()
   })
 
   it('reads only its own submissions, not site-wide expenses, for a SITE_ENGINEER', async () => {

@@ -341,6 +341,8 @@ describe('SiteActivityPage', () => {
 
   it('reads no expense feed for a SUPERVISOR, even when asked for it', async () => {
     mocks.requireUser.mockResolvedValue(principal('SUPERVISOR'))
+    // A field role opens only an assigned site.
+    mocks.prisma.companyMember.findFirst.mockResolvedValueOnce({ siteIds: ['site_1'] })
 
     await SiteActivityPage({ params: P({ id: 'site_1' }), searchParams: P({ type: 'EXPENSE' }) })
 
@@ -397,6 +399,8 @@ describe('SiteLayout', () => {
 
   it('hands the budget-bearing edit form only to a role with sites.update', async () => {
     mocks.requireUser.mockResolvedValue(principal('SITE_ENGINEER'))
+    // A field role opens only an assigned site.
+    mocks.prisma.companyMember.findFirst.mockResolvedValueOnce({ siteIds: ['site_1'] })
 
     const html = await render(SiteLayout({ children: null, params: P({ id: 'site_1' }) }))
 

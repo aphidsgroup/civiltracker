@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   }),
   prisma: {
     company: { findFirst: vi.fn() },
+    companyMember: { findFirst: vi.fn() },
     site: { findFirst: vi.fn(), findUnique: vi.fn() },
     labourAttendance: { findMany: vi.fn() },
     contractorAttendance: { findMany: vi.fn() },
@@ -53,6 +54,12 @@ const SITES: Row[] = [
   { id: 'site_1', companyId: 'company_1', name: 'Tower A', location: 'Chennai', deletedAt: null, budget: 1000, progress: 10, dprs: [] },
   { id: 'site_dead', companyId: 'company_1', name: 'Gone', location: 'Chennai', deletedAt: new Date('2026-01-01'), budget: 0, progress: 0, dprs: [] },
   { id: 'site_other', companyId: 'company_2', name: 'Other tenant', location: 'Madurai', deletedAt: null, budget: 0, progress: 0, dprs: [] },
+]
+
+/** Active company_1 memberships assigning the field roles below to site_1. */
+const MEMBERS: Row[] = [
+  { userId: 'user_site_engineer', companyId: 'company_1', isActive: true, siteIds: ['site_1'] },
+  { userId: 'user_supervisor', companyId: 'company_1', isActive: true, siteIds: ['site_1'] },
 ]
 
 const siteById = new Map(SITES.map((site) => [site.id as string, site]))
@@ -132,6 +139,7 @@ beforeEach(() => {
 
   // The page gate reads the live company's modules before any site read; SITES is enabled.
   mocks.prisma.company.findFirst.mockResolvedValue({ modulesJson: { SITES: true } })
+  mocks.prisma.companyMember.findFirst.mockImplementation(inMemoryDelegate(MEMBERS).findFirst)
   mocks.prisma.site.findFirst.mockImplementation(inMemoryDelegate(SITES).findFirst)
   mocks.prisma.labourAttendance.findMany.mockResolvedValue([])
   mocks.prisma.contractorAttendance.findMany.mockResolvedValue([])
@@ -175,7 +183,13 @@ describe('SiteOverviewPage authorization', () => {
 
     await expect(render('site_1')).rejects.toThrow('NEXT_REDIRECT:/sites')
 
-    expect(mocks.prisma.site.findFirst.mock.calls[0][0].where).toEqual({ id: 'site_1', companyId: 'company_2', deletedAt: null })
+    // No active company_2 membership, so the field role is scoped to sites it engineers.
+    expect(mocks.prisma.site.findFirst.mock.calls[0][0].where).toEqual({
+      id: 'site_1',
+      companyId: 'company_2',
+      deletedAt: null,
+      OR: [{ assignedEngineerId: 'user_site_engineer' }, { engineerId: 'user_site_engineer' }],
+    })
     expectNoSiteDataReads()
     expectNoApprovalReads()
   })

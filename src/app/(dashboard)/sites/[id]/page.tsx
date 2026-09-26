@@ -1,4 +1,4 @@
-import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { prisma } from '@/lib/prisma'
 import { countSitePendingApprovalsForViewer } from '@/lib/approvals/valid-reads'
 import { redirect } from 'next/navigation'
@@ -17,8 +17,9 @@ export default async function SiteOverviewPage({
   if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}`)
   const { user } = gate.access
 
+  // A field role opens only a site it is assigned to.
   const site = await prisma.site.findFirst({
-    where: { id, ...liveCompanySiteWhere(gate.access.companyId) },
+    where: { id, ...(await assignedSiteWhere(gate.access)) },
     include: {
       dprs: { orderBy: { date: 'desc' }, take: 1, include: { createdBy: true } },
     }

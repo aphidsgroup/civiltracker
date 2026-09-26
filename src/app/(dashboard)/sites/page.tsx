@@ -1,5 +1,6 @@
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteWhere, exitDeniedPage, readsAssignedSitesOnly, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
 import { MapPin, HardHat, CreditCard, Clock } from 'lucide-react'
@@ -10,20 +11,18 @@ export const dynamic = 'force-dynamic'
 export default async function SitesPage() {
   const gate = await resolveTenantPageAccess({ grants: [{ permission: 'sites.view', module: 'SITES' }] })
   if (gate.status === 'denied') exitDeniedPage(gate, '/sites')
-  const { companyId } = gate.access
+  const { companyId, user } = gate.access
 
   const now = new Date()
   const fifteenDaysAgo = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000)
 
-  // Fetch all sites - active + soft-deleted within 15 days
+  // A field role lists only its assigned live sites; every other role sees all sites of
+  // the company, active + soft-deleted within 15 days.
+  const where: Prisma.SiteWhereInput = readsAssignedSitesOnly(user.role)
+    ? await assignedSiteWhere(gate.access)
+    : { companyId, OR: [{ deletedAt: null }, { deletedAt: { gte: fifteenDaysAgo } }] }
   const sites = await prisma.site.findMany({
-    where: {
-      companyId,
-      OR: [
-        { deletedAt: null },
-        { deletedAt: { gte: fifteenDaysAgo } }
-      ]
-    },
+    where,
     include: { _count: { select: { labour: true, expenses: true } } },
     orderBy: { createdAt: 'desc' },
   })

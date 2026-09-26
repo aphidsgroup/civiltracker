@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { EditSiteModal } from '@/components/client/EditSiteModal'
 import { SiteTabsNav } from '@/components/client/SiteTabsNav'
-import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import type { TenantPageGrant } from '@/lib/pages/tenant-page-access'
 
 /**
@@ -38,12 +38,13 @@ export default async function SiteLayout({
   const { id } = await params
   const gate = await resolveTenantPageAccess({ grants: SITE_SECTION_GRANTS })
   if (gate.status === 'denied') exitDeniedPage(gate, `/sites/${id}`)
-  const { companyId, can, moduleEnabled } = gate.access
+  const { can, moduleEnabled } = gate.access
 
   // Site metadata is read only under sites.view and the SITES module; any other admitted
-  // role gets the bare existence check, so a foreign or dead id still leaves the page.
+  // role gets the bare existence check, so a foreign, dead or — for a field role —
+  // unassigned id still leaves the page.
   const showHeader = can('sites.view') && moduleEnabled('SITES')
-  const where = { id, ...liveCompanySiteWhere(companyId) }
+  const where = { id, ...(await assignedSiteWhere(gate.access)) }
   const header = showHeader ? await prisma.site.findFirst({ where, select: SITE_HEADER_SELECT }) : null
   const site = header ?? (showHeader ? null : await prisma.site.findFirst({ where, select: { id: true } }))
   const now = new Date()

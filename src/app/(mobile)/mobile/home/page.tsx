@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma'
-import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import {
   Building2, ChevronDown, Bell, ArrowRight, Wallet,
@@ -25,6 +25,8 @@ function getGreeting() {
 export default async function MobileHome({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
   const gate = await resolveTenantPageAccess({ grants: [{ permission: 'sites.view', module: 'SITES' }] })
   if (gate.status === 'denied') exitDeniedPage(gate, '/mobile/home')
+  // A CLIENT never reads tenant sites here, whatever its permissions become.
+  if (gate.access.user.role === 'CLIENT') exitDeniedPage({ status: 'denied', redirectTo: '/client-portal' }, '/mobile/home')
   const { user, companyId, can, moduleEnabled } = gate.access
   const userId = user.id
   const companyName = user.companyName ?? ''
@@ -43,19 +45,15 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
   const todayEnd = new Date(today)
   todayEnd.setHours(23, 59, 59, 999)
 
-  const member = await prisma.companyMember.findFirst({
-    where: { userId, companyId, isActive: true },
-    select: { siteIds: true },
-  })
-  const siteIds = member?.siteIds ?? []
-
   const resolvedParams = await searchParams
-  const requestedSiteId = resolvedParams?.siteId
+  const requestedSiteId = typeof resolvedParams?.siteId === 'string' ? resolvedParams.siteId : undefined
 
-  // Assigned sites are narrowed to live, active sites of exactly this company; a stale
-  // assignment to another tenant's or a deleted site simply drops out.
+  // The picker is the principal's live assigned-site scope: every live company site for
+  // an admin or project role, and for a field role only the sites it is the engineer of
+  // or that its active membership lists. A field role with no assignment gets none, and
+  // a stale assignment to another tenant's or a deleted site simply drops out.
   const allSitesRecords = await prisma.site.findMany({
-    where: { ...liveCompanySiteWhere(companyId), status: 'ACTIVE', ...(siteIds.length > 0 ? { id: { in: siteIds } } : {}) },
+    where: { ...(await assignedSiteWhere(gate.access)), status: 'ACTIVE' },
     orderBy: { name: 'asc' },
   })
 
