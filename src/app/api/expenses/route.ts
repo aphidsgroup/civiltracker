@@ -1,8 +1,10 @@
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { ensureCompanyContext, requireApiPermission } from '@/lib/auth/require-api-permission'
+import { assignedSiteScope, readsAssignedSitesOnly } from '@/lib/auth/site-mutation'
 import {
   assertApprovalSubmitPermission,
   createApprovalRequestRecord,
@@ -33,8 +35,21 @@ export async function GET(request: Request) {
 
   const companyFilter = authResult.role === 'SUPER_ADMIN' ? {} : { companyId: authResult.companyId }
 
+  // A field role reads only the expenses of the live sites it is assigned to: a named site
+  // outside that scope is refused before any expense is read, and the list itself is
+  // bound to the same scope.
+  let siteFilter: Prisma.ExpenseWhereInput = {}
+  if (authResult.companyId && readsAssignedSitesOnly(authResult.role)) {
+    const scope = await assignedSiteScope(authResult, authResult.companyId)
+    if (siteId) {
+      const site = await prisma.site.findFirst({ where: { id: siteId, ...scope }, select: { id: true } })
+      if (!site) return NextResponse.json({ error: 'Forbidden: Site not found or access denied' }, { status: 403 })
+    }
+    siteFilter = { site: scope }
+  }
+
   const expenses = await prisma.expense.findMany({
-    where: { ...companyFilter, ...(siteId ? { siteId } : {}), deletedAt: null },
+    where: { ...companyFilter, ...siteFilter, ...(siteId ? { siteId } : {}), deletedAt: null },
     include: { site: { select: { name: true } }, createdBy: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
     take: 100,

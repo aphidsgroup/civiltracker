@@ -1,13 +1,17 @@
-import { auth } from '@/lib/auth'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { hasPermission } from '@/lib/permissions'
+import { exitDeniedPage, resolveTenantPrincipal } from '@/lib/pages/tenant-page-access'
 import { ChevronRight, Grid, ShieldAlert } from 'lucide-react'
 
 export default async function MobileMorePage() {
-  const session = await auth()
-  if (!session?.user) redirect('/login')
+  // Live tenant principal, never the JWT claims: the menu shapes itself on the current
+  // role and reads no tenant data; each linked page still runs its own gate.
+  const principal = await resolveTenantPrincipal()
+  if (principal.status === 'denied') exitDeniedPage(principal, '/mobile/more')
+  const { role } = principal.user
 
-  const isSiteEngineer = session.user.role === 'SITE_ENGINEER' || session.user.role === 'SUPERVISOR'
+  const isSiteEngineer = role === 'SITE_ENGINEER' || role === 'SUPERVISOR'
+  const canViewApprovals = hasPermission(role, 'approvals.view')
 
   const sections = [
     { title: 'Field Input & Finance', items: [
@@ -36,13 +40,13 @@ export default async function MobileMorePage() {
           </div>
           <div>
             <h1 className="text-xl font-black text-slate-900 m-0">Operations Menu</h1>
-            <p className="text-xs text-slate-400 font-medium m-0">{session.user.role || 'Field Portal'}</p>
+            <p className="text-xs text-slate-400 font-medium m-0">{role || 'Field Portal'}</p>
           </div>
         </div>
       </div>
 
       {sections.map(section => {
-        const filteredItems = section.items.filter(item => !(isSiteEngineer && item.hideForEng))
+        const filteredItems = section.items.filter(item => !(item.hideForEng && (isSiteEngineer || !canViewApprovals)))
         if (filteredItems.length === 0) return null
 
         return (

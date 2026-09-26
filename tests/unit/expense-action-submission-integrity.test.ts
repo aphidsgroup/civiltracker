@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => {
   }
 
   const tx = {
+    mediaAsset: { findFirst: vi.fn() },
+    billAttachment: { findFirst: vi.fn() },
     expense: {
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         const { billAttachments, ...fields } = data as { billAttachments?: { create: Record<string, unknown> } }
@@ -109,10 +111,7 @@ const EXPENSE_INPUT = {
 const BILL_INPUT = {
   ...EXPENSE_INPUT,
   billNumber: 'INV-7',
-  cloudinaryPublicId: 'bills/inv7',
-  secureUrl: 'https://res.cloudinary.test/bills/inv7.jpg',
-  format: 'jpg',
-  bytes: 2048,
+  mediaAssetId: 'asset_inv7',
 }
 
 function grantOnly(...permissions: string[]) {
@@ -167,6 +166,16 @@ beforeEach(() => {
   grantOnly('expenses.create', 'bills.upload', 'approvals.view')
   mocks.prisma.$transaction.mockImplementation(mocks.runTransaction)
   liveSites({ site_1: { companyId: 'company_1' } })
+  mocks.tx.mediaAsset.findFirst.mockResolvedValue({
+    cloudinaryPublicId: 'bills/inv7',
+    secureUrl: 'https://res.cloudinary.test/bills/inv7.jpg',
+    format: 'jpg',
+    bytes: 2048,
+    width: null,
+    height: null,
+    originalName: 'inv7.jpg',
+  })
+  mocks.tx.billAttachment.findFirst.mockResolvedValue(null)
 })
 
 describe('createExpenseAction authorizes before any read or write', () => {

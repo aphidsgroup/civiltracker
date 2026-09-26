@@ -1,23 +1,23 @@
-import { requireUser } from '@/lib/auth/require-user'
-import { getRoleRedirect, hasPermission } from '@/lib/permissions'
 import { createDpr } from '@/actions/dpr'
 import { prisma } from '@/lib/prisma'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { redirect } from 'next/navigation'
 import { ClipboardList } from 'lucide-react'
 import DprFormClient from './DprFormClient'
 
 export default async function MobileDprPage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
-  // Live principal, never the JWT claims; revoked members throw here, before any read.
-  const user = await requireUser()
-  // SUPER_ADMIN has no company context and `createDpr` refuses it anyway.
-  if (user.role === 'SUPER_ADMIN') redirect('/super-admin/dashboard')
-  if (!user.companyId) redirect('/login')
-  if (!hasPermission(user.role, 'dpr.create')) redirect(getRoleRedirect(user.role))
+  // Live principal, `dpr.create` and the DPR module, never the JWT claims, before any read.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'dpr.create', module: 'DPR' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/mobile/dpr')
+
+  // The same policy `createDpr` enforces: ACTIVE live sites of the live company, and for a
+  // field role only the sites it is assigned to — none when it has no assignment.
+  const siteWhere = await assignedSiteWhere(gate.access)
 
   const { siteId } = await searchParams
 
   const sites = await prisma.site.findMany({
-    where: { companyId: user.companyId, deletedAt: null, status: 'ACTIVE' },
+    where: { ...siteWhere, status: 'ACTIVE' },
     select: { id: true, name: true }
   })
   const defaultSiteId = sites.some((site) => site.id === siteId) ? siteId : undefined
@@ -36,7 +36,7 @@ export default async function MobileDprPage({ searchParams }: { searchParams: Pr
         </div>
         <h1 className="text-lg font-bold text-gray-900">Submit Daily Progress</h1>
       </div>
-      
+
       <DprFormClient sites={sites} defaultSiteId={defaultSiteId} submitAction={submitDpr} />
     </div>
   )

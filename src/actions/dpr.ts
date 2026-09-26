@@ -2,16 +2,17 @@
 
 import { revalidatePath } from 'next/cache'
 import { createApprovalRequestRecord } from '@/lib/approvals/submit'
-import { requireUser } from '@/lib/auth/require-user'
-import { hasPermission } from '@/lib/permissions'
+import { requireAssignedScopeMutation } from '@/lib/auth/site-mutation'
 import { prisma } from '@/lib/prisma'
 
+/*
+ * Files a DPR. The live principal must hold `dpr.create` with the DPR module enabled on
+ * its live company, and the site must be an ACTIVE, live site of that company within the
+ * principal's `assignedSiteScope` — the same sites the mobile DPR picker lists, so a
+ * SITE_ENGINEER or SUPERVISOR files only on the sites it is assigned to.
+ */
 export async function createDpr(formData: FormData) {
-  const user = await requireUser()
-  if (!user.companyId) throw new Error('UNAUTHORIZED: Company context required')
-  if (!hasPermission(user.role, 'dpr.create')) {
-    throw new Error('FORBIDDEN: Missing required permission "dpr.create"')
-  }
+  const { user, scope } = await requireAssignedScopeMutation('dpr.create', 'DPR')
 
   const siteId = formData.get('siteId') as string
   const workDone = formData.get('workDone') as string
@@ -20,12 +21,12 @@ export async function createDpr(formData: FormData) {
   const dateStr = formData.get('date') as string
   const date = dateStr ? new Date(dateStr) : new Date()
 
-  if (!siteId || !workDone?.trim() || Number.isNaN(date.getTime())) {
+  if (!siteId || typeof siteId !== 'string' || !workDone?.trim() || Number.isNaN(date.getTime())) {
     throw new Error('Invalid DPR submission')
   }
 
   const site = await prisma.site.findFirst({
-    where: { id: siteId, companyId: user.companyId, deletedAt: null },
+    where: { id: siteId, ...scope, status: 'ACTIVE' },
     select: { id: true },
   })
   if (!site) throw new Error('FORBIDDEN: Site not found or access denied')

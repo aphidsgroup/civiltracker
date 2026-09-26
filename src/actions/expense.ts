@@ -13,6 +13,18 @@ import {
 } from '@/lib/approvals/submit'
 import { logActivity } from '@/lib/audit'
 
+const ATTACHMENT_NOT_FOUND = 'Forbidden: Uploaded bill not found or access denied'
+
+/** Attachment fields the browser used to send; they are storage facts, never input. */
+const CLIENT_ATTACHMENT_FIELDS = ['cloudinaryPublicId', 'secureUrl', 'format', 'bytes'] as const
+
+/*
+ * Records an expense and raises its approval. A bill attachment is named only by the id
+ * of the MediaAsset `/api/upload` returned: it must be a BILL upload by this same user
+ * for exactly this live site and company, not yet attached to any expense, and every
+ * attachment field stored is copied from that asset. A URL, public id, format or size
+ * sent by the browser is refused.
+ */
 export async function createExpenseAction(data: {
   siteId: string
   amount: number
@@ -23,10 +35,7 @@ export async function createExpenseAction(data: {
   notes?: string
   description?: string
   billDate?: Date
-  cloudinaryPublicId?: string
-  secureUrl?: string
-  format?: string
-  bytes?: number
+  mediaAssetId?: string
 }) {
   const user = await requirePermission('expenses.create')
 
@@ -34,7 +43,18 @@ export async function createExpenseAction(data: {
   // The approval is raised on the internal writer rather than the public action, so the
   // participation and entity-specific submit permissions that action enforced are
   // re-applied here.
-  const entityType = data.secureUrl ? 'BILL' : 'EXPENSE'
+  const input = (data ?? {}) as Record<string, unknown>
+  if (CLIENT_ATTACHMENT_FIELDS.some((field) => input[field] !== undefined)) {
+    throw new Error('Invalid expense: attach a bill by its uploaded media asset id')
+  }
+  const rawAssetId = input.mediaAssetId
+  if (rawAssetId !== undefined && rawAssetId !== null && typeof rawAssetId !== 'string') {
+    throw new Error(ATTACHMENT_NOT_FOUND)
+  }
+  const mediaAssetId = typeof rawAssetId === 'string' ? rawAssetId.trim() : ''
+  if (rawAssetId != null && (!mediaAssetId || mediaAssetId.length > 64)) throw new Error(ATTACHMENT_NOT_FOUND)
+
+  const entityType = mediaAssetId ? 'BILL' : 'EXPENSE'
   if (!hasPermission(user.role, 'approvals.view')) {
     throw new Error('Forbidden: Missing required permission "approvals.view"')
   }
@@ -50,8 +70,41 @@ export async function createExpenseAction(data: {
   const companyId = site.companyId
 
   // Expense, bill attachment, approval and its initial timeline entry commit together,
-  // so a failed approval write can never leave a PENDING expense with no approval.
+  // so a failed approval write can never leave a PENDING expense with no approval. The
+  // uploaded bill is resolved first, so an unusable asset is refused before any write.
   const expense = await prisma.$transaction(async (tx) => {
+    let attachment: {
+      cloudinaryPublicId: string
+      secureUrl: string
+      format: string | null
+      bytes: number | null
+      width: number | null
+      height: number | null
+      originalName: string | null
+    } | null = null
+    if (mediaAssetId) {
+      attachment = await tx.mediaAsset.findFirst({
+        where: { id: mediaAssetId, companyId, siteId: site.id, module: 'BILL', uploadedById: user.id },
+        select: {
+          cloudinaryPublicId: true,
+          secureUrl: true,
+          format: true,
+          bytes: true,
+          width: true,
+          height: true,
+          originalName: true,
+        },
+      })
+      if (!attachment) throw new Error(ATTACHMENT_NOT_FOUND)
+
+      // One upload backs one bill, so the same file cannot be claimed twice.
+      const bound = await tx.billAttachment.findFirst({
+        where: { cloudinaryPublicId: attachment.cloudinaryPublicId },
+        select: { id: true },
+      })
+      if (bound) throw new Error('Forbidden: Uploaded bill is already attached')
+    }
+
     const created = await tx.expense.create({
       data: {
         companyId,
@@ -65,14 +118,17 @@ export async function createExpenseAction(data: {
         description: data.description ?? (data.notes ? data.notes.substring(0, 50) : `Expense for ${data.category}`),
         ...(data.billDate ? { billDate: data.billDate } : {}),
         createdById: user.id,
-        ...(data.secureUrl && data.cloudinaryPublicId
+        ...(attachment
           ? {
               billAttachments: {
                 create: {
-                  cloudinaryPublicId: data.cloudinaryPublicId,
-                  secureUrl: data.secureUrl,
-                  format: data.format,
-                  bytes: data.bytes,
+                  cloudinaryPublicId: attachment.cloudinaryPublicId,
+                  secureUrl: attachment.secureUrl,
+                  originalName: attachment.originalName,
+                  format: attachment.format,
+                  bytes: attachment.bytes,
+                  width: attachment.width,
+                  height: attachment.height,
                   uploadedById: user.id,
                 },
               },
@@ -100,7 +156,7 @@ export async function createExpenseAction(data: {
     userId: user.id,
     companyId,
     action: 'CREATE',
-    module: data.secureUrl ? 'BILL_UPLOAD' : 'EXPENSE',
+    module: mediaAssetId ? 'BILL_UPLOAD' : 'EXPENSE',
     recordId: expense.id,
     description: `${user.name ?? user.email} logged ₹${data.amount.toLocaleString('en-IN')} ${data.category.replace(/_/g, ' ')} expense on ${site.name}`,
     after: { amount: data.amount, category: data.category, site: site.name },

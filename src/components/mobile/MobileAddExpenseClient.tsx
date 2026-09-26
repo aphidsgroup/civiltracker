@@ -104,7 +104,8 @@ export default function MobileAddExpenseClient({
       if (file) {
         const fileData = new FormData()
         fileData.append('file', file)
-        fileData.append('module', 'expense')
+        // A receipt is stored as a bill upload, the only kind an expense can attach.
+        fileData.append('module', 'BILL')
         fileData.append('siteId', finalSiteId)
 
         const res = await fetch('/api/upload', {
@@ -123,14 +124,8 @@ export default function MobileAddExpenseClient({
         paymentMode: formData.paymentMode,
         paidTo: formData.paidTo || undefined,
         notes: `${formData.notes}${gpsCoords ? ` [GPS:${gpsCoords}]` : ''}` || undefined,
-        ...(uploadResult ? {
-          cloudinaryPublicId: uploadResult.publicId,
-          secureUrl: uploadResult.url,
-          format: file?.type.split('/')[1] || 'jpg',
-          bytes: file?.size || 1024
-        } : {
-          secureUrl: previewUrl || undefined
-        })
+        // The server copies every attachment field from the uploaded asset itself.
+        ...(uploadResult ? { mediaAssetId: uploadResult.assetId } : {})
       })
 
       router.push('/mobile/home')

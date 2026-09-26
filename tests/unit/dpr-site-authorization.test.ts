@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { inMemoryDelegate } from './support/prisma-where'
+import type { Row } from './support/prisma-where'
 
 /**
  * Direct-action cover for `createDpr`.
@@ -14,6 +16,8 @@ const mocks = vi.hoisted(() => {
 
   const prisma = {
     $transaction: vi.fn(),
+    company: { findUnique: vi.fn() },
+    companyMember: { findFirst: vi.fn() },
     site: { findFirst: vi.fn(), findUnique: vi.fn() },
     dailyProgressReport: { create: vi.fn(), findFirst: vi.fn() },
     approval: { create: vi.fn() },
@@ -73,6 +77,21 @@ const { createDpr } = await import('@/actions/dpr')
 
 const ENGINEER = { id: 'engineer_1', role: 'SITE_ENGINEER', companyId: 'company_1' }
 
+/**
+ * engineer_1 is the engineer of site_1 and listed on site_listed by active membership;
+ * site_theirs is a live, ACTIVE company site assigned to someone else.
+ */
+const SITES: Row[] = [
+  { id: 'site_1', companyId: 'company_1', deletedAt: null, status: 'ACTIVE', assignedEngineerId: 'engineer_1', engineerId: null },
+  { id: 'site_listed', companyId: 'company_1', deletedAt: null, status: 'ACTIVE', assignedEngineerId: null, engineerId: null },
+  { id: 'site_theirs', companyId: 'company_1', deletedAt: null, status: 'ACTIVE', assignedEngineerId: 'someone_else', engineerId: null },
+  { id: 'site_hold', companyId: 'company_1', deletedAt: null, status: 'ON_HOLD', assignedEngineerId: 'engineer_1', engineerId: null },
+  { id: 'other_company_site', companyId: 'company_2', deletedAt: null, status: 'ACTIVE', assignedEngineerId: 'engineer_1', engineerId: null },
+]
+
+let modules: unknown
+let memberSiteIds: string[]
+
 function form(siteId = 'site_1') {
   const data = new FormData()
   data.set('siteId', siteId)
@@ -109,11 +128,11 @@ beforeEach(() => {
   mocks.committed.length = 0
   mocks.requireUser.mockResolvedValue(ENGINEER)
   mocks.prisma.$transaction.mockImplementation(mocks.runTransaction)
-  mocks.prisma.site.findFirst.mockImplementation(async (args: { where: Record<string, unknown> }) =>
-    args.where.id === 'site_1' && args.where.companyId === 'company_1' && args.where.deletedAt === null
-      ? { id: 'site_1' }
-      : null
-  )
+  modules = ['DPR']
+  memberSiteIds = ['site_listed']
+  mocks.prisma.company.findUnique.mockImplementation(async () => ({ modulesJson: modules, status: 'ACTIVE' }))
+  mocks.prisma.companyMember.findFirst.mockImplementation(async () => ({ siteIds: memberSiteIds }))
+  mocks.prisma.site.findFirst.mockImplementation(inMemoryDelegate(SITES).findFirst)
 })
 
 describe('createDpr authorizes before any read or write', () => {
@@ -136,9 +155,62 @@ describe('createDpr authorizes before any read or write', () => {
   it('refuses a principal with no company context before any read', async () => {
     mocks.requireUser.mockResolvedValue({ id: 'root_1', role: 'SUPER_ADMIN', companyId: null })
 
-    await expect(createDpr(form())).rejects.toThrow(/company context/i)
+    await expect(createDpr(form())).rejects.toThrow(/tenant context/i)
     expectNoReads()
     expectNoWrites()
+  })
+
+  it('refuses when the live company has the DPR module disabled, before any site read', async () => {
+    modules = ['SITES', 'LABOUR']
+
+    await expect(createDpr(form())).rejects.toThrow(/Module DPR is not enabled/)
+    expectNoReads()
+    expectNoWrites()
+  })
+
+  it('judges the module on the live company, not on anything the form sends', async () => {
+    modules = { dpr: false }
+    const data = form()
+    data.set('companyId', 'company_2')
+
+    await expect(createDpr(data)).rejects.toThrow(/Module DPR is not enabled/)
+    expect(mocks.prisma.company.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'company_1' } }))
+    expectNoWrites()
+  })
+})
+
+describe('createDpr assigned-site policy for field roles', () => {
+  it.each(['SITE_ENGINEER', 'SUPERVISOR'])('%s cannot file on a live company site it is not assigned to', async (role) => {
+    mocks.requireUser.mockResolvedValue({ id: 'engineer_1', role, companyId: 'company_1' })
+
+    await expect(createDpr(form('site_theirs'))).rejects.toThrow(/site not found or access denied/i)
+    expectNoWrites()
+  })
+
+  it('a field role with no assignment at all cannot file on any site', async () => {
+    mocks.requireUser.mockResolvedValue({ id: 'supervisor_new', role: 'SUPERVISOR', companyId: 'company_1' })
+    memberSiteIds = []
+
+    for (const siteId of ['site_1', 'site_listed', 'site_theirs']) {
+      await expect(createDpr(form(siteId))).rejects.toThrow(/site not found or access denied/i)
+    }
+    expectNoWrites()
+  })
+
+  it('files on a site listed on the active membership', async () => {
+    await expect(createDpr(form('site_listed'))).resolves.toEqual({ success: true, dprId: 'dpr_1' })
+  })
+
+  it('refuses an assigned site that is not ACTIVE', async () => {
+    await expect(createDpr(form('site_hold'))).rejects.toThrow(/site not found or access denied/i)
+    expectNoWrites()
+  })
+
+  it('lets a PROJECT_MANAGER file on any ACTIVE live company site', async () => {
+    mocks.requireUser.mockResolvedValue({ id: 'pm_1', role: 'PROJECT_MANAGER', companyId: 'company_1' })
+
+    await expect(createDpr(form('site_theirs'))).resolves.toEqual({ success: true, dprId: 'dpr_1' })
+    expect(mocks.prisma.companyMember.findFirst).not.toHaveBeenCalled()
   })
 })
 
@@ -147,7 +219,7 @@ describe('createDpr tenant authorization', () => {
     await createDpr(form())
 
     expect(mocks.prisma.site.findFirst).toHaveBeenCalledWith({
-      where: { id: 'site_1', companyId: 'company_1', deletedAt: null },
+      where: expect.objectContaining({ id: 'site_1', companyId: 'company_1', deletedAt: null, status: 'ACTIVE' }),
       select: { id: true },
     })
   })
@@ -159,8 +231,8 @@ describe('createDpr tenant authorization', () => {
 
   it('rejects a soft-deleted site without creating DPR or approval records', async () => {
     // The row exists but is soft deleted: only a lookup that ignores deletedAt finds it.
-    mocks.prisma.site.findFirst.mockImplementation(async (args: { where: Record<string, unknown> }) =>
-      args.where.deletedAt === null ? null : { id: 'site_1', companyId: 'company_1', deletedAt: new Date() }
+    mocks.prisma.site.findFirst.mockImplementation(
+      inMemoryDelegate(SITES.map((site) => (site.id === 'site_1' ? { ...site, deletedAt: new Date() } : site))).findFirst
     )
 
     await expect(createDpr(form())).rejects.toThrow(/site not found or access denied/i)
@@ -175,7 +247,8 @@ describe('createDpr writes DPR, approval and timeline atomically', () => {
     const supervisor = { id: 'supervisor_1', role: 'SUPERVISOR', companyId: 'company_1' }
     mocks.requireUser.mockResolvedValue(supervisor)
 
-    await expect(createDpr(form())).resolves.toEqual({ success: true, dprId: 'dpr_1' })
+    // Assigned to site_listed through its active membership.
+    await expect(createDpr(form('site_listed'))).resolves.toEqual({ success: true, dprId: 'dpr_1' })
 
     expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
     expect(mocks.committed.map((row) => row.model)).toEqual(['dailyProgressReport', 'approval', 'approvalTimeline'])
