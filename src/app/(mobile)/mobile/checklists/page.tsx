@@ -1,6 +1,6 @@
-import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { redirect } from 'next/navigation'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import { ChevronLeft, Info } from 'lucide-react'
 import { ChecklistMobileClient } from './ChecklistMobileClient'
@@ -8,30 +8,32 @@ import { ChecklistMobileClient } from './ChecklistMobileClient'
 export const dynamic = 'force-dynamic'
 
 export default async function MobileChecklistsPage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
-  const session = await auth()
-  if (!session?.user?.id) redirect('/login')
-
-  // Resolve companyId — site engineers may not have it in their JWT token
-  let companyId = session.user.companyId
-  if (!companyId) {
-    const member = await prisma.companyMember.findFirst({ where: { userId: session.user.id, isActive: true } })
-    if (!member) redirect('/login')
-    companyId = member.companyId
-  }
+  // Live principal and company only; the page ticks progress, so it needs the same grants
+  // as `toggleTaskStatus` progress: `tasks.manage` or `dpr.create`, with TASKS enabled.
+  const gate = await resolveTenantPageAccess({
+    grants: [
+      { permission: 'tasks.manage', module: 'TASKS' },
+      { permission: 'dpr.create', module: 'TASKS' },
+    ],
+  })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/mobile/checklists')
+  const { companyId } = gate.access
 
   const resolvedParams = await searchParams
   const siteId = resolvedParams?.siteId
 
   if (!siteId) redirect('/mobile/home')
 
+  // A live site of exactly this company; a field role opens only its assigned sites.
   const site = await prisma.site.findFirst({
-    where: { id: siteId, companyId, deletedAt: null }
+    where: { id: siteId, ...(await assignedSiteWhere(gate.access)) },
+    select: { id: true, name: true },
   })
 
   if (!site) redirect('/mobile/home')
 
-  const checklist = await prisma.projectChecklist.findUnique({
-    where: { siteId },
+  const checklist = await prisma.projectChecklist.findFirst({
+    where: { siteId: site.id, companyId },
     include: {
       stages: {
         orderBy: { order: 'asc' },
@@ -77,7 +79,7 @@ export default async function MobileChecklistsPage({ searchParams }: { searchPar
             </p>
           </div>
         ) : (
-          <ChecklistMobileClient siteId={siteId} checklist={checklist} />
+          <ChecklistMobileClient siteId={site.id} checklist={checklist} />
         )}
       </div>
     </div>

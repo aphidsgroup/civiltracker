@@ -28,11 +28,6 @@ export default async function SitesPage() {
     orderBy: { createdAt: 'desc' },
   })
 
-  // Background cleanup of expired deleted sites (fire and forget)
-  prisma.site.deleteMany({
-    where: { companyId, deletedAt: { not: null, lt: fifteenDaysAgo } }
-  }).catch(() => {})
-
   const statusChip: Record<string, string> = {
     ACTIVE:    'bg-green-100 text-green-700 border border-green-200',
     PLANNING:  'bg-gray-100 text-gray-500 border border-gray-200',

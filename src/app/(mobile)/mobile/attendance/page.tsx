@@ -1,7 +1,6 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
-import { redirect } from 'next/navigation'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import MobileAttendanceClient from '@/components/mobile/MobileAttendanceClient'
 import { Users, Sparkles } from 'lucide-react'
 
@@ -31,9 +30,13 @@ type MappedLabour = {
 }
 
 export default async function MobileAttendancePage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'attendance.mark', module: 'LABOUR' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/mobile/attendance')
+  const { companyId } = gate.access
+
+  // The same assigned-site policy the muster-roll actions enforce: a field role sees only
+  // the live sites it is assigned to, and only the workers and logs on those sites.
+  const siteWhere = await assignedSiteWhere(gate.access)
 
   const { siteId } = await searchParams
 
@@ -42,7 +45,7 @@ export default async function MobileAttendancePage({ searchParams }: { searchPar
 
   const [allLabour, sites, contractorAttendances] = await Promise.all([
     prisma.labour.findMany({
-      where: { companyId, isActive: true },
+      where: { companyId, isActive: true, site: siteWhere },
       include: {
         attendance: { where: { date: today }, take: 1 },
         site: { select: { name: true } },
@@ -51,12 +54,12 @@ export default async function MobileAttendancePage({ searchParams }: { searchPar
       orderBy: { name: 'asc' },
     }),
     prisma.site.findMany({
-      where: { companyId, deletedAt: null },
+      where: siteWhere,
       select: { id: true, name: true },
       orderBy: { createdAt: 'desc' }
     }),
     prisma.contractorAttendance.findMany({
-      where: { companyId, date: today },
+      where: { companyId, date: today, site: siteWhere },
       include: { subcontractor: { select: { name: true, trade: true } } },
       orderBy: { createdAt: 'desc' }
     })
@@ -113,8 +116,8 @@ export default async function MobileAttendancePage({ searchParams }: { searchPar
         todayRoster={todayRoster} 
         otherWorkers={otherWorkers} 
         initialContractors={initialContractors}
-        sites={sites} 
-        defaultSiteId={siteId}
+        sites={sites}
+        defaultSiteId={sites.some((site) => site.id === siteId) ? siteId : undefined}
       />
     </div>
   )

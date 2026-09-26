@@ -9,8 +9,10 @@ import {
   requireChecklistTask,
   requireProjectChecklist,
 } from '@/lib/auth/checklist-site'
+import { requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
 import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
+import { UPLOAD_POLICIES } from '@/lib/uploads/upload-policy'
 import { revalidatePath } from 'next/cache'
 
 // Deep clone a master template to a project
@@ -231,19 +233,54 @@ export async function getPendingChecklistPhotos(siteId?: string) {
   }))
 }
 
-export async function uploadChecklistPhotoAction(taskId: string, siteId: string, imageUrl: string) {
-  const { user, site, task } = await requireChecklistTask(siteId, taskId, 'photo')
+const MEDIA_NOT_FOUND = 'FORBIDDEN: Uploaded photo not found or access denied'
 
-  await prisma.sitePhoto.create({
-    data: {
-      companyId: site.companyId,
-      siteId: site.id,
-      taskId: task.id,
-      secureUrl: imageUrl,
-      cloudinaryPublicId: `checklist_${task.id}_${Date.now()}`,
-      caption: 'Checklist Task Completed',
-      uploadedById: user.id,
-    },
+/*
+ * Attaches a checklist completion photo uploaded through `/api/upload`. The live principal
+ * must hold a SITE_PHOTO upload grant with TASKS enabled, the site must be a live company
+ * site the principal is assigned to, the task must be on that site's checklist, and the
+ * photo must be a MediaAsset the same user uploaded as a SITE_PHOTO for exactly that site
+ * and company that no photo row uses yet. The URL and public id come from the asset;
+ * nothing the browser sends is stored as a URL.
+ */
+export async function uploadChecklistPhotoAction(taskId: string, siteId: string, mediaAssetId: string) {
+  const policy = UPLOAD_POLICIES.SITE_PHOTO
+  const { user, site } = await requireAssignedSiteMutation(String(siteId ?? ''), policy.permissions, policy.module)
+  const assetId = typeof mediaAssetId === 'string' ? mediaAssetId.trim() : ''
+  if (!assetId || assetId.length > 64) throw new Error(MEDIA_NOT_FOUND)
+
+  await prisma.$transaction(async (tx) => {
+    const task = await tx.projectChecklistTask.findFirst({
+      where: { id: String(taskId ?? ''), category: { stage: { checklist: { siteId: site.id, companyId: site.companyId } } } },
+      select: { id: true, name: true },
+    })
+    if (!task) throw new Error('FORBIDDEN: Checklist task not found or access denied')
+
+    const asset = await tx.mediaAsset.findFirst({
+      where: { id: assetId, companyId: user.companyId, siteId: site.id, module: 'SITE_PHOTO', uploadedById: user.id },
+      select: { secureUrl: true, cloudinaryPublicId: true },
+    })
+    if (!asset) throw new Error(MEDIA_NOT_FOUND)
+
+    // One upload backs one photo row, so deleting a photo never strands another's image.
+    const bound = await tx.sitePhoto.findFirst({
+      where: { cloudinaryPublicId: asset.cloudinaryPublicId },
+      select: { id: true },
+    })
+    if (bound) throw new Error('FORBIDDEN: Uploaded photo is already attached')
+
+    await tx.sitePhoto.create({
+      data: {
+        companyId: site.companyId,
+        siteId: site.id,
+        taskId: task.id,
+        secureUrl: asset.secureUrl,
+        cloudinaryPublicId: asset.cloudinaryPublicId,
+        caption: 'Checklist Task Completed',
+        uploadedById: user.id,
+      },
+      select: { id: true },
+    })
   })
 
   revalidatePath(`/sites/${site.id}/photos`)

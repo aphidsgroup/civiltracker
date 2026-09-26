@@ -40,6 +40,7 @@ const mocks = vi.hoisted(() => {
     tx,
     prisma: {
       company: { findUnique: vi.fn() },
+      companyMember: { findFirst: vi.fn() },
       site: { findFirst: vi.fn() },
       labour: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
       labourAttendance: { upsert: vi.fn(), deleteMany: vi.fn() },
@@ -138,6 +139,9 @@ beforeEach(() => {
   // A stale JWT still claiming admin: the actions must never trust it.
   mocks.auth.mockResolvedValue({ user: principal('COMPANY_ADMIN') })
   mocks.prisma.company.findUnique.mockImplementation(async () => ({ modulesJson: modules, status: 'ACTIVE' }))
+  // Field roles are assigned to both live company sites here; assignment itself is covered
+  // by mobile-attendance-assigned-site.test.ts.
+  mocks.prisma.companyMember.findFirst.mockResolvedValue({ siteIds: ['site_1', 'site_2'] })
   mocks.prisma.site.findFirst.mockImplementation(inMemoryDelegate(SITES).findFirst)
 
   const labour = inMemoryDelegate(LABOUR, relations)

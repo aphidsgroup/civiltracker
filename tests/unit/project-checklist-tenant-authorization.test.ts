@@ -3,12 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireChecklistSite: vi.fn(),
   requireChecklistTask: vi.fn(),
+  requireAssignedSiteMutation: vi.fn(),
   prisma: {
     projectChecklist: { findFirst: vi.fn(), create: vi.fn() },
     checklistTemplate: { findFirst: vi.fn() },
     projectChecklistTask: { findFirst: vi.fn(), update: vi.fn() },
-    sitePhoto: { create: vi.fn() },
+    mediaAsset: { findFirst: vi.fn() },
+    sitePhoto: { findFirst: vi.fn(), create: vi.fn() },
     auditLog: { create: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() },
+    $transaction: vi.fn(),
   },
   revalidatePath: vi.fn(),
 }))
@@ -17,6 +20,7 @@ vi.mock('@/lib/auth/checklist-site', () => ({
   requireChecklistSite: mocks.requireChecklistSite,
   requireChecklistTask: mocks.requireChecklistTask,
 }))
+vi.mock('@/lib/auth/site-mutation', () => ({ requireAssignedSiteMutation: mocks.requireAssignedSiteMutation }))
 vi.mock('@/lib/prisma', () => ({ default: mocks.prisma }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 vi.mock('@/lib/auth', () => ({ auth: vi.fn() }))
@@ -32,6 +36,9 @@ beforeEach(() => {
   mocks.prisma.checklistTemplate.findFirst.mockResolvedValue({ id: 'template_1', stages: [] })
   mocks.prisma.projectChecklistTask.findFirst.mockResolvedValue({ id: 'task_1', name: 'Task' })
   mocks.prisma.auditLog.findMany.mockResolvedValue([])
+  mocks.requireAssignedSiteMutation.mockResolvedValue({ user: { id: 'user_1', companyId: 'company_1' }, site: { id: 'site_1', companyId: 'company_1' } })
+  mocks.prisma.mediaAsset.findFirst.mockResolvedValue({ secureUrl: 'https://res.cloudinary.com/demo/x.jpg', cloudinaryPublicId: 'x' })
+  mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
 })
 
 describe('project checklist tenant authorization', () => {
@@ -66,8 +73,12 @@ describe('project checklist tenant authorization', () => {
   })
 
   it('rejects a photo task not linked to the authorized site before creation', async () => {
-    mocks.requireChecklistTask.mockRejectedValue(new Error('FORBIDDEN: Checklist task not found or access denied'))
-    await expect(actions.uploadChecklistPhotoAction('foreign_task', 'site_1', 'https://example.test/x')).rejects.toThrow(/access denied/i)
+    mocks.prisma.projectChecklistTask.findFirst.mockResolvedValue(null)
+    await expect(actions.uploadChecklistPhotoAction('foreign_task', 'site_1', 'asset_1')).rejects.toThrow(/access denied/i)
+    expect(mocks.prisma.projectChecklistTask.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'foreign_task', category: { stage: { checklist: { siteId: 'site_1', companyId: 'company_1' } } } },
+    }))
+    expect(mocks.prisma.mediaAsset.findFirst).not.toHaveBeenCalled()
     expect(mocks.prisma.sitePhoto.create).not.toHaveBeenCalled()
   })
 })

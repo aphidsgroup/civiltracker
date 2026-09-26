@@ -25,7 +25,10 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
   prisma: {
     company: { findUnique: vi.fn() },
+    companyMember: { findFirst: vi.fn() },
     site: { findFirst: vi.fn() },
+    mediaAsset: { findFirst: vi.fn() },
+    $transaction: vi.fn(),
     checklistTemplate: { findFirst: vi.fn() },
     projectChecklist: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
     projectChecklistCategory: { findFirst: vi.fn(), update: vi.fn() },
@@ -59,6 +62,11 @@ beforeEach(() => {
   mocks.requireUser.mockResolvedValue(principal('PROJECT_MANAGER'))
   mocks.prisma.company.findUnique.mockImplementation(async () => ({ modulesJson: modules, status: 'ACTIVE' }))
   mocks.prisma.site.findFirst.mockImplementation(inMemoryDelegate(SITES).findFirst)
+  // Field roles are assigned to site_1; checklist photos bind to an uploaded asset
+  // (see checklist-photo-media-asset.test.ts for the asset and assignment rules).
+  mocks.prisma.companyMember.findFirst.mockResolvedValue({ siteIds: ['site_1'] })
+  mocks.prisma.mediaAsset.findFirst.mockResolvedValue({ secureUrl: 'https://res.cloudinary.com/demo/x.jpg', cloudinaryPublicId: 'x' })
+  mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
   mocks.prisma.checklistTemplate.findFirst.mockResolvedValue({ id: 'tpl_1', stages: [] })
   mocks.prisma.projectChecklist.findFirst.mockImplementation(async (args: { select?: unknown }) => (args?.select ? { id: 'checklist_1' } : null))
   mocks.prisma.projectChecklistCategory.findFirst.mockResolvedValue({ id: 'cat_1' })
@@ -75,7 +83,7 @@ const MUTATIONS = {
   editChecklistTask: (site = 'site_1') => actions.editChecklistTask(site, 'task_1', 'Renamed'),
   deleteChecklistTask: (site = 'site_1') => actions.deleteChecklistTask(site, 'task_1'),
   deleteProjectChecklist: (site = 'site_1') => actions.deleteProjectChecklist(site),
-  uploadChecklistPhotoAction: (site = 'site_1') => actions.uploadChecklistPhotoAction('task_1', site, 'https://img/x.jpg'),
+  uploadChecklistPhotoAction: (site = 'site_1') => actions.uploadChecklistPhotoAction('task_1', site, 'asset_1'),
 }
 
 type MutationName = keyof typeof MUTATIONS

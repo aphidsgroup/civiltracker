@@ -94,17 +94,33 @@ export async function assignedSiteScope(user: Pick<SessionUser, 'id' | 'role'>, 
 }
 
 /**
- * `requireTenantMutation`, then binds the site id to a live site of exactly the live
- * company that the principal is assigned to (see `assignedSiteScope`).
+ * `requireTenantMutation`, then the principal's `assignedSiteScope`. For actions that
+ * touch records on several sites (a batch, or a record found by its own id): bind every
+ * record's site to `scope`, never trust a site id the client sent alongside it.
+ *
+ * Policy: SITE_ENGINEER and SUPERVISOR act only on their assigned live sites; every other
+ * role holding the permission acts on every live site of its company. SUPER_ADMIN is
+ * refused by `requireTenantMutation` (no tenant context).
+ */
+export async function requireAssignedScopeMutation(permission: PermissionGrant, moduleName: string) {
+  const user = await requireTenantMutation(permission, moduleName)
+  const scope = await assignedSiteScope(user, user.companyId)
+  return { user, scope }
+}
+
+/**
+ * `requireAssignedScopeMutation`, then binds the site id to a live site of exactly the
+ * live company that the principal is assigned to. `scope` is returned so records the
+ * action loads by id (a worker, a log) can be bound to the same policy.
  */
 export async function requireAssignedSiteMutation(siteId: string, permission: PermissionGrant, moduleName: string) {
-  const user = await requireTenantMutation(permission, moduleName)
+  const { user, scope } = await requireAssignedScopeMutation(permission, moduleName)
   const site = await prisma.site.findFirst({
-    where: { id: siteId, ...(await assignedSiteScope(user, user.companyId)) },
+    where: { id: siteId, ...scope },
     select: { id: true, companyId: true, name: true },
   })
   if (!site) throw new Error('FORBIDDEN: Site not found or access denied')
-  return { user, site }
+  return { user, site, scope }
 }
 
 /** A form number that must be finite and non-negative; blank becomes `fallback`. */

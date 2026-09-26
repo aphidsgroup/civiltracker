@@ -4,15 +4,18 @@ import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/audit'
 import { AttendanceStatus, LabourTrade } from '@prisma/client'
-import { requireSiteMutation, requireTenantMutation } from '@/lib/auth/site-mutation'
+import type { Prisma } from '@prisma/client'
+import { requireAssignedScopeMutation, requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
 
 /*
  * Muster-roll actions. Marking the roll (attendance, roster, contractor headcount) needs
  * live `attendance.mark` + LABOUR; editing an existing worker's master data (wage, site)
  * needs live `labour.manage` + LABOUR. Both are checked before any read. Every site is a
- * live site of exactly the live company, and every worker, subcontractor and contractor
- * log must belong to that company on a live site. Multi-step money and attendance
- * changes run in one transaction with counted, company-scoped writes.
+ * live site of exactly the live company that the principal may act on (`assignedSiteScope`:
+ * SITE_ENGINEER and SUPERVISOR only their assigned sites), and every worker and
+ * contractor log must sit on such a site too, so a field role can neither write on nor
+ * pull a worker off a site it is not assigned to. Multi-step money and attendance changes
+ * run in one transaction with counted, company-scoped writes.
  */
 
 const LABOUR_NOT_FOUND = 'FORBIDDEN: Labour not found or access denied'
@@ -20,13 +23,13 @@ const SUBCONTRACTOR_NOT_FOUND = 'FORBIDDEN: Subcontractor not found or access de
 const CONTRACTOR_LOG_NOT_FOUND = 'FORBIDDEN: Contractor attendance not found or access denied'
 const DEFAULT_DAILY_WAGE = 650
 
-function requireAttendanceMutation() {
-  return requireTenantMutation('attendance.mark', 'LABOUR')
+function requireAttendanceScope() {
+  return requireAssignedScopeMutation('attendance.mark', 'LABOUR')
 }
 
-/** A worker of exactly `companyId` whose current site is a live site of that company. */
-function companyLabourWhere(id: string, companyId: string) {
-  return { id, companyId, site: { companyId, deletedAt: null } }
+/** A worker of exactly `companyId` whose current site is in the principal's `scope`. */
+function companyLabourWhere(id: string, companyId: string, scope: Prisma.SiteWhereInput) {
+  return { id, companyId, site: scope }
 }
 
 function requiredName(raw: unknown, field: string): string {
@@ -90,7 +93,7 @@ export async function addMobileWorkerAction(formData: {
   siteId: string
   startTime?: string
 }) {
-  const { user, site } = await requireSiteMutation(String(formData?.siteId ?? ''), 'attendance.mark', 'LABOUR')
+  const { user, site } = await requireAssignedSiteMutation(String(formData?.siteId ?? ''), 'attendance.mark', 'LABOUR')
   const name = requiredName(formData.name, 'Name')
   const { trade, customTag } = parseTrade(formData.trade, formData.customTrade)
   const dailyWage = parseAmount(formData.dailyRate, 'daily rate', 0) || DEFAULT_DAILY_WAGE
@@ -131,7 +134,7 @@ export async function updateWorkerAction(formData: {
   siteId: string
   advance?: number
 }) {
-  const { user, site } = await requireSiteMutation(String(formData?.siteId ?? ''), 'labour.manage', 'LABOUR')
+  const { user, site, scope } = await requireAssignedSiteMutation(String(formData?.siteId ?? ''), 'labour.manage', 'LABOUR')
   const companyId = user.companyId
   const id = requiredName(formData.id, 'Labour')
   const name = requiredName(formData.name, 'Name')
@@ -141,7 +144,7 @@ export async function updateWorkerAction(formData: {
 
   const worker = await prisma.$transaction(async (tx) => {
     const existing = await tx.labour.findFirst({
-      where: companyLabourWhere(id, companyId),
+      where: companyLabourWhere(id, companyId, scope),
       select: { id: true, phone: true },
     })
     if (!existing) throw new Error(LABOUR_NOT_FOUND)
@@ -150,7 +153,7 @@ export async function updateWorkerAction(formData: {
     const phone = customTag ?? (existing.phone?.startsWith('CUSTOM_TRADE:') ? null : existing.phone ?? null)
 
     const updated = await tx.labour.updateMany({
-      where: companyLabourWhere(existing.id, companyId),
+      where: companyLabourWhere(existing.id, companyId, scope),
       data: { name, trade, phone, dailyWage, siteId: site.id },
     })
     if (updated.count !== 1) throw new Error(LABOUR_NOT_FOUND)
@@ -184,7 +187,7 @@ export async function updateWorkerAction(formData: {
 }
 
 export async function saveMobileAttendanceAction(records: { labourId: string; status: string; siteId: string; advance?: number, startTime?: string }[], dateIso?: string) {
-  const user = await requireAttendanceMutation()
+  const { user, scope } = await requireAttendanceScope()
   const companyId = user.companyId
   if (!Array.isArray(records)) throw new Error('Invalid attendance records')
 
@@ -207,12 +210,12 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
       startTime: parseStartTime(item.startTime),
     }))
 
-  // Every worker must be of this company on a live site, and each row must name the
-  // worker's own site; one bad row refuses the whole batch.
+  // Every worker must be of this company on a site in the principal's scope, and each row
+  // must name the worker's own site; one bad row refuses the whole batch.
   const labourIds = [...new Set(marked.map((item) => item.labourId))]
   const workers = labourIds.length > 0
     ? await prisma.labour.findMany({
-        where: { id: { in: labourIds }, companyId, site: { companyId, deletedAt: null } },
+        where: { id: { in: labourIds }, companyId, site: scope },
         select: { id: true, siteId: true },
       })
     : []
@@ -278,14 +281,16 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
 }
 
 export async function addExistingWorkerToRoster(labourId: string, siteId: string, startTime?: string) {
-  const { user, site } = await requireSiteMutation(String(siteId ?? ''), 'attendance.mark', 'LABOUR')
+  const { user, site, scope } = await requireAssignedSiteMutation(String(siteId ?? ''), 'attendance.mark', 'LABOUR')
   const companyId = user.companyId
   const start = parseStartTime(startTime)
   const today = startOfToday()
 
   const record = await prisma.$transaction(async (tx) => {
+    // The worker's current site must be in scope too: a field role may not pull a worker
+    // off a site it is not assigned to.
     const labour = await tx.labour.findFirst({
-      where: companyLabourWhere(String(labourId ?? ''), companyId),
+      where: companyLabourWhere(String(labourId ?? ''), companyId, scope),
       select: { id: true },
     })
     if (!labour) throw new Error(LABOUR_NOT_FOUND)
@@ -315,7 +320,7 @@ export async function addExistingWorkerToRoster(labourId: string, siteId: string
 
     // Update their default site assignment too
     const moved = await tx.labour.updateMany({
-      where: companyLabourWhere(labour.id, companyId),
+      where: companyLabourWhere(labour.id, companyId, scope),
       data: { siteId: site.id }
     })
     if (moved.count !== 1) throw new Error(LABOUR_NOT_FOUND)
@@ -335,7 +340,7 @@ export async function saveContractorAttendance(data: {
   dailyAdvance: number
   startTime?: string
 }) {
-  const { user, site } = await requireSiteMutation(String(data?.siteId ?? ''), 'attendance.mark', 'LABOUR')
+  const { user, site } = await requireAssignedSiteMutation(String(data?.siteId ?? ''), 'attendance.mark', 'LABOUR')
   const companyId = user.companyId
   const contractorName = requiredName(data.contractorName, 'Contractor name')
   const contractorType = typeof data.contractorType === 'string' ? data.contractorType.trim() : ''
@@ -404,13 +409,13 @@ export async function saveContractorAttendance(data: {
 }
 
 export async function removeLabourAttendanceAction(labourId: string, confirmationText?: string) {
-  const user = await requireAttendanceMutation()
+  const { user, scope } = await requireAttendanceScope()
   const companyId = user.companyId
 
   const today = startOfToday()
 
   const labour = await prisma.labour.findFirst({
-    where: companyLabourWhere(String(labourId ?? ''), companyId),
+    where: companyLabourWhere(String(labourId ?? ''), companyId, scope),
     select: { id: true, name: true, siteId: true, trade: true }
   })
 
@@ -445,7 +450,7 @@ export async function removeLabourAttendanceAction(labourId: string, confirmatio
 }
 
 export async function removeContractorAttendanceAction(attendanceId: string, confirmationText?: string) {
-  const user = await requireAttendanceMutation()
+  const { user, scope } = await requireAttendanceScope()
   const companyId = user.companyId
 
   // Find the record to reverse the advance amount if any
@@ -453,7 +458,7 @@ export async function removeContractorAttendanceAction(attendanceId: string, con
     where: {
       id: String(attendanceId ?? ''),
       companyId,
-      site: { companyId, deletedAt: null },
+      site: scope,
       subcontractor: { companyId },
     },
     include: { subcontractor: { select: { name: true, trade: true } } }
