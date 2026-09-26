@@ -1,31 +1,34 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { LabourTrade } from '@prisma/client'
 import { updateLabourAction } from '@/actions/labour'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export const dynamic = 'force-dynamic'
 
-export default async function EditLabourPage({ params }: { params: { id: string } }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+export default async function EditLabourPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  // Same live permission and module `updateLabourAction` enforces.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'labour.manage', module: 'LABOUR' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/labour/${id}/edit`)
+  const { companyId } = gate.access
 
+  // Exactly this worker of this company on a live site; anything else reads nothing more.
   const labour = await prisma.labour.findFirst({
-    where: { id: params.id, companyId },
+    where: { id, companyId, site: liveCompanySiteWhere(companyId) },
   })
 
   if (!labour) redirect('/labour')
 
   const sites = await prisma.site.findMany({
-    where: { companyId, deletedAt: null, status: 'ACTIVE' },
+    where: { ...liveCompanySiteWhere(companyId), status: 'ACTIVE' },
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   })
 
   const attendances = await prisma.labourAttendance.findMany({
-    where: { labourId: params.id }
+    where: { labourId: labour.id }
   })
 
   let totalAdvance = Number(labour.openingAdvance) || 0

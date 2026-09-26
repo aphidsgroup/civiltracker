@@ -1,23 +1,27 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { formatDate } from '@/lib/utils'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export const metadata = { title: 'Settings | Civil Tracker' }
 
 export default async function SettingsPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'company.view' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/settings')
+  const { companyId, can } = gate.access
+  // The team roster (names, emails, roles) is member management, not company info.
+  const canManageTeam = can('company.manage')
 
   const [company, members] = await Promise.all([
-    prisma.company.findUnique({ where: { id: companyId } }),
-    prisma.companyMember.findMany({
-      where: { companyId },
-      include: { user: { select: { id: true, name: true, email: true, isActive: true } } },
-      orderBy: { joinedAt: 'desc' },
-      take: 20,
-    }),
+    prisma.company.findFirst({ where: { id: companyId, deletedAt: null } }),
+    canManageTeam
+      ? prisma.companyMember.findMany({
+          where: { companyId },
+          include: { user: { select: { id: true, name: true, email: true, isActive: true } } },
+          orderBy: { joinedAt: 'desc' },
+          take: 20,
+        })
+      : Promise.resolve([]),
   ])
   const users = members.map(m => ({ id: m.userId, name: m.user?.name ?? '', email: m.user?.email ?? '', role: m.role, isActive: m.user?.isActive ?? true, createdAt: m.joinedAt }))
 
@@ -60,7 +64,7 @@ export default async function SettingsPage() {
       </div>
 
       {/* Team */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {canManageTeam && <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50/50">
           <h2 className="text-base font-bold text-gray-900 m-0">Team Members</h2>
         </div>
@@ -104,7 +108,7 @@ export default async function SettingsPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

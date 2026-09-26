@@ -76,6 +76,23 @@ export async function resolveTenantPageAccess(gate: TenantPageGate): Promise<Ten
   return { status: 'ok', access: { user: { ...user, companyId }, companyId, can, moduleEnabled } }
 }
 
+export type TenantPrincipalResult = { status: 'ok'; user: SessionUser & { companyId: string } } | TenantPageDenial
+
+/**
+ * Live tenant principal for a shell or menu that reads no tenant data of its own and so
+ * has no page permission to check. A principal `requireUser` cannot resolve goes to
+ * /login instead of throwing, SUPER_ADMIN goes to the platform dashboard and a CLIENT to
+ * its portal. Every data page below it still runs `resolveTenantPageAccess` itself.
+ */
+export async function resolveTenantPrincipal(): Promise<TenantPrincipalResult> {
+  const user = await requireUser().catch(() => null)
+  if (!user) return denied('/login')
+  if (user.role === 'SUPER_ADMIN') return denied('/super-admin/dashboard')
+  if (user.role === 'CLIENT') return denied(getRoleRedirect(user.role))
+  if (!user.companyId) return denied('/login')
+  return { status: 'ok', user: { ...user, companyId: user.companyId } }
+}
+
 /**
  * Leaves a denied page. A denial that would send the page back onto itself — a role whose
  * home is the page it may not read — answers not found instead of looping.
@@ -103,6 +120,17 @@ export { readsAssignedSitesOnly }
  */
 export async function assignedSiteWhere(access: TenantPageAccess): Promise<Prisma.SiteWhereInput> {
   return assignedSiteScope(access.user, access.companyId)
+}
+
+/**
+ * The ids of the sites a field role may see, for pages that read records through an
+ * action whose query they cannot narrow; `null` for every other role, which sees every
+ * live site of its company. A field role with no assignment gets an empty set.
+ */
+export async function assignedSiteIds(access: TenantPageAccess): Promise<ReadonlySet<string> | null> {
+  if (!readsAssignedSitesOnly(access.user.role)) return null
+  const sites = await prisma.site.findMany({ where: await assignedSiteWhere(access), select: { id: true } })
+  return new Set(sites.map((site) => site.id))
 }
 
 /** Bounded, validated page size from a `?limit=` search param. */

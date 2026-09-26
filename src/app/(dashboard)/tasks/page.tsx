@@ -1,6 +1,5 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { ListTodo, CircleDashed, Clock, CheckCircle2, AlertCircle } from 'lucide-react'
 
 const STATUS_COLOR: Record<string, string> = {
@@ -18,12 +17,12 @@ const STATUS_DOT: Record<string, string> = {
 }
 
 export default async function TasksPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'tasks.manage', module: 'TASKS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/tasks')
+  const { companyId } = gate.access
 
   const tasks = await prisma.task.findMany({
-    where: { companyId },
+    where: { companyId, site: liveCompanySiteWhere(companyId) },
     include: { site: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
   })

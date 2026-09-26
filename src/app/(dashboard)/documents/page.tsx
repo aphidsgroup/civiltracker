@@ -1,6 +1,5 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { FileText, FolderOpen } from 'lucide-react'
 
 const CAT_COLOR: Record<string, string> = {
@@ -13,12 +12,14 @@ const CAT_COLOR: Record<string, string> = {
 }
 
 export default async function DocumentsPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'documents.view', module: 'DOCUMENTS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/documents')
+  const { companyId } = gate.access
 
+  // Company-wide documents, and documents of a site the principal may see: a live site of
+  // this company, narrowed for a field role to its assigned sites.
   const docs = await prisma.document.findMany({
-    where: { companyId },
+    where: { companyId, OR: [{ siteId: null }, { site: await assignedSiteWhere(gate.access) }] },
     include: { site: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
   })

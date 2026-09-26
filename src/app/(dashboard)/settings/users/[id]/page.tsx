@@ -1,6 +1,6 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect, notFound } from 'next/navigation'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { UserMinus, Eye } from 'lucide-react'
@@ -24,21 +24,24 @@ async function handlePasswordReset(formData: FormData) {
 }
 
 export default async function EditUserPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-
   const resolvedParams = await params
   const memberId = resolvedParams.id
 
-  const member = await prisma.companyMember.findUnique({
-    where: { id: memberId, companyId: session.user.companyId },
+  // Same live permission the member actions on this page enforce.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'company.manage' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/settings/users/${memberId}`)
+  const { companyId } = gate.access
+
+  // A membership of another company answers exactly like a missing one.
+  const member = await prisma.companyMember.findFirst({
+    where: { id: memberId, companyId },
     include: { user: true },
   })
 
   if (!member) return notFound()
 
   const sites = await prisma.site.findMany({
-    where: { companyId: session.user.companyId, status: 'ACTIVE' },
+    where: { ...liveCompanySiteWhere(companyId), status: 'ACTIVE' },
     select: { id: true, name: true },
   })
 

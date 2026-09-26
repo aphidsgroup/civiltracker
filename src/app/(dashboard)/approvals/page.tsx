@@ -1,5 +1,3 @@
-import { auth } from '@/lib/auth'
-import { redirect } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import ResponsiveTable from '@/components/responsive/ResponsiveTable'
@@ -7,16 +5,19 @@ import MobileCardList from '@/components/responsive/MobileCardList'
 import { getApprovalsAction, getApprovalStatsAction } from '@/actions/approvals'
 import { MessageSquare, ArrowRight } from 'lucide-react'
 import ApprovalInlineActions from '@/components/approvals/ApprovalInlineActions'
-import { hasPermission } from '@/lib/permissions'
-import type { Role } from '@prisma/client'
+import { canApprove as roleCanApprove } from '@/lib/permissions'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export default async function ApprovalsPage({
   searchParams,
 }: {
   searchParams?: Promise<{ status?: string }>
 }) {
-  const session = await auth()
-  if (!session?.user?.companyId && session?.user?.role !== 'SUPER_ADMIN') redirect('/login')
+  // Same live permission the approval read actions enforce, plus the module the approval
+  // API routes enforce, before any approval query.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'approvals.view', module: 'APPROVALS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/approvals')
+  const { user, can } = gate.access
 
   const params = searchParams ? await searchParams : {}
   const activeStatus = params.status || 'ALL'
@@ -26,9 +27,9 @@ export default async function ApprovalsPage({
     getApprovalStatsAction(),
   ])
 
-  const userRole = session.user.role as Role
-  const canApprove = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'PROJECT_MANAGER', 'ACCOUNTANT', 'PURCHASE_MANAGER'].includes(userRole)
-  const canPay = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'ACCOUNTANT'].includes(userRole) || hasPermission(userRole, 'salary.markPaid') || hasPermission(userRole, 'payments.manage')
+  // Button hints from the live role; each transition action re-checks on its own.
+  const canApprove = roleCanApprove(user.role)
+  const canPay = can('payments.manage') || can('salary.markPaid')
 
   const statusColors: Record<string, string> = {
     PENDING: 'bg-amber-100 text-amber-800',

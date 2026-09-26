@@ -1,6 +1,5 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
 import ResponsiveTable from '@/components/responsive/ResponsiveTable'
@@ -11,12 +10,13 @@ export const metadata = { title: 'Materials | Civil Tracker' }
 export const dynamic = 'force-dynamic'
 
 export default async function MaterialsPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'materials.view', module: 'MATERIALS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/materials')
+  const { companyId } = gate.access
 
+  // A field role sees only the stock of its assigned live sites.
   const materials = await prisma.material.findMany({
-    where: { companyId, isActive: true, site: { deletedAt: null } },
+    where: { companyId, isActive: true, site: await assignedSiteWhere(gate.access) },
     include: { site: { select: { name: true } } },
     orderBy: { name: 'asc' },
   })

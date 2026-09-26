@@ -1,7 +1,6 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { Shield } from 'lucide-react'
 import ModuleAccessSelector from '@/components/ui/ModuleAccessSelector'
 import { inviteEmployee } from '@/actions/users'
@@ -41,12 +40,13 @@ const roleDescriptions: Record<string, { label: string; desc: string; access: st
 }
 
 export default async function InviteUserPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  // Same live permission `inviteEmployee` enforces.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'company.manage' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/settings/users/invite')
+  const { companyId } = gate.access
 
   const sites = await prisma.site.findMany({
-    where: { companyId, deletedAt: null, status: 'ACTIVE' },
+    where: { ...liveCompanySiteWhere(companyId), status: 'ACTIVE' },
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   })
