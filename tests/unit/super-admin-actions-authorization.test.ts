@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   redirect: vi.fn(),
   hash: vi.fn(),
   prisma: {
-    user: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    user: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn(), delete: vi.fn() },
     company: { findUnique: vi.fn(), delete: vi.fn() },
     companyMember: { findFirst: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -63,6 +63,7 @@ const ACTIONS: Array<[string, () => Promise<unknown>]> = [
 
 function expectNoTargetPrismaCalls() {
   expect(mocks.prisma.user.update).not.toHaveBeenCalled()
+  expect(mocks.prisma.user.updateMany).not.toHaveBeenCalled()
   expect(mocks.prisma.user.delete).not.toHaveBeenCalled()
   expect(mocks.prisma.company.findUnique).not.toHaveBeenCalled()
   expect(mocks.prisma.company.delete).not.toHaveBeenCalled()
@@ -92,6 +93,7 @@ beforeEach(() => {
   mocks.prisma.company.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
     where.id === TARGET_COMPANY.id ? TARGET_COMPANY : null)
   mocks.prisma.auditLog.create.mockResolvedValue({})
+  mocks.prisma.user.updateMany.mockResolvedValue({ count: 1 })
   // The destructive actions run on the transaction client; here it is the same mock.
   mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
   mocks.prisma.companyMember.findFirst.mockResolvedValue({
@@ -146,16 +148,22 @@ describe('super-admin actions: legitimate live super admin', () => {
   it('changes only the live principal password and audits as the live principal', async () => {
     mocks.auth.mockResolvedValue(session({ id: 'sa_1', role: 'SUPER_ADMIN', name: 'Forged Name' }))
     await expect(actions.changeSuperAdminPassword('new-secret')).resolves.toEqual({ success: true })
-    expect(mocks.prisma.user.update).toHaveBeenCalledWith({ where: { id: 'sa_1' }, data: { passwordHash: 'hashed' } })
-    expect(mocks.logActivity).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 'sa_1', companyId: null, recordId: 'sa_1', description: expect.stringMatching(/^Root /),
-    }))
+    expect(mocks.prisma.user.update).not.toHaveBeenCalled()
+    expect(mocks.prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 'sa_1', role: 'SUPER_ADMIN', isActive: true }, data: { passwordHash: 'hashed' },
+    })
+    expect(mocks.logActivity).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      userId: 'sa_1', companyId: null, module: 'PASSWORD_RESET', recordId: 'sa_1',
+      after: { _description: expect.stringMatching(/^Root /) },
+    }) })
   })
 
   it('rejects a short password before hashing or writing', async () => {
     await expect(actions.changeSuperAdminPassword('123')).rejects.toThrow(/at least 6/)
     expect(mocks.hash).not.toHaveBeenCalled()
     expect(mocks.prisma.user.update).not.toHaveBeenCalled()
+    expect(mocks.prisma.user.updateMany).not.toHaveBeenCalled()
   })
 
   it('deletes a company in any tenant and audits as the live principal', async () => {

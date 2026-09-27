@@ -5,33 +5,42 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { logActivity } from '@/lib/audit'
 import type { Prisma } from '@prisma/client'
 
 // Every action resolves the live, active SUPER_ADMIN from the database before touching
 // data and acts as that principal; the session's role and name claims are never trusted.
 
+// The credential write is guarded on the live SUPER_ADMIN row and shares a transaction with
+// the actor re-read and the required audit record: an audit failure rolls the password
+// back, and revalidation runs only after the commit.
 export async function changeSuperAdminPassword(password: string) {
   const actor = await requireSuperAdmin()
 
-  if (!password || password.length < 6) {
+  if (typeof password !== 'string' || password.length < 6) {
     throw new Error('Password must be at least 6 characters long')
   }
 
   const hashedPassword = await bcrypt.hash(password, 10)
 
-  await prisma.user.update({
-    where: { id: actor.id },
-    data: { passwordHash: hashedPassword }
-  })
+  await prisma.$transaction(async (tx) => {
+    await requireLiveSuperAdminInTx(tx, actor.id)
 
-  await logActivity({
-    userId: actor.id,
-    companyId: null,
-    action: 'UPDATE',
-    module: 'PASSWORD_RESET',
-    recordId: actor.id,
-    description: `${actor.name ?? actor.email} changed their own Super Admin password`,
+    const result = await tx.user.updateMany({
+      where: { id: actor.id, role: 'SUPER_ADMIN', isActive: true },
+      data: { passwordHash: hashedPassword },
+    })
+    if (result.count !== 1) throw new Error('FORBIDDEN: Super admin access required')
+
+    await tx.auditLog.create({
+      data: {
+        userId: actor.id,
+        companyId: null,
+        action: 'UPDATE',
+        module: 'PASSWORD_RESET',
+        recordId: actor.id,
+        after: { _description: `${actor.name ?? actor.email} changed their own Super Admin password` },
+      },
+    })
   })
 
   revalidatePath('/super-admin/settings')

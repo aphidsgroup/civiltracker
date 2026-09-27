@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
     company: { findUnique: vi.fn() },
     companyMember: { findFirst: vi.fn() },
     site: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    auditLog: { create: vi.fn() },
+    $transaction: vi.fn(),
   },
 }))
 
@@ -62,6 +64,9 @@ beforeEach(() => {
   // A bare-id lookup returns deleted and foreign rows, exactly like the real findUnique.
   mocks.prisma.site.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => SITES.find((s) => s.id === where.id) ?? null)
   mocks.prisma.site.update.mockResolvedValue({})
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
+  // The audited update runs on the transaction client; here it is the same mock.
+  mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
 })
 
 describe('updateSite', () => {
@@ -101,6 +106,7 @@ describe('updateSite', () => {
     mocks.prisma.site.updateMany.mockResolvedValue({ count: 0 })
     await expect(updateSite('site_1', DATA)).rejects.toThrow(/Site not found or access denied/)
     expect(mocks.logActivity).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   })
 
   it('updates only the live site of the live company with a guarded write', async () => {
@@ -109,6 +115,9 @@ describe('updateSite', () => {
     const call = mocks.prisma.site.updateMany.mock.calls[0][0]
     expect(call.where).toEqual({ id: 'site_1', companyId: 'company_1', deletedAt: null })
     expect(call.data).toMatchObject({ name: 'Tower A2', location: 'Chennai', budget: 1000 })
-    expect(mocks.logActivity).toHaveBeenCalledWith(expect.objectContaining({ companyId: 'company_1', recordId: 'site_1', action: 'UPDATE' }))
+    expect(mocks.logActivity).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ companyId: 'company_1', recordId: 'site_1', action: 'UPDATE', module: 'SITE' }),
+    })
   })
 })

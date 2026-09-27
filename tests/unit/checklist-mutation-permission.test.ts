@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => ({
     checklistTemplate: { findFirst: vi.fn() },
     projectChecklist: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
     projectChecklistCategory: { findFirst: vi.fn(), update: vi.fn() },
-    projectChecklistTask: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), deleteMany: vi.fn(), count: vi.fn() },
+    projectChecklistTask: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), delete: vi.fn(), deleteMany: vi.fn(), count: vi.fn() },
     sitePhoto: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), count: vi.fn() },
     auditLog: { create: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() },
   },
@@ -78,6 +78,7 @@ beforeEach(() => {
     category: { name: 'Slab', stage: { name: 'Structure', checklistId: 'checklist_1' } },
     _count: { sitePhotos: 0, attachments: 0 },
   })
+  mocks.prisma.projectChecklistTask.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.projectChecklistTask.deleteMany.mockResolvedValue({ count: 1 })
   mocks.prisma.projectChecklistTask.count.mockResolvedValue(0)
   mocks.prisma.sitePhoto.count.mockResolvedValue(0)
@@ -105,7 +106,7 @@ function writeCount() {
     mocks.prisma.projectChecklist.create, mocks.prisma.projectChecklist.delete, mocks.prisma.projectChecklist.deleteMany,
     mocks.prisma.projectChecklistCategory.update,
     mocks.prisma.projectChecklistTask.create, mocks.prisma.projectChecklistTask.update, mocks.prisma.projectChecklistTask.delete,
-    mocks.prisma.projectChecklistTask.deleteMany,
+    mocks.prisma.projectChecklistTask.updateMany, mocks.prisma.projectChecklistTask.deleteMany,
     mocks.prisma.sitePhoto.create, mocks.prisma.auditLog.create, mocks.prisma.auditLog.deleteMany,
   ].reduce((sum, fn) => sum + fn.mock.calls.length, 0)
 }
@@ -200,10 +201,30 @@ describe('client read and photo confirmation behavior is preserved', () => {
     mocks.requireUser.mockResolvedValue(principal('CLIENT'))
     mocks.prisma.sitePhoto.findFirst.mockResolvedValue({
       id: 'photo_1', companyId: 'company_1', siteId: 'site_1', taskId: 'task_1',
-      site: { companyId: 'company_1' },
+      site: { id: 'site_1', companyId: 'company_1' },
       task: { category: { stage: { checklist: { siteId: 'site_1', companyId: 'company_1' } } } },
     })
+    mocks.prisma.projectChecklistTask.findFirst.mockResolvedValue({
+      id: 'task_1', name: 'Pour slab', status: 'PENDING', isClientDone: false, completedAt: null,
+    })
     await expect(actions.clientApproveTaskPhoto('photo_1')).resolves.toEqual({ success: true })
-    expect(mocks.prisma.projectChecklistTask.update).toHaveBeenCalledTimes(1)
+    // The photo is only found through the CLIENT's own assigned site.
+    expect(mocks.prisma.sitePhoto.findFirst.mock.calls[0][0].where).toMatchObject({
+      id: 'photo_1', approvedForClient: true, site: { clientUserId: 'user_client', companyId: 'company_1', deletedAt: null },
+    })
+    // The confirmation is a guarded compare-and-set on the unchanged, unconfirmed task.
+    expect(mocks.prisma.projectChecklistTask.update).not.toHaveBeenCalled()
+    expect(mocks.prisma.projectChecklistTask.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.prisma.projectChecklistTask.updateMany.mock.calls[0][0]).toMatchObject({
+      where: {
+        id: 'task_1', isClientDone: false, status: 'PENDING',
+        category: { stage: { checklist: { siteId: 'site_1', companyId: 'company_1' } } },
+      },
+      data: { isClientDone: true, status: 'COMPLETED' },
+    })
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prisma.auditLog.create.mock.calls[0][0].data).toMatchObject({
+      userId: 'user_client', companyId: 'company_1', module: 'CHECKLIST', action: 'CLIENT_APPROVE', recordId: 'site_1',
+    })
   })
 })

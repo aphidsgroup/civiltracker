@@ -14,8 +14,8 @@ import type { Row } from './support/prisma-where'
  * of an explicit allowlist are written, each normalized, and any assignee must be an
  * active member of the live company, all before the first write.
  *
- * `@/lib/permissions`, `@/lib/auth/require-module`, `@/lib/auth/site-mutation` and
- * `@/lib/validation/sites` are real.
+ * `@/lib/permissions`, `@/lib/auth/require-module`, `@/lib/auth/site-mutation`,
+ * `@/lib/validation/sites` and `@/lib/sites/update-site` are real.
  */
 const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(),
@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
     companyMember: { findFirst: vi.fn(), findMany: vi.fn() },
     site: { findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
+    $transaction: vi.fn(),
   },
 }))
 
@@ -79,6 +80,9 @@ beforeEach(() => {
   const sites = inMemoryDelegate(SITES)
   mocks.prisma.site.findFirst.mockImplementation(sites.findFirst)
   mocks.prisma.site.updateMany.mockResolvedValue({ count: 1 })
+  mocks.prisma.auditLog.create.mockResolvedValue({ id: 'audit_1' })
+  // The audited update runs on the transaction client; here it is the same mock.
+  mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
   mocks.prisma.companyMember.findMany.mockImplementation(async ({ where }: { where: MemberWhere }) =>
     MEMBERSHIPS.filter((m) =>
       m.companyId === where.companyId &&
@@ -176,7 +180,10 @@ describe('updateSite input validation', () => {
       assignedEngineerId: null,
     })
     expect(mocks.prisma.companyMember.findMany.mock.calls[0][0].where.userId).toEqual({ in: ['user_pm'] })
-    expect(mocks.logActivity).toHaveBeenCalledWith(expect.objectContaining({ companyId: 'company_1', recordId: 'site_1', action: 'UPDATE' }))
+    expect(mocks.logActivity).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ companyId: 'company_1', recordId: 'site_1', action: 'UPDATE', module: 'SITE' }),
+    })
   })
 
   it('leaves unsent fields untouched instead of nulling them', async () => {

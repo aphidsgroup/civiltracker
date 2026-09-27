@@ -9,6 +9,7 @@ import {
   requireChecklistSite,
   requireChecklistTask,
 } from '@/lib/auth/checklist-site'
+import { activeClientSiteWhere } from '@/lib/auth/client-portal'
 import { requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
 import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
@@ -441,56 +442,73 @@ export async function rejectPhotoAction(photoId: string) {
   return { success: true }
 }
 
-// Client confirms they have seen / accepted a task photo → marks task completed
+const CLIENT_PHOTO_NOT_FOUND = 'Photo not found or access denied'
+
+/*
+ * Client confirms a task photo they were shown, marking its task completed and
+ * client-done. The photo is re-read on the transaction client: approved for the client,
+ * on an active site of the client's live company that is explicitly assigned to them.
+ * Its task must be on that site's checklist and not yet client-confirmed. The guarded
+ * write repeats that binding and the observed state and must match exactly one row, and
+ * the required CHECKLIST CLIENT_APPROVE audit record shares the transaction, so an audit
+ * failure rolls the confirmation back.
+ */
 export async function clientApproveTaskPhoto(photoId: string) {
   const user = await requireUser()
   if (user.role !== 'CLIENT') throw new Error('FORBIDDEN: Client portal access required')
+  if (!user.companyId) throw new Error('FORBIDDEN: Tenant context required')
+  if (typeof photoId !== 'string' || !photoId || photoId.length > 64) throw new Error(CLIENT_PHOTO_NOT_FOUND)
+  const companyId = user.companyId
 
-  const photo = await prisma.sitePhoto.findFirst({
-    where: {
-      id: photoId,
-      approvedForClient: true,
-      site: { clientUserId: user.id, deletedAt: null },
-    },
-    include: {
-      site: { select: { companyId: true } },
-      task: {
-        include: {
-          category: {
-            include: {
-              stage: { include: { checklist: { select: { siteId: true, companyId: true } } } },
-            },
-          },
-        },
+  await prisma.$transaction(async (tx) => {
+    const photo = await tx.sitePhoto.findFirst({
+      where: {
+        id: photoId,
+        approvedForClient: true,
+        site: { ...activeClientSiteWhere(user.id), companyId },
       },
-    },
+      select: { id: true, siteId: true, companyId: true, taskId: true, site: { select: { id: true, companyId: true } } },
+    })
+    if (!photo) throw new Error(CLIENT_PHOTO_NOT_FOUND)
+    if (photo.companyId !== photo.site.companyId) {
+      throw new Error('Photo company does not match its authorized site')
+    }
+    if (!photo.taskId) throw new Error('Photo is not linked to a checklist task')
+
+    const taskOnSite = {
+      id: photo.taskId,
+      category: { stage: { checklist: { siteId: photo.site.id, companyId: photo.site.companyId } } },
+    }
+    const task = await tx.projectChecklistTask.findFirst({
+      where: taskOnSite,
+      select: { id: true, name: true, status: true, isClientDone: true, completedAt: true },
+    })
+    if (!task) throw new Error('Photo task is not linked to the authorized site')
+    if (task.isClientDone) throw new Error('Task is already confirmed by the client')
+
+    // A task staff already completed keeps its completion time.
+    const completedAt = task.status === 'COMPLETED' && task.completedAt ? task.completedAt : new Date()
+    const result = await tx.projectChecklistTask.updateMany({
+      where: { ...taskOnSite, isClientDone: false, status: task.status },
+      data: { isClientDone: true, status: 'COMPLETED', completedAt },
+    })
+    if (result.count !== 1) throw new Error('Task changed while it was being confirmed; reload and try again')
+
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        companyId: photo.site.companyId,
+        module: 'CHECKLIST',
+        action: 'CLIENT_APPROVE',
+        recordId: photo.site.id,
+        before: { taskId: task.id, siteId: photo.site.id, photoId: photo.id, status: task.status, isClientDone: false },
+        after: { taskId: task.id, taskName: task.name, siteId: photo.site.id, photoId: photo.id, status: 'COMPLETED', isClientDone: true },
+      },
+    })
   })
 
-  if (!photo) throw new Error('Photo not found or access denied')
-  if (photo.companyId !== photo.site.companyId) {
-    throw new Error('Photo company does not match its authorized site')
-  }
-  const checklist = photo.task?.category.stage.checklist
-  if (photo.taskId && (!checklist || checklist.siteId !== photo.siteId || checklist.companyId !== photo.companyId)) {
-    throw new Error('Photo task is not linked to the authorized site')
-  }
-
-  // Mark the linked task as client-confirmed
-  if (photo.taskId) {
-    await prisma.projectChecklistTask.update({
-      where: { id: photo.taskId },
-      data: {
-        isClientDone: true,
-        status: 'COMPLETED',
-        completedAt: new Date()
-      }
-    })
-  }
-
-  if (photo.siteId) {
-    revalidatePath(`/client-portal`)
-    revalidatePath(`/client-portal/photos`)
-  }
+  revalidatePath(`/client-portal`)
+  revalidatePath(`/client-portal/photos`)
   return { success: true }
 }
 

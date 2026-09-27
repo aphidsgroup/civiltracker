@@ -3,7 +3,8 @@ import { CompanyStatus, Role } from '@prisma/client'
 import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
 
-const activeClientSiteWhere = (clientUserId: string) => ({
+/** Live sites explicitly assigned to `clientUserId`, of a company that is not suspended. */
+export const activeClientSiteWhere = (clientUserId: string) => ({
   clientUserId,
   deletedAt: null,
   company: {
