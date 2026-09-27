@@ -100,23 +100,24 @@ export default async function EditVendorPage({ params }: { params: Promise<{ id:
             </div>
 
             <div className="grid grid-cols-2 gap-4">
+              {/* The payable is changed only by a confirmed adjustment or settlement on the vendor list. */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Amount Payable (₹)</label>
-                <input
-                  name="amountPayable" type="number" step="0.01" defaultValue={Number(vendor.amountPayable) || ''}
-                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
-                />
+                <div className="px-4 py-2.5 text-sm font-bold text-slate-700">{Number(vendor.amountPayable).toLocaleString('en-IN')}</div>
               </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Status</label>
-                <select
-                  name="isActive" required defaultValue={vendor.isActive ? 'true' : 'false'}
-                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all bg-white"
-                >
-                  <option value="true">Active</option>
-                  <option value="false">Inactive</option>
-                </select>
-              </div>
+              {/* Deactivation goes through the confirmed Remove Vendor action; only reactivation is offered here. */}
+              {!vendor.isActive && (
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Status</label>
+                  <select
+                    name="isActive" required defaultValue="false"
+                    className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all bg-white"
+                  >
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="pt-4 flex justify-end">

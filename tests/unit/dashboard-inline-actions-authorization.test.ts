@@ -153,7 +153,7 @@ const ACTIONS: Array<{ name: string; run: () => Promise<unknown>; permitted: str
   { name: 'createMaterialAction', run: () => materials.createMaterialAction(form(MATERIAL_FORM)), permitted: 'PROJECT_MANAGER', module: 'MATERIALS' },
   { name: 'createPurchaseOrderAction', run: () => purchase.createPurchaseOrderAction(form(PO_FORM)), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
   { name: 'createVendorAction', run: () => vendors.createVendorAction(form(VENDOR_FORM)), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
-  { name: 'updateVendorAction', run: () => vendors.updateVendorAction(form({ id: 'vendor_1', ...VENDOR_FORM, amountPayable: '0', isActive: 'true' })), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
+  { name: 'updateVendorAction', run: () => vendors.updateVendorAction(form({ id: 'vendor_1', ...VENDOR_FORM })), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
   { name: 'markVendorPaidAction', run: () => vendors.markVendorPaidAction(form(SETTLE_FORM)), permitted: 'ACCOUNTANT', module: 'MATERIALS' },
   { name: 'deactivateVendorAction', run: () => vendors.deactivateVendorAction(form({ id: 'vendor_1', dangerConfirmText: 'Sri Ram Traders' })), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
   { name: 'createSubcontractorAction', run: () => subcontractors.createSubcontractorAction(form(SUB_FORM)), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
@@ -394,7 +394,7 @@ describe('labour list actions', () => {
 
 describe('vendor and subcontractor list actions', () => {
   it.each(['vendor_foreign', 'vendor_deleted_site', 'vendor_missing'])('vendor writes refuse %s', async (id) => {
-    await expect(vendors.updateVendorAction(form({ id, ...VENDOR_FORM, amountPayable: '0', isActive: 'true' }))).rejects.toThrow(/Vendor not found/)
+    await expect(vendors.updateVendorAction(form({ id, ...VENDOR_FORM }))).rejects.toThrow(/Vendor not found/)
     mocks.requireUser.mockResolvedValue(principal('ACCOUNTANT'))
     await expect(vendors.markVendorPaidAction(form({ ...SETTLE_FORM, id, dangerConfirmText: 'Rival' }))).rejects.toThrow(/Vendor not found/)
     mocks.requireUser.mockResolvedValue(principal('PURCHASE_MANAGER'))
@@ -407,10 +407,18 @@ describe('vendor and subcontractor list actions', () => {
     expectNoWrites()
   })
 
-  it('vendor writes are scoped to the live company', async () => {
-    await vendors.updateVendorAction(form({ id: 'vendor_site', ...VENDOR_FORM, amountPayable: '10', isActive: 'false' }))
+  it('vendor profile writes are scoped to the live company and never touch the payable or status', async () => {
+    await vendors.updateVendorAction(form({ id: 'vendor_site', ...VENDOR_FORM, name: 'Site Vendor' }))
     expect(mocks.prisma.vendor.updateMany.mock.calls[0][0].where).toMatchObject({ id: 'vendor_site', companyId: 'company_1' })
-    expect(mocks.prisma.vendor.updateMany.mock.calls[0][0].data).toMatchObject({ amountPayable: 10, isActive: false })
+    expect(mocks.prisma.vendor.updateMany.mock.calls[0][0].data).not.toHaveProperty('amountPayable')
+    expect(mocks.prisma.vendor.updateMany.mock.calls[0][0].data).not.toHaveProperty('isActive')
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('vendor update refuses a changed payable or a deactivation', async () => {
+    await expect(vendors.updateVendorAction(form({ id: 'vendor_site', ...VENDOR_FORM, amountPayable: '10' }))).rejects.toThrow(/confirmed adjustment/)
+    await expect(vendors.updateVendorAction(form({ id: 'vendor_site', ...VENDOR_FORM, isActive: 'false' }))).rejects.toThrow(/Remove Vendor/)
+    expectNoWrites()
   })
 
   it.each(['sub_foreign', 'sub_deleted_site', 'sub_missing'])('subcontractor writes refuse %s', async (id) => {

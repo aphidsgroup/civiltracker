@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { Plus, Truck, AlertCircle, CheckCircle2, DollarSign } from 'lucide-react'
 import { VendorCardList } from './VendorCardList'
-import { deactivateVendorAction, markVendorPaidAction, updateVendorAction } from '@/actions/vendors'
+import { adjustVendorPayableAction, deactivateVendorAction, markVendorPaidAction, updateVendorAction } from '@/actions/vendors'
 import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export const dynamic = 'force-dynamic'
@@ -92,6 +92,7 @@ export default async function VendorsPage() {
             vendors={rows}
             updateAction={updateVendorAction}
             markPaidAction={markVendorPaidAction}
+            adjustPayableAction={adjustVendorPayableAction}
             deactivateAction={deactivateVendorAction}
           />
         )}

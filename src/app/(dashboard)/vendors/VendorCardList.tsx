@@ -22,6 +22,7 @@ type Props = {
   vendors: VendorRow[]
   updateAction: (formData: FormData) => Promise<void>
   markPaidAction: (formData: FormData) => Promise<void>
+  adjustPayableAction: (formData: FormData) => Promise<void>
   deactivateAction: (formData: FormData) => Promise<void>
 }
 
@@ -31,10 +32,11 @@ function fmt(n: number) {
   return '₹' + n.toLocaleString('en-IN')
 }
 
-function VendorCard({ vendor, updateAction, markPaidAction, deactivateAction }: {
+function VendorCard({ vendor, updateAction, markPaidAction, adjustPayableAction, deactivateAction }: {
   vendor: VendorRow
   updateAction: (fd: FormData) => Promise<void>
   markPaidAction: (fd: FormData) => Promise<void>
+  adjustPayableAction: (fd: FormData) => Promise<void>
   deactivateAction: (fd: FormData) => Promise<void>
 }) {
   const [open, setOpen] = useState(false)
@@ -46,8 +48,6 @@ function VendorCard({ vendor, updateAction, markPaidAction, deactivateAction }: 
   const [category, setCategory] = useState(vendor.category ?? '')
   const [address, setAddress] = useState(vendor.address ?? '')
   const [paymentTerms, setPaymentTerms] = useState(vendor.paymentTerms ?? '')
-  const [amountPayable, setAmountPayable] = useState(String(vendor.amountPayable))
-  const [status, setStatus] = useState(vendor.isActive ? 'Active' : 'Inactive')
 
   const isPending = vendor.amountPayable > 0
 
@@ -62,8 +62,6 @@ function VendorCard({ vendor, updateAction, markPaidAction, deactivateAction }: 
       fd.append('category', category)
       fd.append('address', address)
       fd.append('paymentTerms', paymentTerms)
-      fd.append('amountPayable', amountPayable)
-      fd.append('isActive', status === 'Active' ? 'true' : 'false')
       await updateAction(fd)
       setOpen(false)
     })
@@ -81,6 +79,24 @@ function VendorCard({ vendor, updateAction, markPaidAction, deactivateAction }: 
       fd.append('dangerConfirmText', typed)
       fd.append('reason', reason)
       await markPaidAction(fd)
+    })
+  }
+
+  const handleAdjustPayable = () => {
+    const amount = window.prompt(`New payable balance for "${vendor.name}" (currently ${fmt(vendor.amountPayable)}):`)
+    if (amount === null) return
+    const typed = window.prompt(`Type "${vendor.name}" to change the payable balance.`)
+    if (typed === null) return
+    const reason = window.prompt('Reason / reference for this adjustment (required):')
+    if (reason === null) return
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.append('id', vendor.id)
+      fd.append('amount', amount)
+      fd.append('expectedAmount', String(vendor.amountPayable))
+      fd.append('dangerConfirmText', typed)
+      fd.append('reason', reason)
+      await adjustPayableAction(fd)
     })
   }
 
@@ -179,15 +195,13 @@ function VendorCard({ vendor, updateAction, markPaidAction, deactivateAction }: 
               <input value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)} placeholder="e.g. Net 30" className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Status</label>
-              <select value={status} onChange={e => setStatus(e.target.value)} className={inputCls}>
-                <option>Active</option>
-                <option>Inactive</option>
-              </select>
-            </div>
-            <div>
               <label className={labelCls}>Amount Payable (₹)</label>
-              <input type="number" step="0.01" min="0" value={amountPayable} onChange={e => setAmountPayable(e.target.value)} className={inputCls} />
+              <div className="flex items-center gap-2 py-2">
+                <span className="text-sm font-bold text-slate-700">{fmt(vendor.amountPayable)}</span>
+                <button type="button" onClick={handleAdjustPayable} disabled={pending} className="text-xs font-bold text-[#fc6e20] hover:underline disabled:opacity-50">
+                  Adjust
+                </button>
+              </div>
             </div>
             <div className="col-span-2 md:col-span-3">
               <label className={labelCls}>Address</label>
@@ -221,7 +235,7 @@ function VendorCard({ vendor, updateAction, markPaidAction, deactivateAction }: 
   )
 }
 
-export function VendorCardList({ vendors, updateAction, markPaidAction, deactivateAction }: Props) {
+export function VendorCardList({ vendors, updateAction, markPaidAction, adjustPayableAction, deactivateAction }: Props) {
   return (
     <div className="space-y-3">
       {vendors.map(v => (
@@ -230,6 +244,7 @@ export function VendorCardList({ vendors, updateAction, markPaidAction, deactiva
           vendor={v}
           updateAction={updateAction}
           markPaidAction={markPaidAction}
+          adjustPayableAction={adjustPayableAction}
           deactivateAction={deactivateAction}
         />
       ))}

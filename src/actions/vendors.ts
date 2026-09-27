@@ -4,13 +4,15 @@ import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { auditLogData } from '@/lib/audit-data'
+import { bindOptionalSite, optionalText, requiredText, requireTenantMutation } from '@/lib/auth/site-mutation'
 import {
-  bindOptionalSite,
-  optionalText,
-  parseNonNegativeAmount,
-  requiredText,
-  requireTenantMutation,
-} from '@/lib/auth/site-mutation'
+  MAX_AMOUNT_14_2,
+  confirmationText,
+  paise,
+  parseAmountText,
+  parseFinancialReason,
+  rupeeDelta,
+} from '@/lib/validation/financial-mutations'
 
 const VENDOR_NOT_FOUND = 'FORBIDDEN: Vendor not found or access denied'
 
@@ -51,49 +53,128 @@ export async function createVendorAction(formData: FormData) {
   redirect('/vendors')
 }
 
-/* Edits a vendor's master data; the vendor is bound to the live company before the write. */
+const VENDOR_CHANGED = 'Vendor changed. Refresh and retry.'
+const VENDOR_PAYABLE_NOT_PROFILE = 'Vendor payable changes only through a confirmed adjustment.'
+
+/*
+ * Edits a vendor's profile. Live `materials.update` + MATERIALS is checked before any read.
+ * The payable balance is not a profile field: a payable the form echoes back must equal
+ * the stored balance, anything else is refused (see `adjustVendorPayableAction`). An
+ * absent status is left as is; a reactivation is allowed, a deactivation must go through
+ * the confirmed `deactivateVendorAction`. The re-read of the bound vendor, the write
+ * guarded on its status and the before/after audit share one transaction.
+ */
 export async function updateVendorAction(formData: FormData) {
   const user = await requireTenantMutation('materials.update', 'MATERIALS')
   const companyId = user.companyId
 
   const id = requiredText(formData.get('id'), 'Vendor')
-  const name = requiredText(formData.get('name'), 'Vendor name')
-  const amountPayable = parseNonNegativeAmount(formData.get('amountPayable'), 'amount payable', 0)
-  const isActive = parseActive(formData.get('isActive'))
+  const profile = {
+    name: requiredText(formData.get('name'), 'Vendor name'),
+    phone: optionalText(formData.get('phone')),
+    email: optionalText(formData.get('email')),
+    gst: optionalText(formData.get('gst')),
+    category: optionalText(formData.get('category')),
+    address: optionalText(formData.get('address')),
+    paymentTerms: optionalText(formData.get('paymentTerms')),
+  }
+  const payableText = optionalText(formData.get('amountPayable'))
+  const echoedPayable = payableText === null ? null : parseAmountText(payableText, 'amount payable', { max: MAX_AMOUNT_14_2 })
+  const isActive = formData.has('isActive') ? parseActive(formData.get('isActive')) : null
 
-  const vendor = await prisma.vendor.findFirst({ where: boundVendorWhere(id, companyId), select: { id: true } })
-  if (!vendor) throw new Error(VENDOR_NOT_FOUND)
+  await prisma.$transaction(async (tx) => {
+    const vendor = await tx.vendor.findFirst({
+      where: boundVendorWhere(id, companyId),
+      select: { id: true, name: true, phone: true, email: true, gst: true, category: true, address: true, paymentTerms: true, isActive: true, amountPayable: true },
+    })
+    if (!vendor) throw new Error(VENDOR_NOT_FOUND)
+    if (echoedPayable !== null && paise(echoedPayable) !== paise(Number(vendor.amountPayable))) {
+      throw new Error(VENDOR_PAYABLE_NOT_PROFILE)
+    }
+    if (isActive === false && vendor.isActive) {
+      throw new Error('Deactivate a vendor with Remove Vendor, which asks for confirmation.')
+    }
+    const reactivate = isActive === true && !vendor.isActive
 
-  await prisma.vendor.updateMany({
-    where: { id: vendor.id, companyId },
-    data: {
-      name,
-      phone: optionalText(formData.get('phone')),
-      email: optionalText(formData.get('email')),
-      gst: optionalText(formData.get('gst')),
-      category: optionalText(formData.get('category')),
-      address: optionalText(formData.get('address')),
-      paymentTerms: optionalText(formData.get('paymentTerms')),
-      amountPayable,
-      isActive,
-    },
+    const result = await tx.vendor.updateMany({
+      where: { ...boundVendorWhere(vendor.id, companyId), isActive: vendor.isActive },
+      data: reactivate ? { ...profile, isActive: true } : profile,
+    })
+    if (result.count !== 1) throw new Error(VENDOR_CHANGED)
+
+    const { name, phone, email, gst, category, address, paymentTerms } = vendor
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId,
+        action: 'UPDATE',
+        module: 'VENDOR',
+        recordId: vendor.id,
+        description: `${user.name ?? user.email} ${reactivate ? 'reactivated' : 'updated'} vendor "${profile.name}"`,
+        before: { name, phone, email, gst, category, address, paymentTerms, isActive: vendor.isActive },
+        after: { ...profile, isActive: reactivate || vendor.isActive },
+      }),
+    })
   })
+
   revalidatePath('/vendors')
 }
 
 const VENDOR_PAYABLE_CHANGED = 'Vendor payable changed. Refresh and retry.'
-const MAX_SETTLEMENT_REASON = 500
 
-/** The balance the caller is settling, in rupees with at most two decimals. */
-function parseSettledAmount(raw: FormDataEntryValue | null): number {
-  const text = typeof raw === 'string' ? raw.trim() : ''
-  if (!/^\d{1,12}(\.\d{1,2})?$/.test(text)) throw new Error('Invalid settled amount')
-  return Number(text)
-}
+/*
+ * Sets a vendor's payable to a new balance, the one way to change it besides a full
+ * settlement. Needs live `payments.manage` + MATERIALS, the vendor name typed back, a
+ * reason, the new balance and the balance the caller saw. The re-read of an active vendor
+ * of the live company, the write guarded on that balance and the immutable before/after
+ * audit share one transaction, so an adjustment without its audit record rolls back.
+ */
+export async function adjustVendorPayableAction(formData: FormData) {
+  const user = await requireTenantMutation('payments.manage', 'MATERIALS')
+  const companyId = user.companyId
+  const id = requiredText(formData.get('id'), 'Vendor')
+  const typed = confirmationText(formData.get('dangerConfirmText'))
+  const reason = parseFinancialReason(formData.get('reason'), 'Adjustment reason')
+  const amount = parseAmountText(formData.get('amount'), 'amount payable', { max: MAX_AMOUNT_14_2 })
+  const expected = parseAmountText(formData.get('expectedAmount'), 'current amount payable', { max: MAX_AMOUNT_14_2 })
+  if (paise(amount) === paise(expected)) throw new Error('Vendor payable is unchanged.')
 
-/** Rupee amounts compared in whole paise, so a `Decimal(14, 2)` balance and form text agree. */
-function paise(amount: number): number {
-  return Math.round(amount * 100)
+  await prisma.$transaction(async (tx) => {
+    const where = { ...boundVendorWhere(id, companyId), isActive: true }
+    const vendor = await tx.vendor.findFirst({
+      where,
+      select: { id: true, name: true, siteId: true, isActive: true, amountPayable: true },
+    })
+    if (!vendor) throw new Error(VENDOR_NOT_FOUND)
+    if (typed !== vendor.name.trim()) {
+      throw new Error('Adjustment confirmation text did not match the vendor name.')
+    }
+
+    const current = Number(vendor.amountPayable)
+    if (paise(current) !== paise(expected)) throw new Error(VENDOR_PAYABLE_CHANGED)
+
+    const result = await tx.vendor.updateMany({
+      where: { ...where, id: vendor.id, amountPayable: vendor.amountPayable },
+      data: { amountPayable: amount },
+    })
+    if (result.count !== 1) throw new Error(VENDOR_PAYABLE_CHANGED)
+
+    const snapshot = { name: vendor.name, siteId: vendor.siteId, isActive: vendor.isActive }
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId,
+        action: 'ADJUST',
+        module: 'VENDOR',
+        recordId: vendor.id,
+        description: `${user.name ?? user.email} adjusted payable to vendor "${vendor.name}" from ₹${current.toLocaleString('en-IN')} to ₹${amount.toLocaleString('en-IN')}: ${reason}`,
+        before: { ...snapshot, amountPayable: current },
+        after: { ...snapshot, amountPayable: amount, adjustment: rupeeDelta(current, amount), reason },
+      }),
+    })
+  })
+
+  revalidatePath('/vendors')
 }
 
 /*
@@ -106,10 +187,9 @@ export async function markVendorPaidAction(formData: FormData) {
   const user = await requireTenantMutation('payments.manage', 'MATERIALS')
   const companyId = user.companyId
   const id = requiredText(formData.get('id'), 'Vendor')
-  const typed = typeof formData.get('dangerConfirmText') === 'string' ? (formData.get('dangerConfirmText') as string).trim() : ''
-  const reason = requiredText(formData.get('reason'), 'Settlement reason')
-  if (reason.length > MAX_SETTLEMENT_REASON) throw new Error(`Settlement reason must be at most ${MAX_SETTLEMENT_REASON} characters`)
-  const expected = parseSettledAmount(formData.get('amount'))
+  const typed = confirmationText(formData.get('dangerConfirmText'))
+  const reason = parseFinancialReason(formData.get('reason'), 'Settlement reason')
+  const expected = parseAmountText(formData.get('amount'), 'settled amount', { max: MAX_AMOUNT_14_2 })
 
   await prisma.$transaction(async (tx) => {
     const where = { ...boundVendorWhere(id, companyId), isActive: true }
