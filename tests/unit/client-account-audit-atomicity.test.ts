@@ -39,7 +39,7 @@ const mocks = vi.hoisted(() => {
     }),
     prisma: {
       company: { findUnique: vi.fn() },
-      user: { findUnique: vi.fn(), create: vi.fn() },
+      user: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
       companyMember: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
       site: { findMany: vi.fn(), updateMany: vi.fn() },
       auditLog: { create: vi.fn() },
@@ -95,7 +95,7 @@ beforeEach(() => {
   mocks.requirePermission.mockResolvedValue(actor)
   mocks.requireUser.mockResolvedValue(actor)
   mocks.prisma.company.findUnique.mockResolvedValue({ id: companyId, userLimit: 10, _count: { members: 1 } })
-  mocks.prisma.user.findUnique.mockResolvedValue(null)
+  mocks.prisma.user.findFirst.mockResolvedValue(null)
   mocks.prisma.site.findMany.mockResolvedValue([{ id: 'site_1' }])
   mocks.prisma.companyMember.findUnique.mockImplementation(async ({ where }: { where: { id: string; companyId?: string } }) => {
     const row = store.members[where.id]

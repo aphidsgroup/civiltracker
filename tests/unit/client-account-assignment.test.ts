@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => {
   }
   const prisma = {
     company: { findUnique: vi.fn() },
-    user: { findUnique: vi.fn() },
+    user: { findUnique: vi.fn(), findFirst: vi.fn() },
     companyMember: { findUnique: vi.fn() },
     site: { findMany: vi.fn() },
     $transaction: vi.fn(),
@@ -43,7 +43,8 @@ beforeEach(() => {
   mocks.requirePermission.mockResolvedValue(actor)
   mocks.requireUser.mockResolvedValue(actor)
   mocks.prisma.company.findUnique.mockResolvedValue({ id: companyId, userLimit: 10, _count: { members: 1 } })
-  mocks.prisma.user.findUnique.mockResolvedValue(null)
+  mocks.prisma.user.findFirst.mockResolvedValue(null)
+  mocks.tx.companyMember.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'member_new', ...data }))
   mocks.prisma.site.findMany.mockResolvedValue([{ id: 'site_1' }])
   mocks.tx.user.create.mockResolvedValue({ id: 'client_1' })
   mocks.tx.site.updateMany.mockResolvedValue({ count: 1 })

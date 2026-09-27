@@ -7,6 +7,10 @@ import { revalidatePath } from 'next/cache'
 import { Plus, Building2, Eye } from 'lucide-react'
 import bcrypt from 'bcryptjs'
 import DangerConfirmSubmit from '@/components/ui/DangerConfirmSubmit'
+import {
+  CLIENT_PASSWORD_MIN_LENGTH,
+  parseCreateClientAccountForm,
+} from '@/lib/validation/client-accounts'
 
 export const metadata = { title: 'Client Accounts | Civil Tracker' }
 export const dynamic = 'force-dynamic'
@@ -32,29 +36,32 @@ async function requireActiveCompanySites(companyId: string, siteIds: string[]) {
   return uniqueSiteIds
 }
 
+function sameIds(left: readonly string[], right: readonly string[]) {
+  return left.length === right.length && left.every(id => right.includes(id))
+}
+
 export async function createClientUser(formData: FormData) {
   'use server'
-  const actor = await requirePermission('company.manage')
+  const actor = await requireClientManager()
   const companyId = actor.companyId
-  if (!companyId) throw new Error('Company context required')
 
-  const name = formData.get('name') as string
-  const email = formData.get('email') as string
-  const phone = (formData.get('phone') as string) || undefined
-  const password = formData.get('password') as string
-  const siteIds = formData.getAll('siteIds') as string[]
-
-  if (!name || !email || !password) redirect('/client-accounts?error=Missing+required+fields')
+  // Strict boundary: unknown/forged keys, repeated scalars, files, weak passwords and
+  // malformed identity fields are refused before any identity, site or user lookup.
+  const { name, email, phone, password, siteIds } = parseCreateClientAccountForm(formData)
   const assignedSiteIds = await requireActiveCompanySites(companyId, siteIds)
 
   const company = await prisma.company.findUnique({
-    where: { id: companyId },
+    where: { id: companyId, deletedAt: null },
     include: { _count: { select: { members: { where: { isActive: true } } } } },
   })
   if (!company) redirect('/client-accounts?error=Company+not+found')
   if (company._count.members >= company.userLimit) redirect('/client-accounts?error=User+limit+reached.+Please+upgrade+your+plan.')
 
-  const existing = await prisma.user.findUnique({ where: { email } })
+  // Case-insensitive, so a legacy mixed-case login cannot be shadowed by its lowercase twin.
+  const existing = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+    select: { id: true },
+  })
   if (existing) redirect('/client-accounts?error=Email+already+in+use')
 
   const passwordHash = await bcrypt.hash(password, 12)
@@ -62,10 +69,17 @@ export async function createClientUser(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: { name, email, phone, passwordHash, role: 'CLIENT' },
+      select: { id: true },
     })
-    await tx.companyMember.create({
+    const member = await tx.companyMember.create({
       data: { userId: user.id, companyId, role: 'CLIENT', siteIds: assignedSiteIds, isActive: true },
     })
+    if (
+      member.userId !== user.id || member.companyId !== companyId || member.role !== 'CLIENT' ||
+      !member.isActive || !sameIds(member.siteIds, assignedSiteIds)
+    ) {
+      throw new Error('Client membership did not match the created client login.')
+    }
     const assigned = await tx.site.updateMany({
       where: {
         id: { in: assignedSiteIds }, companyId, deletedAt: null, status: 'ACTIVE',
@@ -85,10 +99,13 @@ export async function createClientUser(formData: FormData) {
         action: 'CREATE',
         module: 'USER',
         recordId: user.id,
+        // Identity and access only: the password and its hash are never recorded.
         after: {
           name,
           email,
+          phone: phone ?? null,
           role: 'CLIENT',
+          memberId: member.id,
           siteIds: assignedSiteIds,
           _description: `${actor.name ?? actor.email} created client login "${name}"`,
         },
@@ -240,28 +257,28 @@ export default async function ClientAccountsPage({ searchParams }: { searchParam
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Client Name *</label>
                 <input
-                  name="name" required placeholder="e.g. Sharma Builders"
+                  name="name" required minLength={2} maxLength={120} placeholder="e.g. Sharma Builders"
                   className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Email Address *</label>
                 <input
-                  name="email" type="email" required placeholder="client@example.com"
+                  name="email" type="email" required maxLength={254} placeholder="client@example.com"
                   className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Phone</label>
                 <input
-                  name="phone" type="tel" placeholder="9876543210"
+                  name="phone" type="tel" maxLength={32} placeholder="9876543210"
                   className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Login Password *</label>
                 <input
-                  name="password" type="password" required minLength={6} placeholder="Set a password for the client"
+                  name="password" type="password" required minLength={CLIENT_PASSWORD_MIN_LENGTH} placeholder="Set a password for the client"
                   className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all font-mono"
                 />
                 <p className="mt-1 text-xs text-slate-400">After creation, share the password with the client through a secure channel.</p>
