@@ -92,7 +92,8 @@ function WorkerCard({ worker, sites, updateAction, markPaidAction, deactivateAct
     startTransition(async () => {
       const fd = new FormData()
       fd.append('id', worker.id)
-      fd.append('amount', String(worker.pendingBalance))
+      // The server accepts strict two-decimal amounts only; wage math can leave float residue.
+      fd.append('amount', worker.pendingBalance.toFixed(2))
       await markPaidAction(fd)
     })
   }

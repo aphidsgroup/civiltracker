@@ -85,7 +85,7 @@ export default async function EditSubcontractorPage({ params }: { params: Promis
                   type="number" 
                   name="workOrderValue" 
                   step="0.01"
-                  defaultValue={Number(sub.workOrderValue) || ''}
+                  defaultValue={Number(sub.workOrderValue)}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
                 />
               </div>
@@ -96,7 +96,7 @@ export default async function EditSubcontractorPage({ params }: { params: Promis
                   type="number" 
                   name="raBilled" 
                   step="0.01"
-                  defaultValue={Number(sub.raBilled) || ''}
+                  defaultValue={Number(sub.raBilled)}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
                 />
               </div>
@@ -107,7 +107,7 @@ export default async function EditSubcontractorPage({ params }: { params: Promis
                   type="number" 
                   name="advance" 
                   step="0.01"
-                  defaultValue={Number(sub.advance) || ''}
+                  defaultValue={Number(sub.advance)}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
                 />
               </div>
@@ -118,7 +118,7 @@ export default async function EditSubcontractorPage({ params }: { params: Promis
                   type="number" 
                   name="retention" 
                   step="0.01"
-                  defaultValue={Number(sub.retention) || ''}
+                  defaultValue={Number(sub.retention)}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
                 />
               </div>
@@ -134,6 +134,27 @@ export default async function EditSubcontractorPage({ params }: { params: Promis
                   <option value="Inactive">Inactive</option>
                   <option value="Completed">Completed</option>
                 </select>
+              </div>
+
+              {/* Required by the server only when a balance above changes. */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Type &quot;{sub.name}&quot; to change balances</label>
+                <input
+                  type="text"
+                  name="dangerConfirmText"
+                  autoComplete="off"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Reason for balance change</label>
+                <input
+                  type="text"
+                  name="reason"
+                  maxLength={500}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
+                />
               </div>
             </div>
 

@@ -64,22 +64,27 @@ const SITES: Row[] = [
 ]
 
 const LABOUR: Row[] = [
-  { id: 'lab_1', companyId: 'company_1', siteId: 'site_1', name: 'Ravi' },
-  { id: 'lab_site2', companyId: 'company_1', siteId: 'site_2', name: 'Kumar' },
-  { id: 'lab_dead', companyId: 'company_1', siteId: 'site_dead', name: 'Old' },
-  { id: 'lab_other', companyId: 'company_2', siteId: 'site_other', name: 'Foreign' },
+  { id: 'lab_1', companyId: 'company_1', siteId: 'site_1', name: 'Ravi', isActive: true, openingAdvance: 0 },
+  { id: 'lab_site2', companyId: 'company_1', siteId: 'site_2', name: 'Kumar', isActive: true, openingAdvance: 0 },
+  { id: 'lab_dead', companyId: 'company_1', siteId: 'site_dead', name: 'Old', isActive: true, openingAdvance: 0 },
+  { id: 'lab_other', companyId: 'company_2', siteId: 'site_other', name: 'Foreign', isActive: true, openingAdvance: 0 },
 ]
 
+/*
+ * `lab_1` also has a later log from a site it has since left, listed first: a pay-out that
+ * did not bind the attendance to the worker's current site would pick it.
+ */
 const ATTENDANCE: Row[] = [
-  { id: 'att_1', labourId: 'lab_1', siteId: 'site_1', advance: 100 },
-  { id: 'att_other', labourId: 'lab_other', siteId: 'site_other', advance: 50 },
+  { id: 'att_old_site', labourId: 'lab_1', siteId: 'site_2', date: new Date('2026-09-25'), advance: 0 },
+  { id: 'att_1', labourId: 'lab_1', siteId: 'site_1', date: new Date('2026-09-20'), advance: 100 },
+  { id: 'att_other', labourId: 'lab_other', siteId: 'site_other', date: new Date('2026-09-20'), advance: 50 },
 ]
 
 const SUBS: Row[] = [
-  { id: 'sub_1', companyId: 'company_1', siteId: 'site_1', name: 'Bricks Co', trade: 'Brickwork', status: 'Active', isActive: true, raBilled: 0, advance: 0, retention: 0 },
-  { id: 'sub_unbound', companyId: 'company_1', siteId: null, name: 'Floating Co', trade: null, status: 'Active', isActive: true, raBilled: 0, advance: 0, retention: 0 },
-  { id: 'sub_site2', companyId: 'company_1', siteId: 'site_2', name: 'Elsewhere Co', trade: null, status: 'Active', isActive: true, raBilled: 0, advance: 0, retention: 0 },
-  { id: 'sub_other', companyId: 'company_2', siteId: 'site_other', name: 'Foreign Co', trade: null, status: 'Active', isActive: true, raBilled: 0, advance: 0, retention: 0 },
+  { id: 'sub_1', companyId: 'company_1', siteId: 'site_1', name: 'Bricks Co', trade: 'Brickwork', status: 'Active', isActive: true, workOrderValue: 0, raBilled: 0, advance: 0, retention: 0 },
+  { id: 'sub_unbound', companyId: 'company_1', siteId: null, name: 'Floating Co', trade: null, status: 'Active', isActive: true, workOrderValue: 0, raBilled: 0, advance: 0, retention: 0 },
+  { id: 'sub_site2', companyId: 'company_1', siteId: 'site_2', name: 'Elsewhere Co', trade: null, status: 'Active', isActive: true, workOrderValue: 0, raBilled: 0, advance: 0, retention: 0 },
+  { id: 'sub_other', companyId: 'company_2', siteId: 'site_other', name: 'Foreign Co', trade: null, status: 'Active', isActive: true, workOrderValue: 0, raBilled: 0, advance: 0, retention: 0 },
 ]
 
 const siteRelation: RelationResolver = (row, key) => {
@@ -100,8 +105,12 @@ function form(fields: Record<string, string>) {
 const labourForm = (overrides: Record<string, string> = {}) =>
   form({ id: 'lab_1', name: 'Ravi K', phone: '', trade: 'MASON', dailyWage: '800', overtimeRate: '100', openingAdvance: '0', siteId: 'site_1', status: 'active', ...overrides })
 
+/* Changes every stored balance, so it carries the confirmation and reason a financial edit needs. */
 const subForm = (overrides: Record<string, string> = {}) =>
-  form({ id: 'sub_1', name: 'Bricks Co', phone: '', trade: 'Brickwork', gst: '', workOrderValue: '1000', raBilled: '200', advance: '50', retention: '10', status: 'Active', ...overrides })
+  form({ id: 'sub_1', name: 'Bricks Co', phone: '', trade: 'Brickwork', gst: '', workOrderValue: '1000', raBilled: '200', advance: '50', retention: '10', status: 'Active', dangerConfirmText: 'Bricks Co', reason: 'RA bill 1 certified', ...overrides })
+
+const subPayForm = (overrides: Record<string, string> = {}) =>
+  form({ id: 'sub_1', amount: '100', dangerConfirmText: 'Bricks Co', reason: 'RA bill 1 paid by NEFT', ...overrides })
 
 let modules: unknown
 
@@ -216,26 +225,29 @@ describe('site labour actions (F3-F4)', () => {
     expect(labourWrites()).toBe(0)
   })
 
-  it('markSiteLabourPaid atomically increments the latest attendance advance inside one transaction', async () => {
+  it('markSiteLabourPaid books the advance on the latest attendance of this site, guarded and audited in one transaction', async () => {
     await labourActions.markSiteLabourPaid('site_1', form({ id: 'lab_1', amount: '500' }))
     expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
-    expect(mocks.tx.labour.findFirst.mock.calls[0][0].where).toEqual({ id: 'lab_1', companyId: 'company_1', siteId: 'site_1', site: { deletedAt: null } })
-    expect(mocks.tx.labourAttendance.findFirst.mock.calls[0][0].where).toEqual({ labourId: 'lab_1' })
+    expect(mocks.tx.labour.findFirst.mock.calls[0][0].where).toEqual({ id: 'lab_1', companyId: 'company_1', siteId: 'site_1', site: { deletedAt: null }, isActive: true })
+    expect(mocks.tx.labourAttendance.findFirst.mock.calls[0][0].where).toEqual({ labourId: 'lab_1', siteId: 'site_1' })
     expect(mocks.tx.labourAttendance.updateMany).toHaveBeenCalledWith({
-      where: { id: 'att_1', labourId: 'lab_1' },
-      data: { advance: { increment: 500 } },
+      where: { id: 'att_1', labourId: 'lab_1', siteId: 'site_1', advance: 100 },
+      data: { advance: 600 },
     })
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create.mock.calls[0][0].data).toMatchObject({ action: 'PAID', module: 'LABOUR', recordId: 'lab_1', companyId: 'company_1' })
     expect(mocks.prisma.labourAttendance.update).not.toHaveBeenCalled()
     expect(mocks.prisma.labourAttendance.updateMany).not.toHaveBeenCalled()
   })
 
-  it('markSiteLabourPaid increments the opening advance when there is no attendance', async () => {
+  it('markSiteLabourPaid books the opening advance when there is no attendance on this site', async () => {
     mocks.tx.labourAttendance.findFirst.mockResolvedValue(null)
     await labourActions.markSiteLabourPaid('site_1', form({ id: 'lab_1', amount: '250' }))
     expect(mocks.tx.labour.updateMany).toHaveBeenCalledWith({
-      where: { id: 'lab_1', companyId: 'company_1', siteId: 'site_1' },
-      data: { openingAdvance: { increment: 250 } },
+      where: { id: 'lab_1', companyId: 'company_1', siteId: 'site_1', site: { deletedAt: null }, isActive: true, openingAdvance: 0 },
+      data: { openingAdvance: 250 },
     })
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
   })
 
   it('markSiteLabourPaid never reads another tenant\'s attendance for a foreign worker', async () => {
@@ -256,9 +268,10 @@ describe('site labour actions (F3-F4)', () => {
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
-  it('markSiteLabourPaid fails when the increment matches no row', async () => {
+  it('markSiteLabourPaid fails, without an audit record, when the guarded write matches no row', async () => {
     mocks.tx.labourAttendance.updateMany.mockResolvedValue({ count: 0 })
-    await expect(labourActions.markSiteLabourPaid('site_1', form({ id: 'lab_1', amount: '5' }))).rejects.toThrow(/access denied/)
+    await expect(labourActions.markSiteLabourPaid('site_1', form({ id: 'lab_1', amount: '5' }))).rejects.toThrow(/Labour advance changed/)
+    expect(mocks.tx.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
@@ -274,10 +287,11 @@ describe('site labour actions (F3-F4)', () => {
   })
 })
 
+/* `staleError`: what a guarded write that matches no row reports. */
 const SUB_ACTIONS = [
-  { name: 'updateSiteSubcontractor', permission: 'materials.update', run: (siteId = 'site_1', fields: Record<string, string> = {}) => subActions.updateSiteSubcontractor(siteId, subForm(fields)) },
-  { name: 'markSiteSubcontractorPaid', permission: 'payments.manage', run: (siteId = 'site_1', fields: Record<string, string> = {}) => subActions.markSiteSubcontractorPaid(siteId, form({ id: 'sub_1', amount: '100', ...fields })) },
-  { name: 'deactivateSiteSubcontractor', permission: 'materials.update', run: (siteId = 'site_1', fields: Record<string, string> = {}) => subActions.deactivateSiteSubcontractor(siteId, form({ id: 'sub_1', dangerConfirmText: 'Bricks Co', ...fields })) },
+  { name: 'updateSiteSubcontractor', permission: 'materials.update', staleError: /Subcontractor changed/, run: (siteId = 'site_1', fields: Record<string, string> = {}) => subActions.updateSiteSubcontractor(siteId, subForm(fields)) },
+  { name: 'markSiteSubcontractorPaid', permission: 'payments.manage', staleError: /Subcontractor changed/, run: (siteId = 'site_1', fields: Record<string, string> = {}) => subActions.markSiteSubcontractorPaid(siteId, subPayForm(fields)) },
+  { name: 'deactivateSiteSubcontractor', permission: 'materials.update', staleError: /access denied/, run: (siteId = 'site_1', fields: Record<string, string> = {}) => subActions.deactivateSiteSubcontractor(siteId, form({ id: 'sub_1', dangerConfirmText: 'Bricks Co', ...fields })) },
 ]
 
 describe('site subcontractor actions (F5)', () => {
@@ -303,10 +317,10 @@ describe('site subcontractor actions (F5)', () => {
   it('edits need materials.update and payments need payments.manage', async () => {
     mocks.requireUser.mockResolvedValue(principal('ACCOUNTANT'))
     await expect(subActions.updateSiteSubcontractor('site_1', subForm())).rejects.toThrow(/materials\.update/)
-    await expect(subActions.markSiteSubcontractorPaid('site_1', form({ id: 'sub_1', amount: '10' }))).resolves.toBeUndefined()
+    await expect(subActions.markSiteSubcontractorPaid('site_1', subPayForm({ amount: '10' }))).resolves.toBeUndefined()
 
     mocks.requireUser.mockResolvedValue(principal('PURCHASE_MANAGER'))
-    await expect(subActions.markSiteSubcontractorPaid('site_1', form({ id: 'sub_1', amount: '10' }))).rejects.toThrow(/payments\.manage/)
+    await expect(subActions.markSiteSubcontractorPaid('site_1', subPayForm({ amount: '10' }))).rejects.toThrow(/payments\.manage/)
     await expect(subActions.updateSiteSubcontractor('site_1', subForm())).resolves.toBeUndefined()
   })
 
@@ -332,23 +346,24 @@ describe('site subcontractor actions (F5)', () => {
     },
   )
 
-  it('markSiteSubcontractorPaid is one atomic increment scoped to the tenant site', async () => {
-    await subActions.markSiteSubcontractorPaid('site_1', form({ id: 'sub_unbound', amount: '100' }))
-    expect(mocks.prisma.subcontractor.updateMany).toHaveBeenCalledWith({
-      where: { id: 'sub_unbound', companyId: 'company_1', OR: [{ siteId: null }, { siteId: 'site_1' }] },
-      data: { advance: { increment: 100 } },
+  it('markSiteSubcontractorPaid is one guarded write scoped to the tenant site, inside one transaction', async () => {
+    await subActions.markSiteSubcontractorPaid('site_1', subPayForm({ id: 'sub_unbound', dangerConfirmText: 'Floating Co' }))
+    const binding = { companyId: 'company_1', isActive: true, OR: [{ siteId: null }, { siteId: 'site_1' }] }
+    expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
+    // The advance is re-read inside the transaction and the write is guarded on that
+    // value, so a concurrent payment makes this one fail instead of being overwritten.
+    expect(mocks.tx.subcontractor.findFirst.mock.calls[0][0].where).toEqual({ ...binding, id: 'sub_unbound' })
+    expect(mocks.tx.subcontractor.updateMany).toHaveBeenCalledWith({
+      where: { ...binding, id: 'sub_unbound', advance: 0 },
+      data: { advance: 100 },
     })
-    // The pre-write binding check reads only the id: the advance is never read back and
-    // rewritten.
-    expect(mocks.prisma.subcontractor.findFirst).toHaveBeenCalledTimes(1)
-    expect(mocks.prisma.subcontractor.findFirst).toHaveBeenCalledWith({
-      where: { id: 'sub_unbound', companyId: 'company_1', OR: [{ siteId: null }, { siteId: 'site_1' }] },
-      select: { id: true },
-    })
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prisma.subcontractor.findFirst).not.toHaveBeenCalled()
+    expect(mocks.prisma.subcontractor.updateMany).not.toHaveBeenCalled()
   })
 
   it.each(['0', '-1', 'NaN', 'Infinity'])('markSiteSubcontractorPaid rejects amount %j', async (amount) => {
-    await expect(subActions.markSiteSubcontractorPaid('site_1', form({ id: 'sub_1', amount }))).rejects.toThrow(/invalid/i)
+    await expect(subActions.markSiteSubcontractorPaid('site_1', subPayForm({ amount }))).rejects.toThrow(/invalid/i)
     expect(subWrites()).toBe(0)
   })
 
@@ -364,9 +379,14 @@ describe('site subcontractor actions (F5)', () => {
 
   it('updateSiteSubcontractor writes only within the tenant site binding', async () => {
     await subActions.updateSiteSubcontractor('site_1', subForm())
-    const call = mocks.prisma.subcontractor.updateMany.mock.calls[0][0]
-    expect(call.where).toEqual({ id: 'sub_1', companyId: 'company_1', OR: [{ siteId: null }, { siteId: 'site_1' }] })
+    const call = mocks.tx.subcontractor.updateMany.mock.calls[0][0]
+    expect(call.where).toEqual({
+      companyId: 'company_1', isActive: true, OR: [{ siteId: null }, { siteId: 'site_1' }],
+      id: 'sub_1', workOrderValue: 0, raBilled: 0, advance: 0, retention: 0,
+    })
     expect(call.data).toMatchObject({ workOrderValue: 1000, raBilled: 200, advance: 50, retention: 10, status: 'Active' })
+    expect(mocks.prisma.subcontractor.updateMany).not.toHaveBeenCalled()
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
   })
 
   it('deactivateSiteSubcontractor checks the confirmation and deactivates within the binding', async () => {
@@ -392,10 +412,10 @@ describe('site subcontractor actions (F5)', () => {
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
-  it.each(SUB_ACTIONS)('$name fails when the guarded write matches no row', async ({ run }) => {
+  it.each(SUB_ACTIONS)('$name fails when the guarded write matches no row', async ({ run, staleError }) => {
     mocks.prisma.subcontractor.updateMany.mockResolvedValue({ count: 0 })
     mocks.tx.subcontractor.updateMany.mockResolvedValue({ count: 0 })
-    await expect(run()).rejects.toThrow(/access denied/)
+    await expect(run()).rejects.toThrow(staleError)
     expect(mocks.tx.auditLog.create).not.toHaveBeenCalled()
     expect(mocks.logActivity).not.toHaveBeenCalled()
     expect(mocks.revalidatePath).not.toHaveBeenCalled()

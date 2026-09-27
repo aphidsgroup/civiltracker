@@ -64,10 +64,11 @@ const SITES: Row[] = [
   { id: 'site_foreign', companyId: 'company_2', name: 'Other', clientId: 'client_foreign', deletedAt: null },
 ]
 
+/* `amountDue` is the receivable an invoice's guarded write is conditioned on. */
 const CLIENTS: Row[] = [
-  { id: 'client_1', companyId: 'company_1', siteId: 'site_1' },
-  { id: 'client_2', companyId: 'company_1', siteId: 'site_other_client' },
-  { id: 'client_foreign', companyId: 'company_2', siteId: 'site_foreign' },
+  { id: 'client_1', companyId: 'company_1', siteId: 'site_1', name: 'Anand Homes', amountDue: 12000 },
+  { id: 'client_2', companyId: 'company_1', siteId: 'site_other_client', name: 'Bala Estates', amountDue: 0 },
+  { id: 'client_foreign', companyId: 'company_2', siteId: 'site_foreign', name: 'Rival Client', amountDue: 0 },
 ]
 
 function principal(role: string, companyId = 'company_1') {
@@ -192,7 +193,7 @@ describe('finance actions: live principal, permission and module before any read
 
 describe('raiseInvoice', () => {
   it.each(['client_foreign', 'missing', ''])('refuses client %j that is not of the live company', async (clientId) => {
-    await expect(raiseInvoice(invoiceForm({ clientId, siteId: '' }))).rejects.toThrow(/Client not found or access denied|Invalid invoice/)
+    await expect(raiseInvoice(invoiceForm({ clientId, siteId: '' }))).rejects.toThrow(/Client not found or access denied|Client is required/)
     expect(committed).toEqual([])
     expect(bareWrites()).toBe(0)
   })
@@ -218,7 +219,7 @@ describe('raiseInvoice', () => {
     expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
   })
 
-  it('creates the invoice and increments the receivable of exactly the tenant client in one transaction', async () => {
+  it('creates the invoice and raises the receivable of exactly the tenant client in one transaction', async () => {
     const result = await raiseInvoice(invoiceForm())
     expect(result).toEqual({ success: true, invoiceNumber: 'INV-0007' })
     expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
@@ -226,11 +227,13 @@ describe('raiseInvoice', () => {
     expect(mocks.tx.invoice.create.mock.calls[0][0].data).toMatchObject({
       companyId: 'company_1', clientId: 'client_1', siteId: 'site_1', invoiceNumber: 'INV-0007', amount: 5000, status: 'DUE',
     })
+    // Guarded on the receivable read, so a concurrent invoice or receipt cannot be lost.
     expect(mocks.tx.client.updateMany).toHaveBeenCalledWith({
-      where: { id: 'client_1', companyId: 'company_1' },
-      data: { amountDue: { increment: 5000 } },
+      where: { id: 'client_1', companyId: 'company_1', amountDue: 12000 },
+      data: { amountDue: 17000 },
     })
-    expect(committed.map(([name]) => name)).toEqual(['invoice.create', 'client.updateMany'])
+    expect(committed.map(([name]) => name)).toEqual(['invoice.create', 'client.updateMany', 'auditLog.create'])
+    expect(committed[2][1]).toMatchObject({ userId: 'user_company_admin', companyId: 'company_1', module: 'INVOICE', recordId: 'inv_new' })
     expect(bareWrites()).toBe(0)
   })
 
@@ -241,8 +244,9 @@ describe('raiseInvoice', () => {
 
   it('rolls the invoice back when the receivable update matches no row', async () => {
     mocks.tx.client.updateMany.mockResolvedValue({ count: 0 })
-    await expect(raiseInvoice(invoiceForm())).rejects.toThrow(/Client not found or access denied/)
+    await expect(raiseInvoice(invoiceForm())).rejects.toThrow(/Client receivable changed/)
     expect(mocks.tx.invoice.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).not.toHaveBeenCalled()
     expect(committed).toEqual([])
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })

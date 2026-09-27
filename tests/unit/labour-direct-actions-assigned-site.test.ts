@@ -87,6 +87,11 @@ const MEMBERS: Row[] = [
   { userId: 'user_field', companyId: 'company_1', isActive: false, siteIds: ['site_theirs'] },
 ]
 
+// Latest attendance of each payable worker on its *current* site, shaped as
+// `payLabourAdvance` selects it. The real date binds the payment to that log.
+const ATTENDANCE_MINE = { id: 'att_1', date: new Date('2026-09-20T00:00:00.000Z'), advance: 200 }
+const ATTENDANCE_THEIRS = { id: 'att_any', date: new Date('2026-09-18T00:00:00.000Z'), advance: 0 }
+
 const relations: RelationResolver = (row, key) => {
   if (key === 'site') return SITES.find((site) => site.id === row.siteId) ?? null
   return undefined
@@ -195,14 +200,18 @@ describe.each(FIELD_ROLES)('direct labour mutations for a field %s', (role) => {
   })
 
   it('markLabourPaidAction pays an assigned worker against attendance on its own site only', async () => {
-    mocks.tx.labourAttendance.findFirst.mockResolvedValue({ id: 'att_1' })
+    mocks.tx.labourAttendance.findFirst.mockResolvedValue(ATTENDANCE_MINE)
     await labourActions.markLabourPaidAction(form({ id: 'lab_mine', amount: '500' }))
     expect(mocks.tx.labourAttendance.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: { labourId: 'lab_mine', siteId: 'site_mine' },
     }))
     expect(mocks.tx.labourAttendance.updateMany).toHaveBeenCalledWith({
-      where: { id: 'att_1', labourId: 'lab_mine' },
-      data: { advance: { increment: 500 } },
+      where: { id: 'att_1', labourId: 'lab_mine', siteId: 'site_mine', advance: 200 },
+      data: { advance: 700 },
+    })
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create.mock.calls[0][0].data.after).toMatchObject({
+      siteId: 'site_mine', attendanceId: 'att_1', attendanceDate: '2026-09-20', advance: 700, paidAmount: 500,
     })
   })
 
@@ -239,13 +248,17 @@ describe('privileged company roles keep company-wide labour management', () => {
       id: 'lab_theirs', companyId: 'company_1', site: { companyId: 'company_1', deletedAt: null },
     })
 
-    mocks.tx.labourAttendance.findFirst.mockResolvedValue({ id: 'att_any' })
+    mocks.tx.labourAttendance.findFirst.mockResolvedValue(ATTENDANCE_THEIRS)
     await labourActions.markLabourPaidAction(form({ id: 'lab_theirs', amount: '100' }))
-    expect(mocks.tx.labourAttendance.findFirst.mock.calls[0][0].where).toEqual({ labourId: 'lab_theirs' })
-    expect(mocks.tx.labourAttendance.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.labourAttendance.findFirst.mock.calls[0][0].where).toEqual({ labourId: 'lab_theirs', siteId: 'site_theirs' })
+    expect(mocks.tx.labourAttendance.updateMany).toHaveBeenCalledWith({
+      where: { id: 'att_any', labourId: 'lab_theirs', siteId: 'site_theirs', advance: 0 },
+      data: { advance: 100 },
+    })
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
 
     await labourActions.deactivateLabourAction(form({ id: 'lab_theirs', dangerConfirmText: 'Kumar' }))
-    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(2)
     expect(mocks.prisma.companyMember.findFirst).not.toHaveBeenCalled()
   })
 

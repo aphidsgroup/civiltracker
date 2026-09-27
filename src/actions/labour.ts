@@ -9,14 +9,12 @@ import { auditLogData } from '@/lib/audit-data'
 import {
   optionalText,
   parseNonNegativeAmount,
-  parsePositiveAmount,
-  readsAssignedSitesOnly,
   requiredText,
   requireAssignedScopeMutation,
   requireAssignedSiteMutation,
 } from '@/lib/auth/site-mutation'
-
-const LABOUR_NOT_FOUND = 'FORBIDDEN: Labour not found or access denied'
+import { LABOUR_NOT_FOUND, payLabourAdvance } from '@/lib/labour-payment'
+import { MAX_AMOUNT_10_2, parseAmountText } from '@/lib/validation/financial-mutations'
 
 /**
  * A worker of exactly `companyId` whose current site is in `scope`: a live site of that
@@ -154,40 +152,18 @@ export async function updateLabourRosterAction(formData: FormData) {
 }
 
 /*
- * Pays a worker out as an advance on their latest attendance (or their opening advance
- * when they have none). The worker is bound to the live company and the principal's
- * assigned scope before any attendance is read, and the read and increment run in one
- * transaction. A field role books the advance only on attendance of the worker's own
- * (assigned) site, never on a log of a site it is not assigned to.
+ * Pays a worker out as an advance (see `payLabourAdvance`). The amount is strict positive
+ * decimal text within the `Decimal(10, 2)` column; the worker must be an active worker of
+ * the live company whose current site is in the principal's assigned scope. The advance is
+ * booked only on attendance of that current site, and the guarded write and its audit
+ * record share one transaction.
  */
 export async function markLabourPaidAction(formData: FormData) {
   const { user, scope } = await requireAssignedScopeMutation('labour.manage', 'LABOUR')
-  const companyId = user.companyId
   const id = requiredText(formData.get('id'), 'Labour')
-  const amount = parsePositiveAmount(formData.get('amount'))
-  const ownSiteOnly = readsAssignedSitesOnly(user.role)
+  const amount = parseAmountText(formData.get('amount'), 'payment amount', { max: MAX_AMOUNT_10_2, positive: true })
 
-  await prisma.$transaction(async (tx) => {
-    const worker = await tx.labour.findFirst({ where: boundLabourWhere(id, companyId, scope), select: { id: true, siteId: true } })
-    if (!worker) throw new Error(LABOUR_NOT_FOUND)
-
-    const latest = await tx.labourAttendance.findFirst({
-      where: ownSiteOnly ? { labourId: worker.id, siteId: worker.siteId } : { labourId: worker.id },
-      orderBy: { date: 'desc' },
-      select: { id: true },
-    })
-    if (latest) {
-      await tx.labourAttendance.updateMany({
-        where: { id: latest.id, labourId: worker.id },
-        data: { advance: { increment: amount } },
-      })
-    } else {
-      await tx.labour.updateMany({
-        where: { id: worker.id, companyId },
-        data: { openingAdvance: { increment: amount } },
-      })
-    }
-  })
+  await prisma.$transaction((tx) => payLabourAdvance(tx, user, { ...boundLabourWhere(id, user.companyId, scope), isActive: true }, amount))
 
   revalidatePath('/labour')
 }

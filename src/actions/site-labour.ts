@@ -6,19 +6,18 @@ import { prisma } from '@/lib/prisma'
 import {
   optionalText,
   parseNonNegativeAmount,
-  parsePositiveAmount,
   requiredText,
   requireAssignedSiteMutation,
   requireSiteMutation,
 } from '@/lib/auth/site-mutation'
+import { LABOUR_NOT_FOUND, payLabourAdvance } from '@/lib/labour-payment'
+import { MAX_AMOUNT_10_2, parseAmountText } from '@/lib/validation/financial-mutations'
 
 /*
  * Site labour page actions. Each is bound to the page's site id, which arrives from the
  * client and is re-authorized here: live `labour.manage` + LABOUR, then a live site of
  * exactly the live company, then a worker of that company assigned to that site.
  */
-
-const LABOUR_NOT_FOUND = 'FORBIDDEN: Labour not found or access denied'
 
 function requireLabourMutation(siteId: string) {
   return requireSiteMutation(siteId, 'labour.manage', 'LABOUR')
@@ -72,36 +71,19 @@ export async function updateSiteLabour(siteId: string, formData: FormData) {
   revalidatePath(`/sites/${site.id}/labour`)
 }
 
+/**
+ * Pays a worker an advance (see `payLabourAdvance`). The URL site is bound through the
+ * assigned-site mutation gate, the amount is strict positive decimal text within the
+ * `Decimal(10, 2)` column, and the worker must be active and currently on this site; the
+ * advance is booked only on attendance of this site, audited in the same transaction.
+ */
 export async function markSiteLabourPaid(siteId: string, formData: FormData) {
-  const { user, site } = await requireLabourMutation(siteId)
-  const id = formData.get('id') as string
-  const amount = parsePositiveAmount(formData.get('amount'))
+  const { user, site } = await requireAssignedSiteMutation(siteId, 'labour.manage', 'LABOUR')
+  const id = requiredText(formData.get('id'), 'Labour')
+  const amount = parseAmountText(formData.get('amount'), 'payment amount', { max: MAX_AMOUNT_10_2, positive: true })
 
-  // The worker is re-read, the latest attendance picked and the advance incremented in
-  // one transaction; the increment is applied by the database, never a read-modify-write.
-  await prisma.$transaction(async (tx) => {
-    const labour = await tx.labour.findFirst({
-      where: siteLabourWhere(id, user.companyId, site.id),
-      select: { id: true },
-    })
-    if (!labour) throw new Error(LABOUR_NOT_FOUND)
+  await prisma.$transaction((tx) => payLabourAdvance(tx, user, { ...siteLabourWhere(id, user.companyId, site.id), isActive: true }, amount))
 
-    const latest = await tx.labourAttendance.findFirst({
-      where: { labourId: labour.id },
-      orderBy: { date: 'desc' },
-      select: { id: true },
-    })
-    const result = latest
-      ? await tx.labourAttendance.updateMany({
-          where: { id: latest.id, labourId: labour.id },
-          data: { advance: { increment: amount } },
-        })
-      : await tx.labour.updateMany({
-          where: { id: labour.id, companyId: user.companyId, siteId: site.id },
-          data: { openingAdvance: { increment: amount } },
-        })
-    if (result.count !== 1) throw new Error(LABOUR_NOT_FOUND)
-  })
   revalidatePath(`/sites/${site.id}/labour`)
 }
 

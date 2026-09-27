@@ -94,15 +94,24 @@ const VENDORS: Row[] = [
 ]
 
 const SUBS: Row[] = [
-  { id: 'sub_1', companyId: 'company_1', siteId: 'site_1', isActive: true, name: 'A.K. Builders', trade: null, status: 'Active', raBilled: 0, advance: 0, retention: 0 },
-  { id: 'sub_deleted_site', companyId: 'company_1', siteId: 'site_deleted', isActive: true, name: 'Old', trade: null, status: 'Active', raBilled: 0, advance: 0, retention: 0 },
-  { id: 'sub_foreign', companyId: 'company_2', siteId: null, isActive: true, name: 'Rival', trade: null, status: 'Active', raBilled: 0, advance: 0, retention: 0 },
+  { id: 'sub_1', companyId: 'company_1', siteId: 'site_1', isActive: true, name: 'A.K. Builders', trade: null, status: 'Active', workOrderValue: 0, raBilled: 0, advance: 0, retention: 0 },
+  { id: 'sub_deleted_site', companyId: 'company_1', siteId: 'site_deleted', isActive: true, name: 'Old', trade: null, status: 'Active', workOrderValue: 0, raBilled: 0, advance: 0, retention: 0 },
+  { id: 'sub_foreign', companyId: 'company_2', siteId: null, isActive: true, name: 'Rival', trade: null, status: 'Active', workOrderValue: 0, raBilled: 0, advance: 0, retention: 0 },
 ]
 
 const WORKERS: Row[] = [
-  { id: 'labour_1', companyId: 'company_1', siteId: 'site_1', name: 'Ramesh', trade: 'MASON', isActive: true },
-  { id: 'labour_deleted_site', companyId: 'company_1', siteId: 'site_deleted', name: 'Old', trade: 'MASON', isActive: true },
-  { id: 'labour_foreign', companyId: 'company_2', siteId: 'site_foreign', name: 'Rival', trade: 'MASON', isActive: true },
+  { id: 'labour_1', companyId: 'company_1', siteId: 'site_1', name: 'Ramesh', trade: 'MASON', isActive: true, openingAdvance: 0 },
+  { id: 'labour_deleted_site', companyId: 'company_1', siteId: 'site_deleted', name: 'Old', trade: 'MASON', isActive: true, openingAdvance: 0 },
+  { id: 'labour_foreign', companyId: 'company_2', siteId: 'site_foreign', name: 'Rival', trade: 'MASON', isActive: true, openingAdvance: 0 },
+]
+
+/*
+ * `labour_1` also has a later log from a site it has since left, listed first: a pay-out
+ * that did not bind the attendance to the worker's current site would pick it.
+ */
+const ATTENDANCE: Row[] = [
+  { id: 'attendance_old_site', labourId: 'labour_1', siteId: 'site_2', date: new Date('2026-09-25'), advance: 0 },
+  { id: 'attendance_1', labourId: 'labour_1', siteId: 'site_1', date: new Date('2026-09-20'), advance: 200 },
 ]
 
 const CLIENTS: Row[] = [
@@ -139,6 +148,7 @@ const PO_FORM = { vendorId: 'vendor_1', poNumber: 'PO-2026-1001', totalAmount: '
 const VENDOR_FORM = { name: 'Sri Ram Traders', email: '', phone: '', gst: '', category: '', paymentTerms: '', address: '', siteId: '' }
 const SETTLE_FORM = { id: 'vendor_1', dangerConfirmText: 'Sri Ram Traders', reason: 'Paid by cheque 000123', amount: '1500' }
 const SUB_FORM = { name: 'A.K. Builders', phone: '', trade: '', gst: '', workOrderValue: '1000', siteId: '' }
+const SUB_PAY_FORM = { id: 'sub_1', amount: '100', dangerConfirmText: 'A.K. Builders', reason: 'RA bill 1 paid by NEFT' }
 const TASK_FORM = { siteId: 'site_1', name: 'Slab shuttering', description: '', assignedToId: '', startDate: '', dueDate: '' }
 const CLIENT_FORM = { name: 'John Doe', phone: '', email: '', siteId: '', contractValue: '100000' }
 const ADVANCE_FORM = { siteId: 'site_1', amount: '25000', purpose: 'Mobilisation', receivedAt: '2026-09-01T10:00' }
@@ -158,7 +168,7 @@ const ACTIONS: Array<{ name: string; run: () => Promise<unknown>; permitted: str
   { name: 'deactivateVendorAction', run: () => vendors.deactivateVendorAction(form({ id: 'vendor_1', dangerConfirmText: 'Sri Ram Traders' })), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
   { name: 'createSubcontractorAction', run: () => subcontractors.createSubcontractorAction(form(SUB_FORM)), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
   { name: 'updateSubcontractorAction', run: () => subcontractors.updateSubcontractorAction(form({ id: 'sub_1', name: 'A.K. Builders', status: 'Active' })), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
-  { name: 'markSubcontractorPaidAction', run: () => subcontractors.markSubcontractorPaidAction(form({ id: 'sub_1', amount: '100' })), permitted: 'ACCOUNTANT', module: 'MATERIALS' },
+  { name: 'markSubcontractorPaidAction', run: () => subcontractors.markSubcontractorPaidAction(form(SUB_PAY_FORM)), permitted: 'ACCOUNTANT', module: 'MATERIALS' },
   { name: 'deactivateSubcontractorAction', run: () => subcontractors.deactivateSubcontractorAction(form({ id: 'sub_1', dangerConfirmText: 'A.K. Builders' })), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
   { name: 'createTaskAction', run: () => tasks.createTaskAction(form(TASK_FORM)), permitted: 'PROJECT_MANAGER', module: 'TASKS' },
   { name: 'createClientAction', run: () => clients.createClientAction(form(CLIENT_FORM)), permitted: 'ACCOUNTANT', module: 'CLIENTS' },
@@ -183,8 +193,8 @@ beforeEach(() => {
   mocks.prisma.subcontractor.updateMany.mockImplementation(inMemoryDelegate(SUBS, siteOf).updateMany)
   mocks.prisma.labour.findFirst.mockImplementation(inMemoryDelegate(WORKERS, siteOf).findFirst)
   mocks.prisma.labour.updateMany.mockImplementation(inMemoryDelegate(WORKERS, siteOf).updateMany)
-  mocks.prisma.labourAttendance.findFirst.mockResolvedValue({ id: 'attendance_1' })
-  mocks.prisma.labourAttendance.updateMany.mockResolvedValue({ count: 1 })
+  mocks.prisma.labourAttendance.findFirst.mockImplementation(inMemoryDelegate(ATTENDANCE).findFirst)
+  mocks.prisma.labourAttendance.updateMany.mockImplementation(inMemoryDelegate(ATTENDANCE).updateMany)
   mocks.prisma.client.findFirst.mockImplementation(inMemoryDelegate(CLIENTS).findFirst)
   for (const create of [
     mocks.prisma.bOQItem.create, mocks.prisma.labour.create, mocks.prisma.material.create, mocks.prisma.purchaseOrder.create,
@@ -237,7 +247,7 @@ describe('live principal, permission and module gate', () => {
   it('vendor and subcontractor payments need payments.manage', async () => {
     mocks.requireUser.mockResolvedValue(principal('PURCHASE_MANAGER'))
     await expect(vendors.markVendorPaidAction(form(SETTLE_FORM))).rejects.toThrow(/payments\.manage/)
-    await expect(subcontractors.markSubcontractorPaidAction(form({ id: 'sub_1', amount: '100' }))).rejects.toThrow(/payments\.manage/)
+    await expect(subcontractors.markSubcontractorPaidAction(form(SUB_PAY_FORM))).rejects.toThrow(/payments\.manage/)
     expectNoWrites()
   })
 })
@@ -361,14 +371,15 @@ describe('labour list actions', () => {
     expectNoWrites()
   })
 
-  it('pay-out increments the bound worker\'s latest attendance inside one transaction', async () => {
+  it('pay-out books the bound worker\'s latest attendance on its current site, guarded and audited in one transaction', async () => {
     await labour.markLabourPaidAction(form({ id: 'labour_1', amount: '500' }))
     expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
-    expect(mocks.prisma.labourAttendance.findFirst.mock.calls[0][0].where).toEqual({ labourId: 'labour_1' })
+    expect(mocks.prisma.labourAttendance.findFirst.mock.calls[0][0].where).toEqual({ labourId: 'labour_1', siteId: 'site_1' })
     expect(mocks.prisma.labourAttendance.updateMany).toHaveBeenCalledWith({
-      where: { id: 'attendance_1', labourId: 'labour_1' },
-      data: { advance: { increment: 500 } },
+      where: { id: 'attendance_1', labourId: 'labour_1', siteId: 'site_1', advance: 200 },
+      data: { advance: 700 },
     })
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ action: 'PAID', module: 'LABOUR', companyId: 'company_1', recordId: 'labour_1' }) })
   })
 
   it('pay-out rejects a non-positive amount', async () => {
@@ -424,19 +435,21 @@ describe('vendor and subcontractor list actions', () => {
   it.each(['sub_foreign', 'sub_deleted_site', 'sub_missing'])('subcontractor writes refuse %s', async (id) => {
     await expect(subcontractors.updateSubcontractorAction(form({ id, name: 'X', status: 'Active' }))).rejects.toThrow(/Subcontractor not found/)
     mocks.requireUser.mockResolvedValue(principal('ACCOUNTANT'))
-    await expect(subcontractors.markSubcontractorPaidAction(form({ id, amount: '100' }))).rejects.toThrow(/Subcontractor not found/)
+    await expect(subcontractors.markSubcontractorPaidAction(form({ ...SUB_PAY_FORM, id, dangerConfirmText: 'Rival' }))).rejects.toThrow(/Subcontractor not found/)
     mocks.requireUser.mockResolvedValue(principal('PURCHASE_MANAGER'))
     await expect(subcontractors.deactivateSubcontractorAction(form({ id, dangerConfirmText: 'Rival' }))).rejects.toThrow(/Subcontractor not found/)
     expectNoWrites()
   })
 
-  it('subcontractor payment is a database increment on the bound row', async () => {
+  it('subcontractor payment is a write on the bound row guarded on the advance read, audited in one transaction', async () => {
     mocks.requireUser.mockResolvedValue(principal('ACCOUNTANT'))
-    await subcontractors.markSubcontractorPaidAction(form({ id: 'sub_1', amount: '100' }))
+    await subcontractors.markSubcontractorPaidAction(form(SUB_PAY_FORM))
+    expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
     expect(mocks.prisma.subcontractor.updateMany.mock.calls[0][0]).toMatchObject({
-      where: { id: 'sub_1', companyId: 'company_1' },
-      data: { advance: { increment: 100 } },
+      where: { id: 'sub_1', companyId: 'company_1', isActive: true, advance: 0 },
+      data: { advance: 100 },
     })
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ action: 'PAID', module: 'SUBCONTRACTOR', companyId: 'company_1', recordId: 'sub_1' }) })
   })
 
   it('subcontractor update rejects an unknown status', async () => {
