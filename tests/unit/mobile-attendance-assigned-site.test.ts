@@ -23,7 +23,9 @@ import type { RelationResolver, Row } from './support/prisma-where'
 const mocks = vi.hoisted(() => {
   const tx = {
     labour: { findFirst: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
-    labourAttendance: { upsert: vi.fn() },
+    // No same-key attendance row exists here; the other-site refusal is covered by
+    // attendance-reassignment-site-binding.test.ts.
+    labourAttendance: { findFirst: vi.fn(), upsert: vi.fn() },
     subcontractor: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
     contractorAttendance: { create: vi.fn(), deleteMany: vi.fn() },
   }

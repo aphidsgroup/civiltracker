@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma'
-import { exitDeniedPage, liveCompanySiteWhere, parsePageSize, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import { assignedSiteWhere, exitDeniedPage, parsePageSize, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { FileText, Image as ImageIcon, Users, IndianRupee, Clock, CheckSquare } from 'lucide-react'
 import Link from 'next/link'
 
@@ -76,8 +76,10 @@ export default async function DashboardActivityPage({
     CHECKLIST: true,
   }
 
+  // A field role reads only the live sites it is assigned to; every other role, every
+  // live site of its company. Each feed below is bound to exactly these ids.
   const sites = await prisma.site.findMany({
-    where: liveCompanySiteWhere(companyId),
+    where: await assignedSiteWhere(gate.access),
     select: { id: true, name: true }
   })
 

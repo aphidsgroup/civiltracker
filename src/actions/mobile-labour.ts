@@ -7,6 +7,7 @@ import { auditLogData } from '@/lib/audit-data'
 import { AttendanceStatus, LabourTrade } from '@prisma/client'
 import type { Prisma } from '@prisma/client'
 import { requireAssignedScopeMutation, requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
+import { assertNoOtherSiteAttendanceFrom, upsertSiteAttendance } from '@/lib/labour-attendance'
 
 /*
  * Muster-roll actions. Marking the roll (attendance, roster, contractor headcount) needs
@@ -16,7 +17,9 @@ import { requireAssignedScopeMutation, requireAssignedSiteMutation } from '@/lib
  * SITE_ENGINEER and SUPERVISOR only their assigned sites), and every worker and
  * contractor log must sit on such a site too, so a field role can neither write on nor
  * pull a worker off a site it is not assigned to. Multi-step money and attendance changes
- * run in one transaction with counted, company-scoped writes.
+ * run in one transaction with counted, company-scoped writes. Attendance rows are written
+ * only on the site they are made for (`upsertSiteAttendance`): a row another site recorded
+ * for the same worker and date is refused, and a worker is not moved while it has one.
  */
 
 const LABOUR_NOT_FOUND = 'FORBIDDEN: Labour not found or access denied'
@@ -146,9 +149,12 @@ export async function updateWorkerAction(formData: {
   const worker = await prisma.$transaction(async (tx) => {
     const existing = await tx.labour.findFirst({
       where: companyLabourWhere(id, companyId, scope),
-      select: { id: true, phone: true },
+      select: { id: true, phone: true, siteId: true },
     })
     if (!existing) throw new Error(LABOUR_NOT_FOUND)
+
+    const today = startOfToday()
+    if (existing.siteId !== site.id) await assertNoOtherSiteAttendanceFrom(tx, existing.id, site.id, today)
 
     // A standard trade clears a previous custom-trade tag but keeps a real phone number.
     const phone = customTag ?? (existing.phone?.startsWith('CUSTOM_TRADE:') ? null : existing.phone ?? null)
@@ -159,24 +165,14 @@ export async function updateWorkerAction(formData: {
     })
     if (updated.count !== 1) throw new Error(LABOUR_NOT_FOUND)
 
-    // Upsert today's attendance record with the advance payment
+    // Today's advance, only ever on the worker's row for this site.
     if (advance !== undefined) {
-      const today = startOfToday()
-      await tx.labourAttendance.upsert({
-        where: { labourId_date: { labourId: existing.id, date: today } },
-        create: {
-          labourId: existing.id,
-          siteId: site.id,
-          date: today,
-          status: 'PRESENT',
-          advance,
-          markedById: user.id
-        },
-        update: {
-          advance,
-          markedById: user.id
-        }
-      })
+      await upsertSiteAttendance(
+        tx,
+        { labourId: existing.id, date: today, siteId: site.id },
+        { status: 'PRESENT', advance, markedById: user.id },
+        { advance, markedById: user.id },
+      )
     }
 
     return { id: existing.id, name, trade, phone, dailyWage, siteId: site.id }
@@ -212,44 +208,28 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
     }))
 
   // Every worker must be of this company on a site in the principal's scope, and each row
-  // must name the worker's own site; one bad row refuses the whole batch.
+  // must name the worker's own site; one bad row refuses the whole batch. The binding and
+  // the writes share one transaction, and each row is written on exactly that site.
   const labourIds = [...new Set(marked.map((item) => item.labourId))]
-  const workers = labourIds.length > 0
-    ? await prisma.labour.findMany({
-        where: { id: { in: labourIds }, companyId, site: scope },
-        select: { id: true, siteId: true },
-      })
-    : []
-  const siteOf = new Map(workers.map((worker) => [worker.id, worker.siteId]))
-  for (const item of marked) {
-    if (siteOf.get(item.labourId) !== item.siteId) throw new Error(LABOUR_NOT_FOUND)
-  }
-
   await prisma.$transaction(async (tx) => {
+    const workers = labourIds.length > 0
+      ? await tx.labour.findMany({
+          where: { id: { in: labourIds }, companyId, site: scope },
+          select: { id: true, siteId: true },
+        })
+      : []
+    const siteOf = new Map(workers.map((worker) => [worker.id, worker.siteId]))
     for (const item of marked) {
-      await tx.labourAttendance.upsert({
-        where: {
-          labourId_date: {
-            labourId: item.labourId,
-            date: targetDate
-          }
-        },
-        create: {
-          labourId: item.labourId,
-          siteId: item.siteId,
-          date: targetDate,
-          status: item.status,
-          advance: item.advance ?? 0,
-          startTime: item.startTime,
-          markedById: user.id
-        },
-        update: {
-          status: item.status,
-          advance: item.advance,
-          startTime: item.startTime,
-          markedById: user.id
-        }
-      })
+      if (siteOf.get(item.labourId) !== item.siteId) throw new Error(LABOUR_NOT_FOUND)
+    }
+
+    for (const item of marked) {
+      await upsertSiteAttendance(
+        tx,
+        { labourId: item.labourId, date: targetDate, siteId: item.siteId },
+        { status: item.status, advance: item.advance ?? 0, startTime: item.startTime, markedById: user.id },
+        { status: item.status, advance: item.advance, startTime: item.startTime, markedById: user.id },
+      )
     }
   })
   const count = marked.length
@@ -292,32 +272,18 @@ export async function addExistingWorkerToRoster(labourId: string, siteId: string
     // off a site it is not assigned to.
     const labour = await tx.labour.findFirst({
       where: companyLabourWhere(String(labourId ?? ''), companyId, scope),
-      select: { id: true },
+      select: { id: true, siteId: true },
     })
     if (!labour) throw new Error(LABOUR_NOT_FOUND)
+    if (labour.siteId !== site.id) await assertNoOtherSiteAttendanceFrom(tx, labour.id, site.id, today)
 
-    // Mark them present for today to add them to the roster
-    const attendance = await tx.labourAttendance.upsert({
-      where: {
-        labourId_date: {
-          labourId: labour.id,
-          date: today
-        }
-      },
-      create: {
-        labourId: labour.id,
-        siteId: site.id,
-        date: today,
-        status: 'PRESENT',
-        advance: 0,
-        startTime: start,
-        markedById: user.id
-      },
-      update: {
-        status: 'PRESENT',
-        startTime: start
-      }
-    })
+    // Mark them present for today to add them to the roster, only on this site's row.
+    const attendance = await upsertSiteAttendance(
+      tx,
+      { labourId: labour.id, date: today, siteId: site.id },
+      { status: 'PRESENT', advance: 0, startTime: start, markedById: user.id },
+      { status: 'PRESENT', startTime: start },
+    )
 
     // Update their default site assignment too
     const moved = await tx.labour.updateMany({
@@ -428,10 +394,11 @@ export async function removeLabourAttendanceAction(labourId: string, confirmatio
       throw new Error('Roster removal confirmation text did not match the worker name')
     }
 
-    // Delete today's attendance record
+    // Delete today's attendance record on the worker's current site, never another site's
     await tx.labourAttendance.deleteMany({
       where: {
         labourId: labour.id,
+        siteId: labour.siteId,
         date: today,
         labour: { companyId },
       }

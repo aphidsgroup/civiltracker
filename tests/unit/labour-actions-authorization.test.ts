@@ -25,8 +25,10 @@ import type { RelationResolver, Row } from './support/prisma-where'
  */
 const mocks = vi.hoisted(() => {
   const tx = {
-    labour: { findFirst: vi.fn(), updateMany: vi.fn() },
-    labourAttendance: { upsert: vi.fn(), deleteMany: vi.fn() },
+    labour: { findFirst: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
+    // No same-key attendance row exists here; the other-site refusal is covered by
+    // attendance-reassignment-site-binding.test.ts.
+    labourAttendance: { findFirst: vi.fn(), upsert: vi.fn(), deleteMany: vi.fn() },
     subcontractor: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
     contractorAttendance: { create: vi.fn(), deleteMany: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -153,7 +155,7 @@ beforeEach(() => {
   let createdSubs = 0
   const logs = inMemoryDelegate(CONTRACTOR_LOGS, relations)
   for (const delegate of [mocks.prisma.labour, mocks.tx.labour]) delegate.findFirst.mockImplementation(labour.findFirst)
-  mocks.prisma.labour.findMany.mockImplementation(labour.findMany)
+  for (const delegate of [mocks.prisma.labour, mocks.tx.labour]) delegate.findMany.mockImplementation(labour.findMany)
   mocks.prisma.labour.updateMany.mockImplementation(labour.updateMany)
   mocks.prisma.labour.create.mockImplementation(async (args: { data: Row }) => ({ id: 'lab_new', ...args.data }))
   mocks.prisma.labourAttendance.deleteMany.mockResolvedValue({ count: 1 })
@@ -400,9 +402,10 @@ describe('saveMobileAttendanceAction', () => {
     expect(allWrites()).toBe(0)
   })
 
-  it('reads the workers scoped to the live company and live sites', async () => {
+  it('reads the workers scoped to the live company and live sites, inside the write transaction', async () => {
     await mobile.saveMobileAttendanceAction([{ labourId: 'lab_1', siteId: 'site_1', status: 'HALF_DAY', advance: 50 }])
-    expect(mocks.prisma.labour.findMany).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.prisma.labour.findMany).not.toHaveBeenCalled()
+    expect(mocks.tx.labour.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: { in: ['lab_1'] }, companyId: 'company_1', site: { companyId: 'company_1', deletedAt: null } },
     }))
   })

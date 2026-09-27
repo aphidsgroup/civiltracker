@@ -1,6 +1,7 @@
 import { AttendanceStatus } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { requireAssignedScopeMutation } from '@/lib/auth/site-mutation'
+import { AttendanceSiteConflictError, upsertSiteAttendance } from '@/lib/labour-attendance'
 import { prisma } from '@/lib/prisma'
 
 const MAX_BATCH = 500
@@ -45,7 +46,8 @@ function parseMarks(body: unknown): Mark[] | null {
  * Live `attendance.mark` + LABOUR on a principal with a tenant context, before the body
  * is read (SUPER_ADMIN is refused). Every worker must be of exactly the live company on a
  * site in the principal's `assignedSiteScope` (field roles: assigned live sites only); the
- * attendance row takes the worker's own site. The lookup and every write run in one
+ * attendance row takes the worker's own site, and a row another site recorded for the same
+ * worker today is refused, never overwritten. The lookup and every write run in one
  * transaction, and one bad row refuses the whole batch.
  */
 export async function POST(request: Request) {
@@ -80,17 +82,18 @@ export async function POST(request: Request) {
       if (marks.some((mark) => !siteOf.has(mark.labourId))) throw new AttendanceDenied(LABOUR_NOT_FOUND)
 
       for (const { labourId, status } of marks) {
-        await tx.labourAttendance.upsert({
-          where: { labourId_date: { labourId, date: today } },
-          create: { labourId, siteId: siteOf.get(labourId)!, date: today, status, markedById: user.id },
-          update: { status, markedById: user.id },
-        })
+        await upsertSiteAttendance(
+          tx,
+          { labourId, date: today, siteId: siteOf.get(labourId)! },
+          { status, markedById: user.id },
+          { status, markedById: user.id },
+        )
       }
       return marks.length
     })
     return NextResponse.json({ success: true, count })
   } catch (error: unknown) {
-    if (error instanceof AttendanceDenied) return fail(error.message, 403)
+    if (error instanceof AttendanceDenied || error instanceof AttendanceSiteConflictError) return fail(error.message, 403)
     throw error
   }
 }
