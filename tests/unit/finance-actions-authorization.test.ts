@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
     client: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn(), update: vi.fn() },
     invoice: { count: vi.fn(), create: vi.fn() },
     payment: { create: vi.fn() },
+    auditLog: { create: vi.fn() },
   }
   return {
     requireUser: vi.fn(),
@@ -125,6 +126,7 @@ beforeEach(() => {
   mocks.tx.invoice.count.mockResolvedValue(6)
   mocks.tx.invoice.create.mockImplementation(stage('invoice.create', (data) => ({ id: 'inv_new', ...data })))
   mocks.tx.payment.create.mockImplementation(stage('payment.create', (data) => ({ id: 'pay_new', ...data })))
+  mocks.tx.auditLog.create.mockImplementation(stage('auditLog.create', () => ({ id: 'audit_1' })))
 
   mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.tx) => unknown) => {
     staged = []
@@ -282,9 +284,10 @@ describe('createClientAdvance', () => {
       companyId: 'company_1', clientId: 'client_1', siteId: 'site_1', amount: 2500, type: 'ADVANCE', status: 'CONFIRMED',
     })
     expect(mocks.tx.client.create).not.toHaveBeenCalled()
-    expect(committed.map(([name]) => name)).toEqual(['payment.create'])
+    expect(committed.map(([name]) => name)).toEqual(['payment.create', 'auditLog.create'])
+    expect(committed[1][1]).toMatchObject({ userId: 'user_company_admin', companyId: 'company_1', module: 'CLIENT_ADVANCE', recordId: 'pay_new' })
     expect(bareWrites()).toBe(0)
-    expect(mocks.logActivity).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user_company_admin', companyId: 'company_1' }))
+    expect(mocks.logActivity).not.toHaveBeenCalled()
   })
 
   it('creates and links a client for an unlinked site atomically with the advance', async () => {
@@ -293,7 +296,7 @@ describe('createClientAdvance', () => {
       where: { id: 'site_unlinked', companyId: 'company_1', deletedAt: null, clientId: null },
       data: { clientId: 'client_new' },
     })
-    expect(committed.map(([name]) => name)).toEqual(['client.create', 'site.updateMany', 'payment.create'])
+    expect(committed.map(([name]) => name)).toEqual(['client.create', 'site.updateMany', 'payment.create', 'auditLog.create'])
   })
 
   it('rolls back the generated client when the site link races', async () => {

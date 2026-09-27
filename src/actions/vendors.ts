@@ -81,16 +81,72 @@ export async function updateVendorAction(formData: FormData) {
   revalidatePath('/vendors')
 }
 
-/* Settles a vendor's payable. Needs live `payments.manage`. */
+const VENDOR_PAYABLE_CHANGED = 'Vendor payable changed. Refresh and retry.'
+const MAX_SETTLEMENT_REASON = 500
+
+/** The balance the caller is settling, in rupees with at most two decimals. */
+function parseSettledAmount(raw: FormDataEntryValue | null): number {
+  const text = typeof raw === 'string' ? raw.trim() : ''
+  if (!/^\d{1,12}(\.\d{1,2})?$/.test(text)) throw new Error('Invalid settled amount')
+  return Number(text)
+}
+
+/** Rupee amounts compared in whole paise, so a `Decimal(14, 2)` balance and form text agree. */
+function paise(amount: number): number {
+  return Math.round(amount * 100)
+}
+
+/*
+ * Settles a vendor's whole payable. Needs live `payments.manage` + MATERIALS, the vendor
+ * name typed back, a reason, and the balance the caller saw. There is no vendor payment
+ * model, so the audit record is the settlement record: the re-read of an active vendor of
+ * the live company, the write guarded on that balance and the audit share one transaction.
+ */
 export async function markVendorPaidAction(formData: FormData) {
   const user = await requireTenantMutation('payments.manage', 'MATERIALS')
   const companyId = user.companyId
   const id = requiredText(formData.get('id'), 'Vendor')
+  const typed = typeof formData.get('dangerConfirmText') === 'string' ? (formData.get('dangerConfirmText') as string).trim() : ''
+  const reason = requiredText(formData.get('reason'), 'Settlement reason')
+  if (reason.length > MAX_SETTLEMENT_REASON) throw new Error(`Settlement reason must be at most ${MAX_SETTLEMENT_REASON} characters`)
+  const expected = parseSettledAmount(formData.get('amount'))
 
-  const vendor = await prisma.vendor.findFirst({ where: boundVendorWhere(id, companyId), select: { id: true } })
-  if (!vendor) throw new Error(VENDOR_NOT_FOUND)
+  await prisma.$transaction(async (tx) => {
+    const where = { ...boundVendorWhere(id, companyId), isActive: true }
+    const vendor = await tx.vendor.findFirst({
+      where,
+      select: { id: true, name: true, siteId: true, isActive: true, amountPayable: true },
+    })
+    if (!vendor) throw new Error(VENDOR_NOT_FOUND)
+    if (typed !== vendor.name.trim()) {
+      throw new Error('Settlement confirmation text did not match the vendor name.')
+    }
 
-  await prisma.vendor.updateMany({ where: { id: vendor.id, companyId }, data: { amountPayable: 0 } })
+    const settled = Number(vendor.amountPayable)
+    if (paise(settled) <= 0) throw new Error('Vendor has no payable balance to settle.')
+    if (paise(settled) !== paise(expected)) throw new Error(VENDOR_PAYABLE_CHANGED)
+
+    const result = await tx.vendor.updateMany({
+      where: { ...where, id: vendor.id, amountPayable: vendor.amountPayable },
+      data: { amountPayable: 0 },
+    })
+    if (result.count !== 1) throw new Error(VENDOR_PAYABLE_CHANGED)
+
+    const snapshot = { name: vendor.name, siteId: vendor.siteId, isActive: vendor.isActive }
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId,
+        action: 'PAID',
+        module: 'VENDOR',
+        recordId: vendor.id,
+        description: `${user.name ?? user.email} settled ₹${settled.toLocaleString('en-IN')} payable to vendor "${vendor.name}": ${reason}`,
+        before: { ...snapshot, amountPayable: settled },
+        after: { ...snapshot, amountPayable: 0, settledAmount: settled, reason },
+      }),
+    })
+  })
+
   revalidatePath('/vendors')
 }
 

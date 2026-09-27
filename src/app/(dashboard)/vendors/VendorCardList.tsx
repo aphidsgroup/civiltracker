@@ -70,10 +70,16 @@ function VendorCard({ vendor, updateAction, markPaidAction, deactivateAction }: 
   }
 
   const handleMarkPaid = () => {
+    const typed = window.prompt(`Type "${vendor.name}" to settle the full ${fmt(vendor.amountPayable)} payable to zero.`)
+    if (typed === null) return
+    const reason = window.prompt('Reason / payment reference for this settlement (required):')
+    if (reason === null) return
     startTransition(async () => {
       const fd = new FormData()
       fd.append('id', vendor.id)
       fd.append('amount', String(vendor.amountPayable))
+      fd.append('dangerConfirmText', typed)
+      fd.append('reason', reason)
       await markPaidAction(fd)
     })
   }

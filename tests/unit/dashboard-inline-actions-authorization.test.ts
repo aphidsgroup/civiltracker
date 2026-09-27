@@ -86,7 +86,7 @@ const MEMBERS: Row[] = [
 ]
 
 const VENDORS: Row[] = [
-  { id: 'vendor_1', companyId: 'company_1', siteId: null, isActive: true, name: 'Sri Ram Traders', category: null, amountPayable: 0 },
+  { id: 'vendor_1', companyId: 'company_1', siteId: null, isActive: true, name: 'Sri Ram Traders', category: null, amountPayable: 1500 },
   { id: 'vendor_site', companyId: 'company_1', siteId: 'site_1', isActive: true, name: 'Site Vendor', category: null, amountPayable: 0 },
   { id: 'vendor_inactive', companyId: 'company_1', siteId: null, isActive: false, name: 'Gone', category: null, amountPayable: 0 },
   { id: 'vendor_deleted_site', companyId: 'company_1', siteId: 'site_deleted', isActive: true, name: 'Old', category: null, amountPayable: 0 },
@@ -137,6 +137,7 @@ const LABOUR_FORM = { siteId: 'site_1', name: 'Ramesh', phone: '', trade: 'MASON
 const MATERIAL_FORM = { siteId: 'site_1', name: 'OPC Cement', brand: '', unit: 'Bags', openingStock: '10', minStock: '2' }
 const PO_FORM = { vendorId: 'vendor_1', poNumber: 'PO-2026-1001', totalAmount: '5000', notes: '' }
 const VENDOR_FORM = { name: 'Sri Ram Traders', email: '', phone: '', gst: '', category: '', paymentTerms: '', address: '', siteId: '' }
+const SETTLE_FORM = { id: 'vendor_1', dangerConfirmText: 'Sri Ram Traders', reason: 'Paid by cheque 000123', amount: '1500' }
 const SUB_FORM = { name: 'A.K. Builders', phone: '', trade: '', gst: '', workOrderValue: '1000', siteId: '' }
 const TASK_FORM = { siteId: 'site_1', name: 'Slab shuttering', description: '', assignedToId: '', startDate: '', dueDate: '' }
 const CLIENT_FORM = { name: 'John Doe', phone: '', email: '', siteId: '', contractValue: '100000' }
@@ -153,7 +154,7 @@ const ACTIONS: Array<{ name: string; run: () => Promise<unknown>; permitted: str
   { name: 'createPurchaseOrderAction', run: () => purchase.createPurchaseOrderAction(form(PO_FORM)), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
   { name: 'createVendorAction', run: () => vendors.createVendorAction(form(VENDOR_FORM)), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
   { name: 'updateVendorAction', run: () => vendors.updateVendorAction(form({ id: 'vendor_1', ...VENDOR_FORM, amountPayable: '0', isActive: 'true' })), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
-  { name: 'markVendorPaidAction', run: () => vendors.markVendorPaidAction(form({ id: 'vendor_1' })), permitted: 'ACCOUNTANT', module: 'MATERIALS' },
+  { name: 'markVendorPaidAction', run: () => vendors.markVendorPaidAction(form(SETTLE_FORM)), permitted: 'ACCOUNTANT', module: 'MATERIALS' },
   { name: 'deactivateVendorAction', run: () => vendors.deactivateVendorAction(form({ id: 'vendor_1', dangerConfirmText: 'Sri Ram Traders' })), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
   { name: 'createSubcontractorAction', run: () => subcontractors.createSubcontractorAction(form(SUB_FORM)), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
   { name: 'updateSubcontractorAction', run: () => subcontractors.updateSubcontractorAction(form({ id: 'sub_1', name: 'A.K. Builders', status: 'Active' })), permitted: 'PURCHASE_MANAGER', module: 'MATERIALS' },
@@ -235,7 +236,7 @@ describe('live principal, permission and module gate', () => {
 
   it('vendor and subcontractor payments need payments.manage', async () => {
     mocks.requireUser.mockResolvedValue(principal('PURCHASE_MANAGER'))
-    await expect(vendors.markVendorPaidAction(form({ id: 'vendor_1' }))).rejects.toThrow(/payments\.manage/)
+    await expect(vendors.markVendorPaidAction(form(SETTLE_FORM))).rejects.toThrow(/payments\.manage/)
     await expect(subcontractors.markSubcontractorPaidAction(form({ id: 'sub_1', amount: '100' }))).rejects.toThrow(/payments\.manage/)
     expectNoWrites()
   })
@@ -395,7 +396,7 @@ describe('vendor and subcontractor list actions', () => {
   it.each(['vendor_foreign', 'vendor_deleted_site', 'vendor_missing'])('vendor writes refuse %s', async (id) => {
     await expect(vendors.updateVendorAction(form({ id, ...VENDOR_FORM, amountPayable: '0', isActive: 'true' }))).rejects.toThrow(/Vendor not found/)
     mocks.requireUser.mockResolvedValue(principal('ACCOUNTANT'))
-    await expect(vendors.markVendorPaidAction(form({ id }))).rejects.toThrow(/Vendor not found/)
+    await expect(vendors.markVendorPaidAction(form({ ...SETTLE_FORM, id, dangerConfirmText: 'Rival' }))).rejects.toThrow(/Vendor not found/)
     mocks.requireUser.mockResolvedValue(principal('PURCHASE_MANAGER'))
     await expect(vendors.deactivateVendorAction(form({ id, dangerConfirmText: 'Rival' }))).rejects.toThrow(/Vendor not found/)
     expectNoWrites()
