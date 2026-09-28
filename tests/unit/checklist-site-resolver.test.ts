@@ -3,19 +3,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(),
   prisma: {
+    company: { findUnique: vi.fn() },
+    companyMember: { findFirst: vi.fn() },
     site: { findFirst: vi.fn() },
     projectChecklistTask: { findFirst: vi.fn() },
     sitePhoto: { findFirst: vi.fn() },
   },
 }))
 vi.mock('@/lib/auth/require-user', () => ({ requireUser: mocks.requireUser }))
-vi.mock('@/lib/prisma', () => ({ default: mocks.prisma }))
+vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma, default: mocks.prisma }))
 
 const { requireChecklistSite, requireChecklistTask, requireChecklistPhoto } = await import('@/lib/auth/checklist-site')
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireUser.mockResolvedValue({ id: 'user_1', role: 'COMPANY_ADMIN', companyId: 'company_1' })
+  mocks.prisma.company.findUnique.mockResolvedValue({ modulesJson: ['TASKS'], status: 'ACTIVE' })
+  mocks.prisma.companyMember.findFirst.mockResolvedValue({ siteIds: [] })
   mocks.prisma.site.findFirst.mockResolvedValue({ id: 'site_1', companyId: 'company_1' })
   mocks.prisma.projectChecklistTask.findFirst.mockResolvedValue({ id: 'task_1', name: 'Task' })
   mocks.prisma.sitePhoto.findFirst.mockResolvedValue({
@@ -53,7 +57,8 @@ describe('checklist site resolver', () => {
 
   it('requires a manager and rejects a checklist-linked photo with a mismatched task path', async () => {
     mocks.requireUser.mockResolvedValue({ id: 'client_1', role: 'CLIENT', companyId: 'company_1' })
-    await expect(requireChecklistPhoto('photo_1')).rejects.toThrow(/authorized manager/i)
+    await expect(requireChecklistPhoto('photo_1')).rejects.toThrow(/requires tasks\.manage/i)
+    expect(mocks.prisma.sitePhoto.findFirst).not.toHaveBeenCalled()
 
     mocks.requireUser.mockResolvedValue({ id: 'manager_1', role: 'COMPANY_ADMIN', companyId: 'company_1' })
     mocks.prisma.sitePhoto.findFirst.mockResolvedValue({
@@ -62,5 +67,13 @@ describe('checklist site resolver', () => {
       task: { category: { stage: { checklist: { siteId: 'foreign_site', companyId: 'company_2' } } } },
     })
     await expect(requireChecklistPhoto('bad_photo')).rejects.toThrow(/not linked to its site/i)
+  })
+
+  it('reads a moderated photo only on a live site in the caller checklist scope', async () => {
+    const { scope } = await requireChecklistPhoto('photo_1')
+    expect(scope).toEqual({ companyId: 'company_1', deletedAt: null })
+    expect(mocks.prisma.sitePhoto.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'photo_1', companyId: 'company_1', site: { companyId: 'company_1', deletedAt: null } },
+    }))
   })
 })

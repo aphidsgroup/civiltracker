@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
     companyMember: { findFirst: vi.fn() },
     site: { findFirst: vi.fn() },
     mediaAsset: { create: vi.fn() },
+    auditLog: { create: vi.fn() },
+    $transaction: vi.fn(),
   },
   cloudinary: { uploader: { upload: vi.fn(), destroy: vi.fn() } },
 }))
@@ -82,6 +84,8 @@ beforeEach(() => {
   // Field roles are assigned to site_listed by active membership (the engineer to site_1 directly).
   mocks.prisma.companyMember.findFirst.mockResolvedValue({ siteIds: ['site_listed'] })
   mocks.prisma.mediaAsset.create.mockImplementation(async (args: { data: Row }) => ({ id: 'asset_1', ...args.data }))
+  // The asset and its audit event share one transaction (see upload-route-audit-atomicity.test.ts).
+  mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
   mocks.cloudinary.uploader.upload.mockImplementation((_file: string, options: Row, callback: (error: unknown, result?: unknown) => void) => {
     callback(null, { public_id: `${options.folder}/abc123`, secure_url: 'https://res.cloudinary.com/demo/image/upload/abc123.jpg', format: 'jpg', bytes: 12, width: 10, height: 10 })
   })

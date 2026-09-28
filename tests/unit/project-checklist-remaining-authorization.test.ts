@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
     projectChecklistCategory: { findFirst: vi.fn(), update: vi.fn() },
     projectChecklistTask: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
     projectChecklist: { findFirst: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
-    sitePhoto: { findFirst: vi.fn(), update: vi.fn() },
+    sitePhoto: { findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     site: { findFirst: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
@@ -54,8 +54,8 @@ describe('remaining project checklist tenant authorization', () => {
     ['editChecklistTask', () => actions.editChecklistTask('site_1', 'foreign_task', 'Name'), () => mocks.prisma.projectChecklistTask.update],
     ['deleteChecklistTask', () => actions.deleteChecklistTask('site_1', 'foreign_task', 'Pour slab'), () => mocks.prisma.projectChecklistTask.deleteMany],
     ['deleteProjectChecklist', () => actions.deleteProjectChecklist('site_1', 'Tower A'), () => mocks.prisma.projectChecklist.deleteMany],
-    ['approvePhotoAction', () => actions.approvePhotoAction('foreign_photo'), () => mocks.prisma.sitePhoto.update],
-    ['rejectPhotoAction', () => actions.rejectPhotoAction('foreign_photo'), () => mocks.prisma.sitePhoto.update],
+    ['approvePhotoAction', () => actions.approvePhotoAction('foreign_photo'), () => mocks.prisma.sitePhoto.updateMany],
+    ['rejectPhotoAction', () => actions.rejectPhotoAction('foreign_photo'), () => mocks.prisma.sitePhoto.updateMany],
   ])('%s rejects a foreign target before mutation', async (_name, invoke, mutation) => {
     await expect(invoke()).rejects.toThrow(/access denied/i)
     expect(mutation()).not.toHaveBeenCalled()

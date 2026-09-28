@@ -72,6 +72,10 @@ beforeEach(() => {
     ? { id: 'checklist_1', templateId: 'tpl_1', createdAt: new Date('2026-01-01'), _count: { stages: 0 } }
     : null))
   mocks.prisma.projectChecklist.deleteMany.mockResolvedValue({ count: 1 })
+  // Created rows feed the in-transaction audit event (see checklist-photo-audit-atomicity.test.ts).
+  mocks.prisma.projectChecklist.create.mockResolvedValue({ id: 'checklist_new' })
+  mocks.prisma.projectChecklistTask.create.mockResolvedValue({ id: 'task_new', name: 'Extra' })
+  mocks.prisma.sitePhoto.create.mockResolvedValue({ id: 'photo_new' })
   mocks.prisma.projectChecklistCategory.findFirst.mockResolvedValue({ id: 'cat_1' })
   mocks.prisma.projectChecklistTask.findFirst.mockResolvedValue({
     id: 'task_1', name: 'Pour slab', categoryId: 'cat_1',

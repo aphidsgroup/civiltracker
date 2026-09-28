@@ -14,33 +14,65 @@ import { requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
 import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 import { UPLOAD_POLICIES } from '@/lib/uploads/upload-policy'
+import { parseChecklistTaskName } from '@/lib/validation/checklists'
 import { revalidatePath } from 'next/cache'
+
+/*
+ * Structure changes (enable a checklist, neglect a category, add or rename a task) bind
+ * the site to the caller's checklist scope with `tasks.manage` and TASKS first, then
+ * re-read their target on exactly that site's checklist, write, and append a CHECKLIST
+ * audit event on the same transaction client, so a change without its audit rolls back.
+ */
 
 // Deep clone a master template to a project
 export async function enableChecklistForProject(siteId: string, templateId: string) {
-  const { site } = await requireChecklistSite(siteId, 'manage')
-  const existing = await prisma.projectChecklist.findFirst({
-    where: { siteId: site.id, companyId: site.companyId },
-  })
-  if (existing) throw new Error('Checklist already enabled for this project')
+  const { user, site } = await requireChecklistSite(siteId, 'manage')
 
-  const template = await prisma.checklistTemplate.findFirst({
-    where: { id: templateId, OR: [{ companyId: site.companyId }, { isGlobal: true }] },
-    include: { stages: { include: { categories: { include: { tasks: true } } } } },
-  })
-  if (!template) throw new Error('FORBIDDEN: Template not found or access denied')
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.projectChecklist.findFirst({
+      where: { siteId: site.id, companyId: site.companyId },
+    })
+    if (existing) throw new Error('Checklist already enabled for this project')
 
-  await prisma.projectChecklist.create({
-    data: {
-      siteId: site.id, templateId: template.id, companyId: site.companyId,
-      stages: { create: template.stages.map((stage) => ({
-        name: stage.name, order: stage.order, weight: stage.weight,
-        categories: { create: stage.categories.map((category) => ({
-          name: category.name, order: category.order,
-          tasks: { create: category.tasks.map((task) => ({ name: task.name, order: task.order, isRequired: task.isRequired })) },
+    const template = await tx.checklistTemplate.findFirst({
+      where: { id: templateId, OR: [{ companyId: site.companyId }, { isGlobal: true }] },
+      include: { stages: { include: { categories: { include: { tasks: true } } } } },
+    })
+    if (!template) throw new Error('FORBIDDEN: Template not found or access denied')
+
+    const checklist = await tx.projectChecklist.create({
+      data: {
+        siteId: site.id, templateId: template.id, companyId: site.companyId,
+        stages: { create: template.stages.map((stage) => ({
+          name: stage.name, order: stage.order, weight: stage.weight,
+          categories: { create: stage.categories.map((category) => ({
+            name: category.name, order: category.order,
+            tasks: { create: category.tasks.map((task) => ({ name: task.name, order: task.order, isRequired: task.isRequired })) },
+          })) },
         })) },
-      })) },
-    },
+      },
+      select: { id: true },
+    })
+
+    const categories = template.stages.flatMap((stage) => stage.categories)
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        companyId: site.companyId,
+        module: 'CHECKLIST',
+        action: 'CREATE',
+        recordId: site.id,
+        after: {
+          change: 'CHECKLIST_ENABLED',
+          checklistId: checklist.id,
+          templateId: template.id,
+          siteId: site.id,
+          stageCount: template.stages.length,
+          categoryCount: categories.length,
+          taskCount: categories.reduce((sum, category) => sum + category.tasks.length, 0),
+        },
+      },
+    })
   })
 
   revalidatePath(`/sites/${site.id}`)
@@ -117,23 +149,97 @@ export async function toggleTaskStatus(siteId: string, taskId: string, status: T
 }
 
 
+const CATEGORY_NOT_FOUND = 'FORBIDDEN: Checklist category not found or access denied'
+const TASK_NOT_FOUND = 'FORBIDDEN: Checklist task not found or access denied'
+
 export async function toggleCategoryNeglect(siteId: string, categoryId: string, isNeglected: boolean) {
-  const { site, category } = await requireChecklistCategory(siteId, categoryId, 'manage')
-  await prisma.projectChecklistCategory.update({ where: { id: category.id }, data: { isNeglected } })
+  const { user, site, category } = await requireChecklistCategory(siteId, categoryId, 'manage')
+
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.projectChecklistCategory.findFirst({
+      where: { id: category.id, stage: { checklist: { siteId: site.id, companyId: site.companyId } } },
+      select: { id: true, name: true, isNeglected: true },
+    })
+    if (!current) throw new Error(CATEGORY_NOT_FOUND)
+
+    await tx.projectChecklistCategory.update({ where: { id: current.id }, data: { isNeglected }, select: { id: true } })
+
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        companyId: site.companyId,
+        module: 'CHECKLIST',
+        action: 'UPDATE',
+        recordId: site.id,
+        before: { categoryId: current.id, siteId: site.id, isNeglected: current.isNeglected },
+        after: { change: 'CATEGORY_NEGLECT', categoryId: current.id, categoryName: current.name, siteId: site.id, isNeglected },
+      },
+    })
+  })
+
   revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
 
-export async function addCustomTask(siteId: string, categoryId: string, name: string) {
-  const { site, category } = await requireChecklistCategory(siteId, categoryId, 'manage')
-  await prisma.projectChecklistTask.create({ data: { categoryId: category.id, name, order: 999 } })
+// Task names are validated and normalized before the gate, so an invalid name reads nothing.
+export async function addCustomTask(siteId: string, categoryId: string, rawName: string) {
+  const name = parseChecklistTaskName(rawName)
+  const { user, site, category } = await requireChecklistCategory(siteId, categoryId, 'manage')
+
+  await prisma.$transaction(async (tx) => {
+    const parent = await tx.projectChecklistCategory.findFirst({
+      where: { id: category.id, stage: { checklist: { siteId: site.id, companyId: site.companyId } } },
+      select: { id: true },
+    })
+    if (!parent) throw new Error(CATEGORY_NOT_FOUND)
+
+    const task = await tx.projectChecklistTask.create({
+      data: { categoryId: parent.id, name, order: 999 },
+      select: { id: true, name: true },
+    })
+
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        companyId: site.companyId,
+        module: 'CHECKLIST',
+        action: 'CREATE',
+        recordId: site.id,
+        after: { change: 'TASK_CREATED', taskId: task.id, taskName: task.name, categoryId: parent.id, siteId: site.id },
+      },
+    })
+  })
+
   revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
 
-export async function editChecklistTask(siteId: string, taskId: string, newName: string) {
-  const { site, task } = await requireChecklistTask(siteId, taskId, 'manage')
-  await prisma.projectChecklistTask.update({ where: { id: task.id }, data: { name: newName } })
+export async function editChecklistTask(siteId: string, taskId: string, rawName: string) {
+  const newName = parseChecklistTaskName(rawName)
+  const { user, site, task } = await requireChecklistTask(siteId, taskId, 'manage')
+
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.projectChecklistTask.findFirst({
+      where: { id: task.id, category: { stage: { checklist: { siteId: site.id, companyId: site.companyId } } } },
+      select: { id: true, name: true },
+    })
+    if (!current) throw new Error(TASK_NOT_FOUND)
+
+    await tx.projectChecklistTask.update({ where: { id: current.id }, data: { name: newName }, select: { id: true } })
+
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        companyId: site.companyId,
+        module: 'CHECKLIST',
+        action: 'UPDATE',
+        recordId: site.id,
+        before: { taskId: current.id, siteId: site.id, taskName: current.name },
+        after: { change: 'TASK_RENAMED', taskId: current.id, siteId: site.id, taskName: newName },
+      },
+    })
+  })
+
   revalidatePath(`/sites/${site.id}`)
   return { success: true }
 }
@@ -394,7 +500,7 @@ export async function uploadChecklistPhotoAction(taskId: string, siteId: string,
     })
     if (bound) throw new Error('FORBIDDEN: Uploaded photo is already attached')
 
-    await tx.sitePhoto.create({
+    const photo = await tx.sitePhoto.create({
       data: {
         companyId: site.companyId,
         siteId: site.id,
@@ -406,6 +512,18 @@ export async function uploadChecklistPhotoAction(taskId: string, siteId: string,
       },
       select: { id: true },
     })
+
+    // Identifiers only: the event never carries the stored URL or provider public id.
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        companyId: site.companyId,
+        module: 'SITE_PHOTO',
+        action: 'CREATE',
+        recordId: photo.id,
+        after: { change: 'CHECKLIST_PHOTO_ATTACHED', photoId: photo.id, mediaAssetId: assetId, taskId: task.id, siteId: site.id },
+      },
+    })
   })
 
   revalidatePath(`/sites/${site.id}/photos`)
@@ -414,17 +532,60 @@ export async function uploadChecklistPhotoAction(taskId: string, siteId: string,
 }
 
 
-// Admin approves a site photo → makes it visible to client
-export async function approvePhotoAction(photoId: string) {
-  const { user, photo } = await requireChecklistPhoto(photoId)
-  const updated = await prisma.sitePhoto.update({
-    where: { id: photo.id },
-    data: { approvedForClient: true, approvedById: user.id, approvedAt: new Date() },
-    include: { task: true },
+const PHOTO_NOT_FOUND = 'FORBIDDEN: Site photo not found or access denied'
+
+/*
+ * Sets whether a site photo is visible to the client. `requireChecklistPhoto` checks the
+ * live `tasks.manage` grant and TASKS module and resolves the caller's checklist site
+ * scope before reading the photo, then binds it to a live site in that scope and company;
+ * the photo is re-read on the transaction client with that same binding, written with a
+ * guarded `updateMany` that must match exactly one row, and audited as SITE_PHOTO APPROVE
+ * or REJECT on the same client, so a visibility change without its audit rolls back.
+ */
+async function setClientVisibility(photoId: string, approve: boolean) {
+  const { user, photo, scope } = await requireChecklistPhoto(photoId)
+  const bound = {
+    id: photo.id,
+    companyId: photo.companyId,
+    siteId: photo.siteId,
+    site: { ...scope, companyId: photo.companyId, deletedAt: null },
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.sitePhoto.findFirst({
+      where: bound,
+      select: { id: true, siteId: true, taskId: true, approvedForClient: true, approvedById: true },
+    })
+    if (!current) throw new Error(PHOTO_NOT_FOUND)
+
+    const next = approve
+      ? { approvedForClient: true, approvedById: user.id, approvedAt: new Date() }
+      : { approvedForClient: false, approvedById: null, approvedAt: null }
+    const result = await tx.sitePhoto.updateMany({ where: bound, data: next })
+    if (result.count !== 1) throw new Error(PHOTO_NOT_FOUND)
+
+    const ids = { photoId: current.id, siteId: current.siteId, taskId: current.taskId }
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        companyId: photo.companyId,
+        module: 'SITE_PHOTO',
+        action: approve ? 'APPROVE' : 'REJECT',
+        recordId: current.id,
+        before: { ...ids, approvedForClient: current.approvedForClient, approvedById: current.approvedById },
+        after: { ...ids, ...next, approvedAt: next.approvedAt?.toISOString() ?? null },
+      },
+    })
   })
 
-  if (updated.siteId) {
-    revalidatePath(`/sites/${updated.siteId}/photos`)
+  return photo.siteId
+}
+
+// Admin approves a site photo → makes it visible to client
+export async function approvePhotoAction(photoId: string) {
+  const siteId = await setClientVisibility(photoId, true)
+  if (siteId) {
+    revalidatePath(`/sites/${siteId}/photos`)
     revalidatePath(`/client-portal`)
     revalidatePath(`/client-portal/photos`)
   }
@@ -432,13 +593,8 @@ export async function approvePhotoAction(photoId: string) {
 }
 
 export async function rejectPhotoAction(photoId: string) {
-  const { photo } = await requireChecklistPhoto(photoId)
-  const updated = await prisma.sitePhoto.update({
-    where: { id: photo.id },
-    data: { approvedForClient: false, approvedById: null, approvedAt: null },
-  })
-
-  if (updated.siteId) revalidatePath(`/sites/${updated.siteId}/photos`)
+  const siteId = await setClientVisibility(photoId, false)
+  if (siteId) revalidatePath(`/sites/${siteId}/photos`)
   return { success: true }
 }
 

@@ -106,13 +106,24 @@ export async function requireProjectChecklist(siteId: string, mutation?: Checkli
   return { user, site, checklist }
 }
 
+/**
+ * Resolves a site photo for client-visibility moderation. The live role must hold
+ * `tasks.manage` with TASKS enabled, and the caller's `checklistSiteScope` is resolved,
+ * before the photo is read; the photo is then read only on a site inside that scope
+ * (field roles: assigned live sites), of the caller's company. `scope` is returned so the
+ * write can repeat the same binding.
+ */
 export async function requireChecklistPhoto(photoId: string) {
-  const user = await requireUser()
+  const user = await requireChecklistPrincipal('manage')
+  if (typeof photoId !== 'string' || !photoId || photoId.length > 64) {
+    throw new Error('FORBIDDEN: Site photo not found or access denied')
+  }
+  const scope = await checklistSiteScope(user)
   const photo = await prisma.sitePhoto.findFirst({
     where: {
       id: photoId,
       ...(user.role === Role.SUPER_ADMIN ? {} : { companyId: user.companyId! }),
-      site: { deletedAt: null, ...(user.role === Role.SUPER_ADMIN ? {} : { companyId: user.companyId! }) },
+      site: scope,
     },
     include: {
       site: { select: { companyId: true } },
@@ -131,8 +142,5 @@ export async function requireChecklistPhoto(photoId: string) {
   if (checklist && (checklist.siteId !== photo.siteId || checklist.companyId !== photo.companyId)) {
     throw new Error('FORBIDDEN: Checklist photo task is not linked to its site')
   }
-  if (!['SUPER_ADMIN', 'COMPANY_ADMIN', 'PROJECT_MANAGER'].includes(user.role)) {
-    throw new Error('FORBIDDEN: Photo moderation requires an authorized manager')
-  }
-  return { user, photo }
+  return { user, photo, scope }
 }

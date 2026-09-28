@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
     projectChecklistTask: { findFirst: vi.fn() },
     mediaAsset: { findFirst: vi.fn() },
     sitePhoto: { findFirst: vi.fn(), create: vi.fn() },
+    auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   },
 }))

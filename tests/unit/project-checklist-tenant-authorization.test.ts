@@ -33,6 +33,7 @@ beforeEach(() => {
   mocks.requireChecklistSite.mockResolvedValue({ user: { id: 'user_1', companyId: 'company_1' }, site: { id: 'site_1', companyId: 'company_1' } })
   mocks.requireChecklistTask.mockResolvedValue({ user: { id: 'user_1', companyId: 'company_1' }, site: { id: 'site_1', companyId: 'company_1' }, task: { id: 'task_1', name: 'Task' } })
   mocks.prisma.projectChecklist.findFirst.mockResolvedValue(null)
+  mocks.prisma.projectChecklist.create.mockResolvedValue({ id: 'checklist_1' })
   mocks.prisma.checklistTemplate.findFirst.mockResolvedValue({ id: 'template_1', stages: [] })
   mocks.prisma.projectChecklistTask.findFirst.mockResolvedValue({ id: 'task_1', name: 'Task' })
   mocks.prisma.auditLog.findMany.mockResolvedValue([])

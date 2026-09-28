@@ -40,7 +40,9 @@ function safeOriginalName(name: string): string | null {
  * never trusted. A supplied site must be a live site of the live company within the
  * principal's `assignedSiteScope` (field roles: their assigned sites). Cloudinary only
  * stores images/PDFs of the allowed formats under a random public id, and the MediaAsset
- * row is mandatory: if it cannot be written the stored file is removed again.
+ * row is mandatory: it is written with its MEDIA_ASSET CREATE audit event in one
+ * transaction, and if either cannot be written the stored file is removed again. A failed
+ * storage upload returns before the transaction, so it never claims an asset audit.
  */
 export async function POST(request: Request) {
   let user
@@ -134,24 +136,41 @@ export async function POST(request: Request) {
     return fail('Upload failed. Please try again.', 502)
   }
 
+  const userId = user.id
   let asset: { id: string }
   try {
-    asset = await prisma.mediaAsset.create({
-      data: {
-        companyId,
-        siteId,
-        module: moduleName,
-        cloudinaryPublicId: result.public_id,
-        secureUrl: result.secure_url,
-        format: result.format,
-        bytes: result.bytes ?? buffer.length,
-        width: result.width,
-        height: result.height,
-        folder,
-        originalName: safeOriginalName(file.name),
-        uploadedById: user.id,
-      },
-      select: { id: true },
+    asset = await prisma.$transaction(async (tx) => {
+      const bytes = result.bytes ?? buffer.length
+      const created = await tx.mediaAsset.create({
+        data: {
+          companyId,
+          siteId,
+          module: moduleName,
+          cloudinaryPublicId: result.public_id,
+          secureUrl: result.secure_url,
+          format: result.format,
+          bytes,
+          width: result.width,
+          height: result.height,
+          folder,
+          originalName: safeOriginalName(file.name),
+          uploadedById: userId,
+        },
+        select: { id: true },
+      })
+
+      // Identifiers only: never the stored URL, provider public id or client file name.
+      await tx.auditLog.create({
+        data: {
+          userId,
+          companyId,
+          module: 'MEDIA_ASSET',
+          action: 'CREATE',
+          recordId: created.id,
+          after: { mediaAssetId: created.id, uploadModule: moduleName, siteId, format: result.format, bytes },
+        },
+      })
+      return created
     })
   } catch (dbErr: unknown) {
     console.error('[Upload] DB mediaAsset error:', dbErr instanceof Error ? dbErr.message : dbErr)

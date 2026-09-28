@@ -25,7 +25,9 @@ const mocks = vi.hoisted(() => ({
     companyMember: { findFirst: vi.fn() },
     site: { findFirst: vi.fn() },
     mediaAsset: { findFirst: vi.fn() },
-    sitePhoto: { create: vi.fn() },
+    sitePhoto: { findFirst: vi.fn(), create: vi.fn() },
+    auditLog: { create: vi.fn() },
+    $transaction: vi.fn(),
   },
 }))
 
@@ -50,6 +52,12 @@ const ASSETS: Row[] = [
   { id: 'asset_other_site', companyId: 'company_1', siteId: 'site_mine', module: 'SITE_PHOTO', uploadedById: 'user_company_admin', secureUrl: 'x', cloudinaryPublicId: 'x' },
   { id: 'asset_foreign', companyId: 'company_2', siteId: 'site_other', module: 'SITE_PHOTO', uploadedById: 'user_company_admin', secureUrl: 'f', cloudinaryPublicId: 'f' },
   { id: 'asset_someone_else', companyId: 'company_1', siteId: 'site_1', module: 'SITE_PHOTO', uploadedById: 'user_other', secureUrl: 's', cloudinaryPublicId: 's' },
+  { id: 'asset_used', companyId: 'company_1', siteId: 'site_1', module: 'SITE_PHOTO', uploadedById: 'user_company_admin', secureUrl: 'https://res.cloudinary.com/demo/u.jpg', cloudinaryPublicId: 'civil-tracker/acme/site_1/SITE_PHOTO/used' },
+]
+
+// A photo row (here a checklist photo on another task) already backed by `asset_used`.
+const PHOTOS: Row[] = [
+  { id: 'photo_existing', companyId: 'company_1', siteId: 'site_1', taskId: 'task_1', cloudinaryPublicId: 'civil-tracker/acme/site_1/SITE_PHOTO/used' },
 ]
 
 function principal(role: string, companyId = 'company_1') {
@@ -70,7 +78,10 @@ beforeEach(() => {
   mocks.prisma.companyMember.findFirst.mockResolvedValue({ siteIds: [] })
   mocks.prisma.site.findFirst.mockImplementation(inMemoryDelegate(SITES).findFirst)
   mocks.prisma.mediaAsset.findFirst.mockImplementation(inMemoryDelegate(ASSETS).findFirst)
+  mocks.prisma.sitePhoto.findFirst.mockImplementation(inMemoryDelegate(PHOTOS).findFirst)
   mocks.prisma.sitePhoto.create.mockImplementation(async (args: { data: Row }) => ({ id: 'photo_1', ...args.data }))
+  // The photo and its audit event share one transaction (see checklist-photo-audit-atomicity.test.ts).
+  mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
 })
 
 describe('uploadMobileSitePhotoAction', () => {
@@ -141,6 +152,37 @@ describe('uploadMobileSitePhotoAction', () => {
   ])('refuses %s', async (_label, mediaAssetId) => {
     await expect(uploadMobileSitePhotoAction(photo({ mediaAssetId }))).rejects.toThrow(/Uploaded photo not found or access denied/)
     expect(mocks.prisma.sitePhoto.create).not.toHaveBeenCalled()
+  })
+
+  it('refuses an asset already attached to another photo before any photo or audit write', async () => {
+    await expect(uploadMobileSitePhotoAction(photo({ mediaAssetId: 'asset_used' }))).rejects.toThrow(/already attached/)
+    expect(mocks.prisma.sitePhoto.findFirst).toHaveBeenCalledWith({
+      where: { cloudinaryPublicId: 'civil-tracker/acme/site_1/SITE_PHOTO/used' },
+      select: { id: true },
+    })
+    expect(mocks.prisma.sitePhoto.create).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
+  })
+
+  it('checks single use only after the exact tenant/site/uploader asset binding', async () => {
+    // A field engineer on an unassigned site never reaches the asset or use lookup.
+    mocks.requireUser.mockResolvedValue(principal('SITE_ENGINEER'))
+    await expect(uploadMobileSitePhotoAction(photo({ mediaAssetId: 'asset_used' }))).rejects.toThrow(/Site not found or access denied/)
+    expect(mocks.prisma.mediaAsset.findFirst).not.toHaveBeenCalled()
+    expect(mocks.prisma.sitePhoto.findFirst).not.toHaveBeenCalled()
+
+    // Another user's asset is refused as not found, not disclosed as attached.
+    mocks.requireUser.mockResolvedValue(principal('COMPANY_ADMIN'))
+    await expect(uploadMobileSitePhotoAction(photo({ mediaAssetId: 'asset_someone_else' }))).rejects.toThrow(/Uploaded photo not found/)
+    expect(mocks.prisma.sitePhoto.findFirst).not.toHaveBeenCalled()
+    expect(mocks.prisma.sitePhoto.create).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
+  })
+
+  it('refuses an over-long asset id instead of truncating it to a match', async () => {
+    await expect(uploadMobileSitePhotoAction(photo({ mediaAssetId: `asset_1${'x'.repeat(64)}` }))).rejects.toThrow(/Uploaded photo not found/)
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
+    expect(mocks.prisma.mediaAsset.findFirst).not.toHaveBeenCalled()
   })
 
   it('refuses a raw URL or public id in place of an uploaded asset', async () => {
