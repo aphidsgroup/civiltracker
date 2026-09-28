@@ -3,6 +3,8 @@
 import React, { useState } from 'react'
 import { formatCurrency } from '@/lib/utils'
 import { addMobileWorkerAction, updateWorkerAction, saveMobileAttendanceAction } from '@/actions/mobile-labour'
+import { musterRollRow, workerEditPayload } from '@/lib/attendance-payloads'
+import RecordAdvanceForm from '@/components/labour/RecordAdvanceForm'
 import { Check, X, Clock, UserCheck, Save, Plus, Edit3, Sparkles, Search, HardHat, Building2, Wallet, IndianRupee } from 'lucide-react'
 
 type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'HALF_DAY'
@@ -31,6 +33,8 @@ interface AttendanceRegisterClientProps {
   sites?: SiteOption[]
   dateString: string
   targetDateIso?: string
+  /** Live `payments.manage` and the register shows today: offers the explicit advance payment. */
+  canRecordAdvance?: boolean
 }
 
 const STANDARD_TRADES = [
@@ -50,7 +54,8 @@ export default function AttendanceRegisterClient({
   labourList,
   sites = [],
   dateString,
-  targetDateIso
+  targetDateIso,
+  canRecordAdvance = false
 }: AttendanceRegisterClientProps) {
   const sourceList = initialLabour || labourList || []
 
@@ -90,8 +95,9 @@ export default function AttendanceRegisterClient({
   const [editCustomTrade, setEditCustomTrade] = useState('')
   const [editWage, setEditWage] = useState('650')
   const [editSiteId, setEditSiteId] = useState('')
-  const [editAdv, setEditAdv] = useState('0')
   const [updating, setUpdating] = useState(false)
+
+  const [payingWorker, setPayingWorker] = useState<Worker | null>(null)
 
   // Save State
   const [isSaving, setIsSaving] = useState(false)
@@ -107,18 +113,11 @@ export default function AttendanceRegisterClient({
     setSavedSuccess(false)
   }
 
-  const handleAdvanceChange = (id: string, val: string) => {
-    const num = Number(val) || 0
-    setAdvances(prev => ({ ...prev, [id]: num }))
-    setSavedSuccess(false)
-  }
-
   const handleOpenEdit = (w: Worker) => {
     setEditingWorker(w)
     setEditName(w.name)
     setEditWage(String(w.dailyWage))
     setEditSiteId(w.siteId || sites[0]?.id || 's-1')
-    setEditAdv(String(advances[w.id] || 0))
 
     if (w.phone && w.phone.startsWith('CUSTOM_TRADE:')) {
       setEditTrade('OTHERS')
@@ -179,15 +178,14 @@ export default function AttendanceRegisterClient({
     }
     setUpdating(true)
     try {
-      const res = await updateWorkerAction({
+      const res = await updateWorkerAction(workerEditPayload({
         id: editingWorker.id,
         name: editName,
         trade: editTrade,
         customTrade: editCustomTrade,
         dailyWage: Number(editWage) || 650,
         siteId: editSiteId,
-        advance: Number(editAdv) || 0
-      })
+      }))
       if (res.success && res.worker) {
         const selSite = sites.find(s => s.id === editSiteId)
         setWorkers(prev => prev.map(w => {
@@ -204,7 +202,6 @@ export default function AttendanceRegisterClient({
           }
           return w
         }))
-        setAdvances(prev => ({ ...prev, [editingWorker.id]: Number(editAdv) || 0 }))
         setEditingWorker(null)
       }
     } catch (err: unknown) {
@@ -217,11 +214,10 @@ export default function AttendanceRegisterClient({
   const handleSaveAll = async () => {
     setIsSaving(true)
     try {
-      const payload = workers.map(w => ({
+      const payload = workers.map(w => musterRollRow({
         labourId: w.id,
         siteId: w.siteId || 's-1',
-        status: attendance[w.id] || 'PRESENT',
-        advance: advances[w.id] || 0
+        status: attendance[w.id] || 'PRESENT'
       }))
       const res = await saveMobileAttendanceAction(payload, targetDateIso)
       if (res.success) {
@@ -461,15 +457,20 @@ export default function AttendanceRegisterClient({
                       />
                     </td>
                     <td className="py-4 px-4">
-                      <div className="relative max-w-[110px]">
-                        <span className="text-slate-400 font-bold absolute left-2.5 top-2 text-xs">₹</span>
-                        <input
-                          type="number"
-                          placeholder="0"
-                          value={adv || ''}
-                          onChange={e => handleAdvanceChange(worker.id, e.target.value)}
-                          className="w-full pl-6 pr-2 py-1.5 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-700/60 rounded-xl text-xs font-mono font-black text-amber-800 dark:text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        />
+                      <div className="flex items-center gap-2">
+                        <span className="min-w-[70px] px-2.5 py-1.5 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-700/60 rounded-xl text-xs font-mono font-black text-amber-800 dark:text-amber-300">
+                          ₹{adv.toLocaleString('en-IN')}
+                        </span>
+                        {canRecordAdvance && (
+                          <button
+                            onClick={() => setPayingWorker(worker)}
+                            aria-label={`Pay advance to ${worker.name}`}
+                            className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold border-none cursor-pointer inline-flex items-center gap-1 active:scale-95"
+                          >
+                            <Wallet size={12} />
+                            <span>Pay</span>
+                          </button>
+                        )}
                       </div>
                     </td>
                     <td className="py-4 px-4 text-right">
@@ -669,13 +670,12 @@ export default function AttendanceRegisterClient({
 
                 <div>
                   <label className="text-xs font-black text-amber-600 dark:text-amber-400 block mb-1 uppercase tracking-wider">Today&apos;s Advance (₹)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={editAdv}
-                    onChange={e => setEditAdv(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl text-sm font-mono font-black text-amber-800 dark:text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500 box-border"
-                  />
+                  <div className="w-full px-3.5 py-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl text-sm font-mono font-black text-amber-800 dark:text-amber-300 box-border">
+                    ₹{(advances[editingWorker.id] || 0).toLocaleString('en-IN')}
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-500 mt-1 mb-0">
+                    {canRecordAdvance ? 'Pay advances with the Pay button in the register.' : 'Advances are paid by a user with payment access.'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -689,6 +689,20 @@ export default function AttendanceRegisterClient({
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Advance Payment Modal */}
+      {canRecordAdvance && payingWorker && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200 select-none">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-4 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+            <RecordAdvanceForm
+              worker={payingWorker}
+              currentAdvance={advances[payingWorker.id] || 0}
+              onRecorded={(advance) => { setAdvances(prev => ({ ...prev, [payingWorker.id]: advance })); setPayingWorker(null) }}
+              onCancel={() => setPayingWorker(null)}
+            />
+          </div>
         </div>
       )}
     </div>

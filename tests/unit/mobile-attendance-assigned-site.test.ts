@@ -132,7 +132,9 @@ describe('muster-roll actions: field roles only on assigned live sites', () => {
   const ON_UNASSIGNED_SITE = [
     { name: 'addMobileWorkerAction', run: () => mobile.addMobileWorkerAction({ name: 'Arun', trade: 'MASON', dailyRate: 700, siteId: 'site_theirs' }) },
     { name: 'addExistingWorkerToRoster', run: () => mobile.addExistingWorkerToRoster('lab_mine', 'site_theirs') },
-    { name: 'saveContractorAttendance', run: () => mobile.saveContractorAttendance({ siteId: 'site_theirs', contractorName: 'Bricks Co', contractorType: 'Mason', labourCount: 5, dailyAdvance: 300 }) },
+    { name: 'saveContractorAttendance', run: () => mobile.saveContractorAttendance({ siteId: 'site_theirs', contractorName: 'Bricks Co', contractorType: 'Mason', labourCount: 5, dailyAdvance: 0 }) },
+    // The site binding is checked before the payment policy of a daily advance.
+    { name: 'saveContractorAttendance with a daily advance', run: () => mobile.saveContractorAttendance({ siteId: 'site_theirs', contractorName: 'Bricks Co', contractorType: 'Mason', labourCount: 5, dailyAdvance: '300', advanceConfirmation: 'Bricks Co', advanceReason: 'Cement run' }) },
   ]
 
   it.each(ON_UNASSIGNED_SITE.flatMap((action) => FIELD_ROLES.map((role) => ({ ...action, role }))))(
@@ -161,8 +163,17 @@ describe('muster-roll actions: field roles only on assigned live sites', () => {
 
   it('a field role may register a worker and log contractors on an assigned site', async () => {
     await expect(mobile.addMobileWorkerAction({ name: 'Arun', trade: 'MASON', dailyRate: 700, siteId: 'site_mine' })).resolves.toMatchObject({ success: true })
-    await expect(mobile.saveContractorAttendance({ siteId: 'site_listed', contractorName: 'Bricks Co', contractorType: 'Mason', labourCount: 5, dailyAdvance: 300 })).resolves.toMatchObject({ success: true })
-    expect(mocks.tx.subcontractor.updateMany).toHaveBeenCalledWith({ where: { id: 'sub_1', companyId: 'company_1' }, data: { advance: { increment: 300 } } })
+    await expect(mobile.saveContractorAttendance({ siteId: 'site_listed', contractorName: 'Bricks Co', contractorType: 'Mason', labourCount: 5, dailyAdvance: 0 })).resolves.toMatchObject({ success: true })
+    expect(mocks.tx.contractorAttendance.create.mock.calls[0][0].data).toMatchObject({ siteId: 'site_listed', subcontractorId: 'sub_1', dailyAdvance: 0 })
+    expect(mocks.tx.subcontractor.updateMany).not.toHaveBeenCalled()
+  })
+
+  // A daily advance is a payment (mobile-attendance-financial-side-doors.test.ts).
+  it('a field role cannot log a daily advance even on an assigned site', async () => {
+    await expect(mobile.saveContractorAttendance({ siteId: 'site_listed', contractorName: 'Bricks Co', contractorType: 'Mason', labourCount: 5, dailyAdvance: '300', advanceConfirmation: 'Bricks Co', advanceReason: 'Cement run' }))
+      .rejects.toThrow(/Missing required permission "payments\.manage"/)
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
+    expect(writes()).toBe(0)
   })
 
   it('reads the assignment only from an active membership of the live company', async () => {
@@ -181,7 +192,7 @@ describe('muster-roll actions: field roles only on assigned live sites', () => {
   it('saveMobileAttendanceAction refuses the whole batch when one worker is on an unassigned site', async () => {
     await expect(mobile.saveMobileAttendanceAction([
       { labourId: 'lab_mine', siteId: 'site_mine', status: 'PRESENT' },
-      { labourId: 'lab_theirs', siteId: 'site_theirs', status: 'PRESENT', advance: 100 },
+      { labourId: 'lab_theirs', siteId: 'site_theirs', status: 'PRESENT', advance: 0 },
     ])).rejects.toThrow(/Labour not found or access denied/)
     expect(mocks.tx.labourAttendance.upsert).not.toHaveBeenCalled()
     expect(mocks.syncSiteBudget).not.toHaveBeenCalled()

@@ -118,6 +118,7 @@ export default async function MobileAttendancePage({ searchParams }: { searchPar
         initialContractors={initialContractors}
         sites={sites}
         defaultSiteId={sites.some((site) => site.id === siteId) ? siteId : undefined}
+        canManagePayments={gate.access.can('payments.manage')}
       />
     </div>
   )

@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { addMobileWorkerAction, updateWorkerAction, saveMobileAttendanceAction, addExistingWorkerToRoster, saveContractorAttendance, removeLabourAttendanceAction, removeContractorAttendanceAction } from '@/actions/mobile-labour'
+import { contractorLogPayload, musterRollRow, workerEditPayload } from '@/lib/attendance-payloads'
+import RecordAdvanceForm from '@/components/labour/RecordAdvanceForm'
 import { Users, Plus, CheckCircle2, X, HardHat, ShieldCheck, Check, Edit3, IndianRupee, Wallet, Search, Briefcase, Trash2 } from 'lucide-react'
 
 type LabourItem = {
@@ -55,12 +57,15 @@ export default function MobileAttendanceClient({
   initialContractors,
   sites,
   defaultSiteId,
+  canManagePayments = false,
 }: {
   todayRoster: LabourItem[]
   otherWorkers: LabourItem[]
   initialContractors: ContractorItem[]
   sites: SiteOption[]
   defaultSiteId?: string
+  /** Live `payments.manage` with LABOUR enabled: shows the explicit advance payment controls. */
+  canManagePayments?: boolean
 }) {
   const matchedSite = sites.find(s => s.id === defaultSiteId)
   const initialSiteId = matchedSite ? matchedSite.id : (sites[0]?.id || '')
@@ -115,16 +120,20 @@ export default function MobileAttendanceClient({
   const [editCustomTrade, setEditCustomTrade] = useState('')
   const [editRate, setEditRate] = useState('650')
   const [editSiteId, setEditSiteId] = useState('')
-  const [editAdvance, setEditAdvance] = useState('0')
   const [editStartTime, setEditStartTime] = useState('')
   const [updating, setUpdating] = useState(false)
+
+  // Advance payment: one worker at a time, separate from marking the roll
+  const [payingId, setPayingId] = useState<string | null>(null)
 
   // Contractor State
   const [conName, setConName] = useState('')
   const [conType, setConType] = useState('SHUTTERING')
   const [conCustomType, setConCustomType] = useState('')
   const [conCount, setConCount] = useState('10')
-  const [conAdvance, setConAdvance] = useState('0')
+  const [conAdvance, setConAdvance] = useState('')
+  const [conAdvanceConfirm, setConAdvanceConfirm] = useState('')
+  const [conAdvanceReason, setConAdvanceReason] = useState('')
   const [conSiteId, setConSiteId] = useState(initialSiteId)
   const [conStartTime, setConStartTime] = useState(() => {
     const now = new Date()
@@ -148,7 +157,6 @@ export default function MobileAttendanceClient({
     setEditName(worker.name)
     setEditRate(String(worker.dailyRate))
     setEditSiteId(worker.siteId)
-    setEditAdvance(String(advances[worker.id] || 0))
     setEditStartTime(startTimes[worker.id] || '')
 
     if (worker.phone && worker.phone.startsWith('CUSTOM_TRADE:')) {
@@ -237,31 +245,38 @@ export default function MobileAttendanceClient({
       alert('Please enter custom contractor type')
       return
     }
+    const finalType = conType === 'OTHERS' ? conCustomType : conType
+    const built = contractorLogPayload({
+      siteId: conSiteId,
+      contractorName: conName,
+      contractorType: finalType,
+      labourCount: Number(conCount),
+      startTime: conStartTime,
+      advance: { amount: conAdvance, confirmation: conAdvanceConfirm, reason: conAdvanceReason },
+    }, canManagePayments)
+    if (!built.ok) {
+      alert(built.error)
+      return
+    }
     setAddingContractor(true)
     try {
-      const finalType = conType === 'OTHERS' ? conCustomType : conType
-      const res = await saveContractorAttendance({
-        siteId: conSiteId,
-        contractorName: conName,
-        contractorType: finalType,
-        labourCount: Number(conCount),
-        dailyAdvance: Number(conAdvance) || 0,
-        startTime: conStartTime
-      })
+      const res = await saveContractorAttendance(built.payload)
       if (res.success && res.attendance) {
         const newItem: ContractorItem = {
           id: res.attendance.id,
           name: conName,
           trade: finalType,
           labourCount: Number(conCount),
-          advance: Number(conAdvance) || 0,
+          advance: Number(built.payload.dailyAdvance ?? 0),
           siteId: conSiteId,
           startTime: conStartTime
         }
         setContractorList(prev => [newItem, ...prev])
         setConName('')
         setConCount('10')
-        setConAdvance('0')
+        setConAdvance('')
+        setConAdvanceConfirm('')
+        setConAdvanceReason('')
         setConCustomType('')
         setShowContractorForm(false)
       }
@@ -281,15 +296,14 @@ export default function MobileAttendanceClient({
     }
     setUpdating(true)
     try {
-      const res = await updateWorkerAction({
+      const res = await updateWorkerAction(workerEditPayload({
         id: editingId,
         name: editName,
         trade: editTrade,
         customTrade: editCustomTrade,
         dailyWage: Number(editRate) || 650,
         siteId: editSiteId,
-        advance: Number(editAdvance) || 0
-      })
+      }))
       if (res.success && res.worker) {
         const selSite = sites.find(s => s.id === editSiteId)
         setLabourList(prev => prev.map(w => {
@@ -306,7 +320,6 @@ export default function MobileAttendanceClient({
           }
           return w
         }))
-        setAdvances(prev => ({ ...prev, [editingId]: Number(editAdvance) || 0 }))
         setStartTimes(prev => ({ ...prev, [editingId]: editStartTime }))
         setEditingId(null)
       }
@@ -321,11 +334,10 @@ export default function MobileAttendanceClient({
     setSaving(true)
     setSavedMessage('')
     try {
-      const payload = labourList.map(l => ({
+      const payload = labourList.map(l => musterRollRow({
         labourId: l.id,
         siteId: l.siteId,
         status: statuses[l.id] || '',
-        advance: advances[l.id] || 0,
         startTime: startTimes[l.id] || undefined
       }))
       const res = await saveMobileAttendanceAction(payload)
@@ -625,6 +637,15 @@ export default function MobileAttendanceClient({
                       >
                         <Edit3 size={13} strokeWidth={2.5} />
                       </button>
+                      {canManagePayments && (
+                        <button
+                          onClick={() => { setPayingId(payingId === worker.id ? null : worker.id); setShowAddForm(false); setShowContractorForm(false) }}
+                          aria-label={`Pay advance to ${worker.name}`}
+                          className="w-6 h-6 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-600 flex items-center justify-center border-none cursor-pointer p-0 flex-shrink-0 ml-1 active:scale-90 transition-all"
+                        >
+                          <Wallet size={13} strokeWidth={2.5} />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleRemoveLabour(worker.id)}
                         className="w-6 h-6 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 flex items-center justify-center border-none cursor-pointer p-0 flex-shrink-0 ml-1 active:scale-90 transition-all"
@@ -699,7 +720,8 @@ export default function MobileAttendanceClient({
                     </div>
                     <div>
                       <label className="text-[11px] font-black text-amber-300 block mb-1">Today&apos;s Advance (₹)</label>
-                      <input type="number" placeholder="0" value={editAdvance} onChange={e => setEditAdvance(e.target.value)} className="w-full px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-300 font-black text-xs focus:ring-2 focus:ring-amber-400 box-border" />
+                      <div className="w-full px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-400/30 text-amber-300 font-black text-xs box-border">₹{adv}</div>
+                      <div className="text-[9px] font-bold text-slate-400 mt-1">{canManagePayments ? 'Pay advances with the wallet button.' : 'Advances are paid by a user with payment access.'}</div>
                     </div>
                     <div>
                       <label className="text-[11px] font-bold text-slate-300 block mb-1">Start Time</label>
@@ -711,6 +733,14 @@ export default function MobileAttendanceClient({
                     <button type="button" onClick={() => setEditingId(null)} className="px-4 py-2.5 bg-white/10 text-slate-300 font-bold text-xs rounded-xl border-none">Cancel</button>
                   </div>
                 </form>
+              )}
+              {canManagePayments && !isEditing && payingId === worker.id && (
+                <RecordAdvanceForm
+                  worker={worker}
+                  currentAdvance={adv}
+                  onRecorded={(advance) => { setAdvances(prev => ({ ...prev, [worker.id]: advance })); setPayingId(null) }}
+                  onCancel={() => setPayingId(null)}
+                />
               )}
             </div>
           )
@@ -770,14 +800,36 @@ export default function MobileAttendanceClient({
                 </div>
               )}
               <div className="col-span-1">
-                <label className="text-[11px] font-black text-amber-300 block mb-1">Today&apos;s Advance Given (₹)</label>
-                <input type="number" placeholder="0" value={conAdvance} onChange={e => setConAdvance(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-black focus:ring-2 focus:ring-amber-400 box-border" />
-              </div>
-              <div className="col-span-1">
                 <label className="text-[11px] font-bold text-blue-200 block mb-1">Start Time</label>
                 <input type="time" value={conStartTime} onChange={e => setConStartTime(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white text-xs font-bold focus:ring-2 focus:ring-blue-400 box-border" />
               </div>
             </div>
+            {canManagePayments ? (
+              <div className="space-y-2.5 p-3 rounded-2xl bg-amber-500/10 border border-amber-400/30">
+                <div className="text-[11px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                  <Wallet size={13} /><span>Advance Payment (optional)</span>
+                </div>
+                <p className="text-[10px] font-bold text-amber-200/70 m-0">Paid only to a contractor already registered on this site. Leave blank to log headcount only.</p>
+                <div>
+                  <label className="text-[11px] font-black text-amber-300 block mb-1">Today&apos;s Advance Given (₹)</label>
+                  <input type="text" inputMode="decimal" placeholder="0" value={conAdvance} onChange={e => setConAdvance(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-black focus:ring-2 focus:ring-amber-400 box-border" />
+                </div>
+                {conAdvance.trim() !== '' && (
+                  <>
+                    <div>
+                      <label className="text-[11px] font-black text-amber-300 block mb-1">Type the contractor&apos;s registered name to confirm</label>
+                      <input type="text" required autoComplete="off" value={conAdvanceConfirm} onChange={e => setConAdvanceConfirm(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-amber-400/40 text-white text-xs font-bold focus:ring-2 focus:ring-amber-400 box-border" />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-black text-amber-300 block mb-1">Reason</label>
+                      <input type="text" required maxLength={500} placeholder="e.g. Weekly labour advance" value={conAdvanceReason} onChange={e => setConAdvanceReason(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-amber-400/40 text-white placeholder:text-blue-200/40 text-xs font-bold focus:ring-2 focus:ring-amber-400 box-border" />
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <p className="text-[10px] font-bold text-blue-200/70 m-0">Contractor advances are payments and are recorded by a user with payment access, not with the headcount log.</p>
+            )}
             <button type="submit" disabled={addingContractor} className="w-full py-3 bg-[#fc6e20] hover:bg-[#fc6e20] active:scale-98 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md mt-2 flex justify-center items-center gap-1.5">
               {addingContractor ? 'Saving...' : <><Check size={16} strokeWidth={3} /> Save Contractor Log</>}
             </button>

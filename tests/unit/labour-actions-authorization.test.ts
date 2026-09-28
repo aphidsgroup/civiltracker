@@ -216,16 +216,18 @@ function allReads() {
 
 const MARK = [
   { name: 'addMobileWorkerAction', run: () => mobile.addMobileWorkerAction({ name: 'Arun', trade: 'MASON', dailyRate: 700, siteId: 'site_1' }) },
-  { name: 'saveMobileAttendanceAction', run: () => mobile.saveMobileAttendanceAction([{ labourId: 'lab_1', siteId: 'site_1', status: 'PRESENT', advance: 50 }]) },
+  // Marking the roll moves no money; the paid paths are covered by
+  // mobile-attendance-financial-side-doors.test.ts.
+  { name: 'saveMobileAttendanceAction', run: () => mobile.saveMobileAttendanceAction([{ labourId: 'lab_1', siteId: 'site_1', status: 'PRESENT' }]) },
   { name: 'addExistingWorkerToRoster', run: () => mobile.addExistingWorkerToRoster('lab_1', 'site_2') },
-  { name: 'saveContractorAttendance', run: () => mobile.saveContractorAttendance({ siteId: 'site_1', contractorName: 'Bricks Co', contractorType: 'Mason', labourCount: 5, dailyAdvance: 300 }) },
+  { name: 'saveContractorAttendance', run: () => mobile.saveContractorAttendance({ siteId: 'site_1', contractorName: 'Bricks Co', contractorType: 'Mason', labourCount: 5, dailyAdvance: 0 }) },
   { name: 'removeLabourAttendanceAction', run: () => mobile.removeLabourAttendanceAction('lab_1', 'Ravi') },
-  { name: 'removeContractorAttendanceAction', run: () => mobile.removeContractorAttendanceAction('ca_1', 'Bricks Co') },
+  { name: 'removeContractorAttendanceAction', run: () => mobile.removeContractorAttendanceAction('ca_free', 'Bricks Co') },
 ]
 
 const MANAGE = [
   { name: 'updateLabourAction', run: () => updateLabourAction(labourForm()) },
-  { name: 'updateWorkerAction', run: () => mobile.updateWorkerAction({ id: 'lab_1', name: 'Ravi K', trade: 'MASON', dailyWage: 800, siteId: 'site_2', advance: 100 }) },
+  { name: 'updateWorkerAction', run: () => mobile.updateWorkerAction({ id: 'lab_1', name: 'Ravi K', trade: 'MASON', dailyWage: 800, siteId: 'site_2' }) },
 ]
 
 const ALL = [...MARK, ...MANAGE]
@@ -340,7 +342,7 @@ describe('mobile worker registration and edits', () => {
   })
 
   it.each(['lab_other', 'lab_dead', 'lab_cross', 'missing'])('updateWorkerAction refuses worker %s', async (id) => {
-    await expect(mobile.updateWorkerAction({ id, name: 'X', trade: 'MASON', dailyWage: 800, siteId: 'site_1', advance: 10 })).rejects.toThrow(/Labour not found or access denied/)
+    await expect(mobile.updateWorkerAction({ id, name: 'X', trade: 'MASON', dailyWage: 800, siteId: 'site_1' })).rejects.toThrow(/Labour not found or access denied/)
     expect(committed).toEqual([])
     expect(mocks.tx.labourAttendance.upsert).not.toHaveBeenCalled()
   })
@@ -350,29 +352,27 @@ describe('mobile worker registration and edits', () => {
     expect(allWrites()).toBe(0)
   })
 
-  it('updateWorkerAction updates the worker and records the advance in one transaction', async () => {
-    const result = await mobile.updateWorkerAction({ id: 'lab_custom', name: 'Mani', trade: 'MASON', dailyWage: 800, siteId: 'site_2', advance: 100 })
+  it('updateWorkerAction updates the worker in one transaction and, with a zero advance, writes no attendance', async () => {
+    const result = await mobile.updateWorkerAction({ id: 'lab_custom', name: 'Mani', trade: 'MASON', dailyWage: 800, siteId: 'site_2', advance: 0 })
     expect(mocks.tx.labour.updateMany).toHaveBeenCalledWith({
       where: { id: 'lab_custom', companyId: 'company_1', site: { companyId: 'company_1', deletedAt: null } },
       data: { name: 'Mani', trade: 'MASON', phone: null, dailyWage: 800, siteId: 'site_2' },
     })
-    const upsert = mocks.tx.labourAttendance.upsert.mock.calls[0][0]
-    expect(upsert.where.labourId_date.labourId).toBe('lab_custom')
-    expect(upsert.create).toMatchObject({ labourId: 'lab_custom', siteId: 'site_2', advance: 100, markedById: 'user_company_admin' })
-    expect(committed.map(([name]) => name)).toEqual(['labour.updateMany', 'labourAttendance.upsert'])
+    expect(mocks.tx.labourAttendance.upsert).not.toHaveBeenCalled()
+    expect(committed.map(([name]) => name)).toEqual(['labour.updateMany'])
     expect(result.worker).toEqual({ id: 'lab_custom', name: 'Mani', trade: 'MASON', phone: null, dailyWage: 800, siteId: 'site_2' })
   })
 
-  it('updateWorkerAction rolls the worker edit back when the advance write fails', async () => {
-    mocks.tx.labourAttendance.upsert.mockRejectedValue(new Error('db down'))
-    await expect(mobile.updateWorkerAction({ id: 'lab_1', name: 'Ravi', trade: 'MASON', dailyWage: 800, siteId: 'site_1', advance: 100 })).rejects.toThrow(/db down/)
-    expect(mocks.tx.labour.updateMany).toHaveBeenCalledTimes(1)
-    expect(committed).toEqual([])
-  })
-
-  it('updateWorkerAction rejects a negative advance', async () => {
-    await expect(mobile.updateWorkerAction({ id: 'lab_1', name: 'Ravi', trade: 'MASON', dailyWage: 800, siteId: 'site_1', advance: -1 })).rejects.toThrow(/Invalid advance/)
+  // A worker edit moves no money; an advance is recorded by recordLabourAdvanceAction
+  // (mobile-attendance-financial-side-doors.test.ts).
+  it.each([
+    ['a positive advance', 100],
+    ['a negative advance', -1],
+    ['a non-finite advance', Number.POSITIVE_INFINITY],
+  ])('updateWorkerAction refuses %s, writing nothing', async (_label, advance) => {
+    await expect(mobile.updateWorkerAction({ id: 'lab_1', name: 'Ravi', trade: 'MASON', dailyWage: 800, siteId: 'site_1', advance })).rejects.toThrow(/advance is a payment/)
     expect(allWrites()).toBe(0)
+    expect(committed).toEqual([])
   })
 })
 
@@ -386,24 +386,32 @@ describe('saveMobileAttendanceAction', () => {
   ])('refuses the whole batch for %s', async (_label, record) => {
     await expect(mobile.saveMobileAttendanceAction([
       { labourId: 'lab_1', siteId: 'site_1', status: 'PRESENT' },
-      { ...record, status: 'PRESENT', advance: 10 },
+      { ...record, status: 'PRESENT', advance: 0 },
     ])).rejects.toThrow(/Labour not found or access denied/)
     expect(mocks.tx.labourAttendance.upsert).not.toHaveBeenCalled()
     expect(allWrites()).toBe(0)
     expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
   })
 
+  it('rejects an unknown status before any write', async () => {
+    await expect(mobile.saveMobileAttendanceAction([{ labourId: 'lab_1', siteId: 'site_1', status: 'ON_LEAVE' }])).rejects.toThrow(/Invalid/)
+    expect(allWrites()).toBe(0)
+  })
+
+  // Marking the roll moves no money; the paid paths are in
+  // mobile-attendance-financial-side-doors.test.ts.
   it.each([
-    ['an unknown status', { status: 'ON_LEAVE' }],
+    ['a positive advance', { advance: 50 }],
     ['a negative advance', { advance: -10 }],
     ['a non-finite advance', { advance: Number.POSITIVE_INFINITY }],
-  ])('rejects %s before any write', async (_label, overrides) => {
-    await expect(mobile.saveMobileAttendanceAction([{ labourId: 'lab_1', siteId: 'site_1', status: 'PRESENT', ...overrides }])).rejects.toThrow(/Invalid/)
+  ])('refuses %s before any read or write', async (_label, overrides) => {
+    await expect(mobile.saveMobileAttendanceAction([{ labourId: 'lab_1', siteId: 'site_1', status: 'PRESENT', ...overrides }])).rejects.toThrow(/advance is a payment/)
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
     expect(allWrites()).toBe(0)
   })
 
   it('reads the workers scoped to the live company and live sites, inside the write transaction', async () => {
-    await mobile.saveMobileAttendanceAction([{ labourId: 'lab_1', siteId: 'site_1', status: 'HALF_DAY', advance: 50 }])
+    await mobile.saveMobileAttendanceAction([{ labourId: 'lab_1', siteId: 'site_1', status: 'HALF_DAY', advance: 0 }])
     expect(mocks.prisma.labour.findMany).not.toHaveBeenCalled()
     expect(mocks.tx.labour.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: { in: ['lab_1'] }, companyId: 'company_1', site: { companyId: 'company_1', deletedAt: null } },
@@ -419,7 +427,7 @@ describe('saveMobileAttendanceAction', () => {
       return { id: 'att' }
     })
     await expect(mobile.saveMobileAttendanceAction([
-      { labourId: 'lab_1', siteId: 'site_1', status: 'PRESENT', advance: 50 },
+      { labourId: 'lab_1', siteId: 'site_1', status: 'PRESENT', advance: 0 },
       { labourId: 'lab_custom', siteId: 'site_1', status: 'ABSENT' },
     ])).rejects.toThrow(/db down/)
     expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
@@ -430,12 +438,13 @@ describe('saveMobileAttendanceAction', () => {
 
   it('skips unmarked rows and syncs only the verified sites', async () => {
     const result = await mobile.saveMobileAttendanceAction([
-      { labourId: 'lab_1', siteId: 'site_1', status: 'PRESENT', advance: 50 },
+      { labourId: 'lab_1', siteId: 'site_1', status: 'PRESENT', advance: 0 },
       { labourId: 'lab_custom', siteId: 'site_1', status: '' },
     ])
     expect(result).toEqual({ success: true, count: 1 })
     expect(mocks.tx.labourAttendance.upsert).toHaveBeenCalledTimes(1)
-    expect(mocks.tx.labourAttendance.upsert.mock.calls[0][0].create).toMatchObject({ labourId: 'lab_1', siteId: 'site_1', status: 'PRESENT', advance: 50 })
+    expect(mocks.tx.labourAttendance.upsert.mock.calls[0][0].create).toMatchObject({ labourId: 'lab_1', siteId: 'site_1', status: 'PRESENT', advance: 0 })
+    expect(mocks.tx.labourAttendance.upsert.mock.calls[0][0].update).not.toHaveProperty('advance')
     expect(mocks.syncSiteBudget).toHaveBeenCalledTimes(1)
     expect(mocks.syncSiteBudget).toHaveBeenCalledWith('site_1')
   })
@@ -473,7 +482,10 @@ describe('addExistingWorkerToRoster', () => {
 
 describe('contractor attendance', () => {
   const log = (overrides: Partial<Parameters<typeof mobile.saveContractorAttendance>[0]> = {}) =>
-    ({ siteId: 'site_1', contractorName: 'Bricks Co', contractorType: 'Mason', labourCount: 5, dailyAdvance: 300, ...overrides })
+    ({ siteId: 'site_1', contractorName: 'Bricks Co', contractorType: 'Mason', labourCount: 5, dailyAdvance: 0, ...overrides })
+  // A daily advance is a payment; its full policy (binding, guarded increment, audit) is in
+  // mobile-attendance-financial-side-doors.test.ts.
+  const PAID = { dailyAdvance: '300', advanceConfirmation: 'Bricks Co', advanceReason: 'Cement run' }
 
   it.each(['site_other', 'site_dead', 'missing'])('saveContractorAttendance refuses site %s', async (siteId) => {
     await expect(mobile.saveContractorAttendance(log({ siteId }))).rejects.toThrow(/Site not found or access denied/)
@@ -484,14 +496,25 @@ describe('contractor attendance', () => {
     ['a blank contractor name', { contractorName: ' ' }],
     ['a negative headcount', { labourCount: -1 }],
     ['a fractional headcount', { labourCount: 2.5 }],
-    ['a negative advance', { dailyAdvance: -100 }],
-    ['a non-finite advance', { dailyAdvance: Number.NaN }],
+    ['a negative advance', { ...PAID, dailyAdvance: -100 }],
+    ['a negative decimal advance', { ...PAID, dailyAdvance: '-100' }],
+    ['a non-finite advance', { ...PAID, dailyAdvance: Number.NaN }],
+    ['a numeric positive advance', { ...PAID, dailyAdvance: 300 }],
+    ['an exponent advance', { ...PAID, dailyAdvance: '3e2' }],
+    ['a sub-paisa advance', { ...PAID, dailyAdvance: '300.005' }],
   ])('saveContractorAttendance rejects %s', async (_label, overrides) => {
     await expect(mobile.saveContractorAttendance(log(overrides))).rejects.toThrow()
     expect(allWrites()).toBe(0)
   })
 
-  it('reuses only a subcontractor of this company bound to no site or this site', async () => {
+  it.each(['PROJECT_MANAGER', 'SITE_ENGINEER', 'SUPERVISOR'])('saveContractorAttendance refuses a daily advance from live %s without payments.manage', async (role) => {
+    mocks.requireUser.mockResolvedValue(principal(role))
+    await expect(mobile.saveContractorAttendance(log(PAID))).rejects.toThrow(/Missing required permission "payments\.manage"/)
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
+    expect(allWrites()).toBe(0)
+  })
+
+  it('reuses only a subcontractor of this company bound to no site or this site, moving no money', async () => {
     await mobile.saveContractorAttendance(log())
     expect(mocks.tx.subcontractor.findFirst.mock.calls[0][0].where).toEqual({
       companyId: 'company_1',
@@ -499,12 +522,9 @@ describe('contractor attendance', () => {
       OR: [{ siteId: null }, { siteId: 'site_1' }],
     })
     expect(mocks.tx.subcontractor.create).not.toHaveBeenCalled()
-    expect(mocks.tx.contractorAttendance.create.mock.calls[0][0].data).toMatchObject({ companyId: 'company_1', siteId: 'site_1', subcontractorId: 'sub_1', labourCount: 5, dailyAdvance: 300 })
-    expect(mocks.tx.subcontractor.updateMany).toHaveBeenCalledWith({
-      where: { id: 'sub_1', companyId: 'company_1' },
-      data: { advance: { increment: 300 } },
-    })
-    expect(committed.map(([name]) => name)).toEqual(['contractorAttendance.create', 'subcontractor.updateMany'])
+    expect(mocks.tx.contractorAttendance.create.mock.calls[0][0].data).toMatchObject({ companyId: 'company_1', siteId: 'site_1', subcontractorId: 'sub_1', labourCount: 5, dailyAdvance: 0 })
+    expect(mocks.tx.subcontractor.updateMany).not.toHaveBeenCalled()
+    expect(committed.map(([name]) => name)).toEqual(['contractorAttendance.create'])
   })
 
   it('never binds to a same-named subcontractor of another site or tenant', async () => {
@@ -513,19 +533,16 @@ describe('contractor attendance', () => {
     expect(mocks.tx.contractorAttendance.create.mock.calls[0][0].data).toMatchObject({ subcontractorId: 'sub_new' })
 
     vi.clearAllMocks()
-    await mobile.saveContractorAttendance(log({ contractorName: 'Foreign Co' }))
+    await mobile.saveContractorAttendance(log({ contractorName: 'Foreign Co', dailyAdvance: '0' }))
     expect(mocks.tx.subcontractor.create).toHaveBeenCalledTimes(1)
-    expect(mocks.tx.contractorAttendance.create.mock.calls[0][0].data).toMatchObject({ subcontractorId: 'sub_new_2' })
-    expect(mocks.tx.subcontractor.updateMany).toHaveBeenCalledWith({
-      where: { id: 'sub_new_2', companyId: 'company_1' },
-      data: { advance: { increment: 300 } },
-    })
+    expect(mocks.tx.contractorAttendance.create.mock.calls[0][0].data).toMatchObject({ subcontractorId: 'sub_new_2', dailyAdvance: 0 })
+    expect(mocks.tx.subcontractor.updateMany).not.toHaveBeenCalled()
   })
 
-  it('rolls the log and the new subcontractor back when the advance increment fails', async () => {
-    mocks.tx.subcontractor.updateMany.mockResolvedValue({ count: 0 })
-    await expect(mobile.saveContractorAttendance(log({ contractorName: 'New Crew' }))).rejects.toThrow(/Subcontractor not found or access denied/)
-    expect(mocks.tx.contractorAttendance.create).toHaveBeenCalledTimes(1)
+  it('rolls the new subcontractor back when the log write fails', async () => {
+    mocks.tx.contractorAttendance.create.mockRejectedValue(new Error('db down'))
+    await expect(mobile.saveContractorAttendance(log({ contractorName: 'New Crew' }))).rejects.toThrow(/db down/)
+    expect(mocks.tx.subcontractor.create).toHaveBeenCalledTimes(1)
     expect(committed).toEqual([])
   })
 

@@ -24,6 +24,10 @@ export default async function LabourAttendancePage({ searchParams }: { searchPar
     }
   }
   targetDate.setHours(0, 0, 0, 0)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  // An advance is paid only today, and only by a role that may move money.
+  const canRecordAdvance = gate.access.can('payments.manage') && targetDate.getTime() === today.getTime()
 
   // The same assigned-site policy the muster-roll actions enforce: a field role sees only
   // the live sites it is assigned to, the workers on them, and only the attendance logged
@@ -105,6 +109,7 @@ export default async function LabourAttendancePage({ searchParams }: { searchPar
         sites={sites}
         dateString={dateStr}
         targetDateIso={dateInputStr}
+        canRecordAdvance={canRecordAdvance}
       />
     </div>
   )

@@ -216,15 +216,29 @@ describe('a worker moved to a new site: the new-site field user gets no write on
 })
 
 describe('a worker moved to a new site: its old-site advance cannot be changed from the new site', () => {
-  it('updateWorkerAction by a tenant admin refuses to rewrite the old-site advance, rolling the edit back', async () => {
+  // A worker edit moves no money: an advance there is a legacy side door, refused.
+  it('updateWorkerAction by a tenant admin refuses an advance, rewriting neither the old-site row nor the worker', async () => {
     mocks.requireUser.mockResolvedValue(principal('COMPANY_ADMIN'))
     const before = oldSiteRows()
 
-    await expect(mobile.updateWorkerAction({ id: 'lab_moved', name: 'Ravi', trade: 'MASON', dailyWage: 800, siteId: 'site_new', advance: 0 }))
-      .rejects.toThrow(OTHER_SITE)
+    await expect(mobile.updateWorkerAction({ id: 'lab_moved', name: 'Ravi K', trade: 'MASON', dailyWage: 800, siteId: 'site_new', advance: 75 }))
+      .rejects.toThrow(/advance is a payment/)
 
     expect(oldSiteRows()).toBe(before)
     expect(ATTENDANCE.find((row) => row.id === 'att_old_today')?.advance).toBe(200)
+    expect(mocks.tx.labour.updateMany).not.toHaveBeenCalled()
+    expect(mocks.tx.labourAttendance.upsert).not.toHaveBeenCalled()
+  })
+
+  it('updateWorkerAction with a zero advance edits the profile and writes no attendance', async () => {
+    mocks.requireUser.mockResolvedValue(principal('COMPANY_ADMIN'))
+    const before = oldSiteRows()
+
+    await expect(mobile.updateWorkerAction({ id: 'lab_moved', name: 'Ravi K', trade: 'MASON', dailyWage: 800, siteId: 'site_new', advance: 0 }))
+      .resolves.toMatchObject({ success: true, worker: { siteId: 'site_new' } })
+
+    expect(oldSiteRows()).toBe(before)
+    expect(mocks.tx.labourAttendance.upsert).not.toHaveBeenCalled()
   })
 
   it('a tenant admin cannot silently mutate the historical old-site row through the new-site roll', async () => {
@@ -232,9 +246,14 @@ describe('a worker moved to a new site: its old-site advance cannot be changed f
     const before = oldSiteRows()
 
     await expect(mobile.saveMobileAttendanceAction(
-      [{ labourId: 'lab_moved', siteId: 'site_new', status: 'ABSENT', advance: 9999 }],
+      [{ labourId: 'lab_moved', siteId: 'site_new', status: 'ABSENT', advance: 0 }],
       PAST.toISOString(),
     )).rejects.toThrow(OTHER_SITE)
+    // An advance on the roll is refused outright, before any read.
+    await expect(mobile.saveMobileAttendanceAction(
+      [{ labourId: 'lab_moved', siteId: 'site_new', status: 'ABSENT', advance: 9999 }],
+      PAST.toISOString(),
+    )).rejects.toThrow(/advance is a payment/)
     await expect(mobile.addExistingWorkerToRoster('lab_moved', 'site_new')).rejects.toThrow(OTHER_SITE)
     expect((await post({ attendance: [{ labourId: 'lab_moved', status: 'ABSENT' }] })).status).toBe(403)
 
@@ -252,6 +271,22 @@ describe('reassignment never leaves a live same-key row on the old site', () => 
     expect(LABOUR.find((worker) => worker.id === 'lab_old')?.siteId).toBe('site_old')
     expect(mocks.tx.labour.updateMany).not.toHaveBeenCalled()
   })
+
+  it.each([['a positive', 75], ['a negative', -1], ['a non-finite', Number.NaN]])(
+    'updateWorkerAction reports the site-history conflict before refusing %s advance, writing nothing',
+    async (_label, advance) => {
+      mocks.requireUser.mockResolvedValue(principal('COMPANY_ADMIN'))
+      const before = oldSiteRows()
+
+      await expect(mobile.updateWorkerAction({ id: 'lab_old', name: 'Kumar', trade: 'HELPER', dailyWage: 700, siteId: 'site_new', advance }))
+        .rejects.toThrow(OTHER_SITE)
+
+      expect(oldSiteRows()).toBe(before)
+      expect(LABOUR.find((worker) => worker.id === 'lab_old')?.siteId).toBe('site_old')
+      expect(mocks.tx.labour.updateMany).not.toHaveBeenCalled()
+      expect(mocks.tx.labourAttendance.upsert).not.toHaveBeenCalled()
+    },
+  )
 
   it('addExistingWorkerToRoster refuses to pull a worker marked today on its old site onto the new roster', async () => {
     mocks.requireUser.mockResolvedValue(principal('COMPANY_ADMIN'))
@@ -273,8 +308,10 @@ describe('reassignment never leaves a live same-key row on the old site', () => 
 })
 
 describe('same-site attendance remains valid', () => {
-  it('saveMobileAttendanceAction updates the same-site row in place', async () => {
-    await expect(mobile.saveMobileAttendanceAction([{ labourId: 'lab_stay', siteId: 'site_new', status: 'PRESENT', advance: 150 }]))
+  it('saveMobileAttendanceAction updates the same-site row in place, keeping its recorded advance', async () => {
+    ATTENDANCE.find((row) => row.id === 'att_stay_today')!.advance = 150
+
+    await expect(mobile.saveMobileAttendanceAction([{ labourId: 'lab_stay', siteId: 'site_new', status: 'PRESENT', advance: 0 }]))
       .resolves.toEqual({ success: true, count: 1 })
 
     expect(ATTENDANCE.find((row) => row.id === 'att_stay_today')).toMatchObject({ siteId: 'site_new', status: 'PRESENT', advance: 150 })
@@ -300,12 +337,17 @@ describe('same-site attendance remains valid', () => {
     expect(ATTENDANCE.find((row) => row.id === 'att_stay_today')).toMatchObject({ status: 'PRESENT', startTime: '08:00' })
   })
 
-  it('updateWorkerAction records the advance on the worker\'s own site row', async () => {
+  // An advance is recorded by recordLabourAdvanceAction (mobile-attendance-financial-side-doors.test.ts).
+  it('updateWorkerAction refuses an advance even on the worker\'s own site row, writing nothing', async () => {
     mocks.requireUser.mockResolvedValue(principal('COMPANY_ADMIN'))
 
-    await mobile.updateWorkerAction({ id: 'lab_stay', name: 'Arun', trade: 'HELPER', dailyWage: 700, siteId: 'site_new', advance: 75 })
+    await expect(mobile.updateWorkerAction({ id: 'lab_stay', name: 'Arun K', trade: 'HELPER', dailyWage: 700, siteId: 'site_new', advance: 75 }))
+      .rejects.toThrow(/advance is a payment/)
 
-    expect(ATTENDANCE.find((row) => row.id === 'att_stay_today')?.advance).toBe(75)
+    expect(ATTENDANCE.find((row) => row.id === 'att_stay_today')?.advance).toBe(0)
+    expect(LABOUR.find((worker) => worker.id === 'lab_stay')?.name).toBe('Arun')
+    expect(mocks.tx.labour.updateMany).not.toHaveBeenCalled()
+    expect(mocks.tx.labourAttendance.upsert).not.toHaveBeenCalled()
   })
 
   it('updateWorkerAction moves a worker with no attendance today or later on its old site', async () => {
