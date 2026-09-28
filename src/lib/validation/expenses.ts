@@ -118,3 +118,29 @@ export function parseExpenseActionInput(input: unknown): ExpenseActionInput {
   void _ignored
   return { ...data, ...(mediaAssetId ? { mediaAssetId } : {}) }
 }
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Parses a `POST /api/expenses` JSON body with the same policy as
+ * `parseExpenseActionInput`. JSON carries no `Date`, so `billDate` is accepted only as a
+ * real `YYYY-MM-DD` calendar day (absent or null means none); everything else, unknown
+ * keys included, is judged by the canonical parser. Pure, like that parser.
+ */
+export function parseExpenseApiInput(body: unknown): ExpenseActionInput {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    throw new Error('Invalid expense: payload must be an object')
+  }
+  const { billDate: rawDate, ...fields } = body as Record<string, unknown>
+
+  let billDate: Date | undefined
+  if (rawDate !== undefined && rawDate !== null) {
+    const date = typeof rawDate === 'string' && ISO_DATE.test(rawDate) ? new Date(`${rawDate}T00:00:00.000Z`) : null
+    if (!date || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== rawDate) {
+      throw new Error('Invalid expense: billDate must be a valid YYYY-MM-DD date')
+    }
+    billDate = date
+  }
+
+  return parseExpenseActionInput({ ...fields, ...(billDate ? { billDate } : {}) })
+}

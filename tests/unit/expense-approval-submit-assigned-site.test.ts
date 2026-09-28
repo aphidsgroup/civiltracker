@@ -94,7 +94,7 @@ function postExpense(siteId: string) {
   return POST(
     new Request('https://app.test/api/expenses', {
       method: 'POST',
-      body: JSON.stringify({ siteId, category: 'MATERIAL', description: 'Cement bags', amount: 500 }),
+      body: JSON.stringify({ siteId, category: 'MATERIAL', paymentMode: 'CASH', description: 'Cement bags', amount: 500 }),
     })
   )
 }
