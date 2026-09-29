@@ -12,9 +12,12 @@ import {
 } from '@/lib/approvals/submit'
 import { EXPENSE_ATTACHMENT_NOT_FOUND, parseExpenseApiInput } from '@/lib/validation/expenses'
 import type { ExpenseActionInput } from '@/lib/validation/expenses'
+import { MediaClaimRefusal, bindMediaClaim, claimMediaAsset } from '@/lib/uploads/media-claim'
 
 /** A refusal raised inside the transaction; it rolls the transaction back and answers 403. */
 class ExpenseRefusal extends Error {}
+
+const ATTACHMENT_ALREADY_USED = 'Forbidden: Uploaded bill is already attached'
 
 export async function GET(request: Request) {
   const authResult = await requireApiPermission('expenses.view', 'EXPENSES')
@@ -119,9 +122,10 @@ export async function POST(request: Request) {
         height: number | null
         originalName: string | null
       } | null = null
+      const assetPolicy = { id: mediaAssetId ?? '', companyId: site.companyId, siteId: site.id, module: 'BILL', uploadedById: authResult.id }
       if (mediaAssetId) {
         attachment = await tx.mediaAsset.findFirst({
-          where: { id: mediaAssetId, companyId: site.companyId, siteId: site.id, module: 'BILL', uploadedById: authResult.id },
+          where: assetPolicy,
           select: {
             cloudinaryPublicId: true,
             secureUrl: true,
@@ -134,12 +138,15 @@ export async function POST(request: Request) {
         })
         if (!attachment) throw new ExpenseRefusal(EXPENSE_ATTACHMENT_NOT_FOUND)
 
-        // One upload backs one bill, so the same file cannot be claimed twice.
+        // One upload backs one bill. The claim is a guarded write on the asset row, so a
+        // concurrent request for the same upload waits and is then refused (403); it rolls
+        // back with this transaction. The attachment check covers bills filed before claims.
+        await claimMediaAsset(tx, assetPolicy, 'EXPENSE_BILL', ATTACHMENT_ALREADY_USED)
         const bound = await tx.billAttachment.findFirst({
           where: { cloudinaryPublicId: attachment.cloudinaryPublicId },
           select: { id: true },
         })
-        if (bound) throw new ExpenseRefusal('Forbidden: Uploaded bill is already attached')
+        if (bound) throw new ExpenseRefusal(ATTACHMENT_ALREADY_USED)
       }
 
       const created = await tx.expense.create({
@@ -174,6 +181,7 @@ export async function POST(request: Request) {
             : {}),
         },
       })
+      if (attachment) await bindMediaClaim(tx, assetPolicy.id, 'EXPENSE_BILL', created.id, ATTACHMENT_ALREADY_USED)
 
       await createApprovalRequestRecord(tx, authResult, {
         companyId: site.companyId,
@@ -188,7 +196,9 @@ export async function POST(request: Request) {
       return created
     })
   } catch (error: unknown) {
-    if (error instanceof ExpenseRefusal) return NextResponse.json({ error: error.message }, { status: 403 })
+    if (error instanceof ExpenseRefusal || error instanceof MediaClaimRefusal) {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
     console.error('Failed to create expense', error)
     return NextResponse.json({ error: 'Failed to create expense' }, { status: 500 })
   }

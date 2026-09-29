@@ -27,6 +27,7 @@ type Store = {
   tasks: Row[]
   photos: Row[]
   sites: Row[]
+  assets: Row[]
   audit: Row[]
 }
 
@@ -46,7 +47,7 @@ const mocks = vi.hoisted(() => {
       projectChecklist: { findFirst: vi.fn(), create: vi.fn() },
       projectChecklistCategory: { findFirst: vi.fn(), update: vi.fn() },
       projectChecklistTask: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
-      mediaAsset: { findFirst: vi.fn() },
+      mediaAsset: { findFirst: vi.fn(), updateMany: vi.fn() },
       sitePhoto: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
       auditLog: { create: vi.fn() },
     },
@@ -55,7 +56,7 @@ const mocks = vi.hoisted(() => {
       projectChecklist: { findFirst: forbidden('prisma.projectChecklist.findFirst'), create: forbidden('prisma.projectChecklist.create') },
       projectChecklistCategory: { findFirst: forbidden('prisma.projectChecklistCategory.findFirst'), update: forbidden('prisma.projectChecklistCategory.update') },
       projectChecklistTask: { findFirst: forbidden('prisma.projectChecklistTask.findFirst'), create: forbidden('prisma.projectChecklistTask.create'), update: forbidden('prisma.projectChecklistTask.update') },
-      mediaAsset: { findFirst: forbidden('prisma.mediaAsset.findFirst') },
+      mediaAsset: { findFirst: forbidden('prisma.mediaAsset.findFirst'), updateMany: forbidden('prisma.mediaAsset.updateMany') },
       sitePhoto: { findFirst: forbidden('prisma.sitePhoto.findFirst'), create: forbidden('prisma.sitePhoto.create'), update: forbidden('prisma.sitePhoto.update'), updateMany: forbidden('prisma.sitePhoto.updateMany') },
       auditLog: { create: forbidden('prisma.auditLog.create') },
       $transaction: vi.fn(),
@@ -96,9 +97,6 @@ const TEMPLATE = {
   ],
 }
 
-const ASSETS: Row[] = [
-  { id: 'asset_1', companyId: 'company_1', siteId: 'site_1', module: 'SITE_PHOTO', uploadedById: 'user_pm', secureUrl: SECRET_URL, cloudinaryPublicId: SECRET_PUBLIC_ID },
-]
 
 let store: Store
 let failAudit: boolean
@@ -117,6 +115,9 @@ function freshStore(): Store {
     photos: [
       { id: 'photo_1', companyId: 'company_1', siteId: 'site_1', taskId: 'task_1', approvedForClient: false, approvedById: null, approvedAt: null, secureUrl: SECRET_URL, cloudinaryPublicId: 'bound/photo_1' },
       { id: 'photo_shown', companyId: 'company_1', siteId: 'site_1', taskId: null, approvedForClient: true, approvedById: 'user_admin', approvedAt: new Date('2026-09-01T00:00:00Z'), secureUrl: SECRET_URL, cloudinaryPublicId: 'bound/photo_shown' },
+    ],
+    assets: [
+      { id: 'asset_1', companyId: 'company_1', siteId: 'site_1', module: 'SITE_PHOTO', uploadedById: 'user_pm', secureUrl: SECRET_URL, cloudinaryPublicId: SECRET_PUBLIC_ID, consumedAt: null, consumedBy: null, consumedRecordId: null },
     ],
     audit: [{ id: 'audit_old', module: 'CHECKLIST', action: 'TICK', recordId: 'site_1' }],
   }
@@ -194,7 +195,12 @@ beforeEach(() => {
     Object.assign(row, data)
     return { id: row.id }
   })
-  tx.mediaAsset.findFirst.mockImplementation(async (args) => found(ASSETS, args))
+  tx.mediaAsset.findFirst.mockImplementation(async (args) => found(store.assets, args))
+  tx.mediaAsset.updateMany.mockImplementation(async ({ where, data }: { where: Row; data: Row }) => {
+    const rows = store.assets.filter((row) => matchesWhere(row, where))
+    rows.forEach((row) => Object.assign(row, data))
+    return { count: rows.length }
+  })
   tx.sitePhoto.findFirst.mockImplementation(async (args) => found(store.photos, args))
   tx.sitePhoto.create.mockImplementation(async ({ data }: { data: Row }) => {
     const row = { id: `photo_new_${nextId++}`, approvedForClient: false, ...data }
@@ -461,6 +467,24 @@ describe('photo attachment is audited atomically without storing URLs in the eve
     expect(store.photos).toEqual(before)
     expect(newAudit()).toEqual([])
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
+    // The one-time claim rolled back with the photo, so the upload can be attached again.
+    expect(store.assets[0]).toMatchObject({ consumedAt: null, consumedBy: null, consumedRecordId: null })
+    failAudit = false
+    await expect(invoke()).resolves.toMatchObject({ success: true })
+  })
+
+  it.each([
+    ['uploadChecklistPhotoAction', 'CHECKLIST_PHOTO', () => actions.uploadChecklistPhotoAction('task_1', 'site_1', 'asset_1')],
+    ['uploadMobileSitePhotoAction', 'SITE_PHOTO', () => uploadMobileSitePhotoAction({ siteId: 'site_1', mediaAssetId: 'asset_1', caption: 'x', gps: '' })],
+  ] as const)('%s claims the upload for the created photo, and a second use is refused', async (_name, purpose, invoke) => {
+    await invoke()
+    const created = store.photos.find((row) => String(row.id).startsWith('photo_new'))!
+    expect(store.assets[0]).toMatchObject({ consumedBy: purpose, consumedRecordId: created.id })
+    expect(store.assets[0].consumedAt).toBeInstanceOf(Date)
+
+    await expect(invoke()).rejects.toThrow(/already attached/)
+    expect(mocks.tx.sitePhoto.create).toHaveBeenCalledTimes(1)
+    expect(newAudit()).toHaveLength(1)
   })
 
   it('refuses a foreign asset without writing or auditing', async () => {

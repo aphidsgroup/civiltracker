@@ -166,6 +166,8 @@ const tx = {
       return args.data
     }),
   },
+  // No salary run covers the roll's day here; mobile-attendance-date-policy.test.ts covers one.
+  salaryRun: { findFirst: vi.fn(async () => null) },
 }
 
 const siteFindFirst = vi.fn(async (args: { where?: Row }) => SITES.find((site) => matchesWhere(site, args.where, relations)) ?? null)
@@ -252,6 +254,9 @@ describe('saveMobileAttendanceAction carries no money', () => {
   )
 
   it('a status update keeps the recorded advance, even when a zero advance is sent', async () => {
+    // The roll keys today at UTC midnight (the other actions here still use local midnight).
+    const now = new Date()
+    attendanceRow('att_mine')!.date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
     await expect(mobile.saveMobileAttendanceAction([{ labourId: 'lab_mine', siteId: 'site_mine', status: 'HALF_DAY', advance: 0 }]))
       .resolves.toEqual({ success: true, count: 1 })
     expect(attendanceRow('att_mine')).toMatchObject({ status: 'HALF_DAY', advance: 200 })

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { inMemoryDelegate } from './support/prisma-where'
 import type { Row } from './support/prisma-where'
+import { isClaim, mediaAssetTable } from './support/media-asset-table'
+import type { MediaAssetUpdate } from './support/media-asset-table'
 
 /**
  * Regression for project checklist mutations checking the tenant site but no permission.
@@ -15,8 +17,9 @@ import type { Row } from './support/prisma-where'
  * the site is read: structural edits need `tasks.manage`; ticking progress needs
  * `tasks.manage` or `dpr.create` (field staff report progress, but may not set the
  * client-done or neglected flags); checklist photos need `tasks.manage` or
- * `sitePhotos.upload`. All of them need the TASKS module. Reads and the client's own
- * photo confirmation are unchanged.
+ * `sitePhotos.upload`. All of them need the TASKS module. A CLIENT still reads its own
+ * site (reads have their own grant, see checklist-read-authorization.test.ts) and still
+ * confirms its own photos.
  *
  * `@/lib/permissions`, `@/lib/auth/require-module` and `@/lib/auth/checklist-site` are real.
  */
@@ -27,7 +30,7 @@ const mocks = vi.hoisted(() => ({
     company: { findUnique: vi.fn() },
     companyMember: { findFirst: vi.fn() },
     site: { findFirst: vi.fn() },
-    mediaAsset: { findFirst: vi.fn() },
+    mediaAsset: { findFirst: vi.fn(), updateMany: vi.fn() },
     $transaction: vi.fn(),
     checklistTemplate: { findFirst: vi.fn() },
     projectChecklist: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
@@ -55,17 +58,28 @@ function principal(role: string, companyId = 'company_1') {
 }
 
 let modules: unknown
+let assets: ReturnType<typeof mediaAssetTable>
 
 beforeEach(() => {
   vi.clearAllMocks()
   modules = ['SITES', 'TASKS']
   mocks.requireUser.mockResolvedValue(principal('PROJECT_MANAGER'))
   mocks.prisma.company.findUnique.mockImplementation(async () => ({ modulesJson: modules, status: 'ACTIVE' }))
-  mocks.prisma.site.findFirst.mockImplementation(inMemoryDelegate(SITES).findFirst)
+  mocks.prisma.site.findFirst.mockImplementation(inMemoryDelegate(SITES, (_row, key) => (
+    key === 'company' ? { deletedAt: null, status: 'ACTIVE' } : undefined
+  )).findFirst)
   // Field roles are assigned to site_1; checklist photos bind to an uploaded asset
   // (see checklist-photo-media-asset.test.ts for the asset and assignment rules).
   mocks.prisma.companyMember.findFirst.mockResolvedValue({ siteIds: ['site_1'] })
   mocks.prisma.mediaAsset.findFirst.mockResolvedValue({ secureUrl: 'https://res.cloudinary.com/demo/x.jpg', cloudinaryPublicId: 'x' })
+  // The one-time claim honours its guard: `{ count: 1 }` while the upload is unclaimed,
+  // `{ count: 0 }` once consumed. The uploader binding is not modelled here (it has its
+  // own suite, like the lookup above), so every principal may claim asset_1 once.
+  assets = mediaAssetTable([{ id: 'asset_1', companyId: 'company_1', siteId: 'site_1', module: 'SITE_PHOTO', cloudinaryPublicId: 'x' }])
+  mocks.prisma.mediaAsset.updateMany.mockImplementation(async ({ where, data }: MediaAssetUpdate) => {
+    const { uploadedById: _uploader, ...guard } = where ?? {}
+    return assets.updateMany({ where: guard, data })
+  })
   mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => unknown) => fn(mocks.prisma))
   mocks.prisma.checklistTemplate.findFirst.mockResolvedValue({ id: 'tpl_1', stages: [] })
   mocks.prisma.projectChecklist.findFirst.mockImplementation(async (args: { select?: unknown }) => (args?.select
@@ -112,6 +126,7 @@ function writeCount() {
     mocks.prisma.projectChecklistTask.create, mocks.prisma.projectChecklistTask.update, mocks.prisma.projectChecklistTask.delete,
     mocks.prisma.projectChecklistTask.updateMany, mocks.prisma.projectChecklistTask.deleteMany,
     mocks.prisma.sitePhoto.create, mocks.prisma.auditLog.create, mocks.prisma.auditLog.deleteMany,
+    mocks.prisma.mediaAsset.updateMany,
   ].reduce((sum, fn) => sum + fn.mock.calls.length, 0)
 }
 
@@ -166,6 +181,46 @@ describe('checklist mutations: role and permission', () => {
   it('a manager may still set the client-done and neglected flags', async () => {
     await actions.toggleTaskStatus('site_1', 'task_1', 'PENDING', true, true)
     expect(mocks.prisma.projectChecklistTask.update.mock.calls[0][0].data).toMatchObject({ isClientDone: true, isNeglected: true })
+  })
+})
+
+describe('checklist photo: one-time upload claim', () => {
+  it('claims the upload with the guarded write and binds it to the created photo', async () => {
+    await expect(MUTATIONS.uploadChecklistPhotoAction()).resolves.toEqual({ success: true })
+
+    expect(mocks.prisma.mediaAsset.updateMany.mock.calls.map(([args]) => args)).toEqual([
+      {
+        where: { id: 'asset_1', companyId: 'company_1', siteId: 'site_1', module: 'SITE_PHOTO', uploadedById: 'user_project_manager', consumedAt: null },
+        data: { consumedAt: expect.any(Date), consumedBy: 'CHECKLIST_PHOTO' },
+      },
+      {
+        where: { id: 'asset_1', consumedBy: 'CHECKLIST_PHOTO', consumedRecordId: null },
+        data: { consumedRecordId: 'photo_new' },
+      },
+    ])
+    expect(assets.rows[0]).toMatchObject({ consumedBy: 'CHECKLIST_PHOTO', consumedRecordId: 'photo_new' })
+  })
+
+  it.each(['PROJECT_MANAGER', 'SITE_ENGINEER'])('refuses a %s attaching an upload that is already claimed, writing nothing', async (role) => {
+    mocks.requireUser.mockResolvedValue(principal(role))
+    Object.assign(assets.rows[0], { consumedAt: new Date('2026-09-01'), consumedBy: 'SITE_PHOTO', consumedRecordId: 'photo_0' })
+
+    await expect(MUTATIONS.uploadChecklistPhotoAction()).rejects.toThrow('FORBIDDEN: Uploaded photo is already attached')
+
+    const claims = mocks.prisma.mediaAsset.updateMany.mock.calls.map(([args]) => args as MediaAssetUpdate)
+    expect(claims).toHaveLength(1)
+    expect(isClaim(claims[0])).toBe(true)
+    expect(mocks.prisma.sitePhoto.create).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
+    expect(assets.rows[0]).toMatchObject({ consumedBy: 'SITE_PHOTO', consumedRecordId: 'photo_0' })
+  })
+
+  it('lets the same upload back only one checklist photo', async () => {
+    await expect(MUTATIONS.uploadChecklistPhotoAction()).resolves.toEqual({ success: true })
+    await expect(MUTATIONS.uploadChecklistPhotoAction()).rejects.toThrow(/already attached/)
+
+    expect(mocks.prisma.sitePhoto.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prisma.auditLog.create).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => {
     })
 
   const tx = {
-    mediaAsset: { findFirst: vi.fn() },
+    mediaAsset: { findFirst: vi.fn(), updateMany: vi.fn() },
     billAttachment: { findFirst: vi.fn() },
     expense: { create: stage('expense', 'expense_1') },
     approval: { create: stage('approval', 'approval_1') },
@@ -123,6 +123,7 @@ function expectNoResourceReads() {
   expect(mocks.prisma.mediaAsset.findFirst).not.toHaveBeenCalled()
   expect(mocks.tx.mediaAsset.findFirst).not.toHaveBeenCalled()
   expect(mocks.tx.billAttachment.findFirst).not.toHaveBeenCalled()
+  expect(mocks.tx.mediaAsset.updateMany).not.toHaveBeenCalled()
 }
 
 /** No expense, bill attachment, media binding or approval was written anywhere. */
@@ -157,6 +158,8 @@ beforeEach(() => {
     originalName: 'inv7.jpg',
   })
   mocks.tx.billAttachment.findFirst.mockResolvedValue(null)
+  // The one-time claim and its owner binding each match the single unconsumed upload.
+  mocks.tx.mediaAsset.updateMany.mockResolvedValue({ count: 1 })
 })
 
 describe('createExpenseAction module gates', () => {

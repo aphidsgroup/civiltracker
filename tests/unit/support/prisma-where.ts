@@ -32,10 +32,14 @@ function matchesScalar(value: unknown, condition: unknown): boolean {
         return matchesScalar(value, operand)
       case 'in':
         return (operand as unknown[]).some((candidate) => sameValue(value, candidate))
+      case 'notIn':
+        return !(operand as unknown[]).some((candidate) => sameValue(value, candidate))
       case 'not':
         return !matchesScalar(value, operand)
       case 'gte':
         return value != null && (value as number | Date) >= (operand as number | Date)
+      case 'lte':
+        return value != null && (value as number | Date) <= (operand as number | Date)
       case 'contains':
         return String(value ?? '').toLowerCase().includes(String(operand).toLowerCase())
       case 'mode':

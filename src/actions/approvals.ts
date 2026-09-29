@@ -5,6 +5,7 @@ import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { auditLogData } from '@/lib/audit-data'
+import { requireApprovalsModule } from '@/lib/approvals/module-gate'
 import { approvalAssignedSiteFilter, requireApprovalReader } from '@/lib/approvals/read-guard'
 import {
   APPROVAL_DETAIL_NOT_FOUND,
@@ -79,8 +80,12 @@ async function approvalQueryScope(user: SessionUser): Promise<Prisma.ApprovalWhe
  * query runs. A row of any other type is excluded by the query itself, so it answers
  * exactly like a missing id instead of revealing that it exists. The full set adds no
  * predicate.
+ *
+ * Every transition (approve, reject, mark paid) loads its row here, so the APPROVALS
+ * module is checked here on the live company, before the query.
  */
 async function findActionableApproval(user: SessionUser, id: string, entityTypes: ApprovalEntityType[]) {
+  await requireApprovalsModule()
   const approval = await prisma.approval.findFirst({
     where: {
       id,

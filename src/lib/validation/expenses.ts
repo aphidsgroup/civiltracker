@@ -26,6 +26,11 @@ const amountField = z
     error: 'must be a positive amount of at most two decimals',
   })
 
+/** The same amount rule as `amountField`, for boundaries that parse the rest themselves. */
+export function isExpenseAmount(value: unknown): value is number {
+  return amountField.safeParse(value).success
+}
+
 /** Optional free text: absent or blank becomes `undefined`, otherwise trimmed and bounded. */
 function optionalText(max: number) {
   return z

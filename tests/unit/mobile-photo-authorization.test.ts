@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => ({
     company: { findUnique: vi.fn() },
     companyMember: { findFirst: vi.fn() },
     site: { findFirst: vi.fn() },
-    mediaAsset: { findFirst: vi.fn() },
+    mediaAsset: { findFirst: vi.fn(), updateMany: vi.fn(async () => ({ count: 1 })) },
     sitePhoto: { findFirst: vi.fn(), create: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),

@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client'
+import { requireApprovalsModule } from '@/lib/approvals/module-gate'
 import { requireUser } from '@/lib/auth/require-user'
 import { assignedSiteScope, readsAssignedSitesOnly } from '@/lib/auth/site-mutation'
 import { hasPermission } from '@/lib/permissions'
@@ -27,6 +28,9 @@ const APPROVAL_READ_PERMISSION: Permission = 'approvals.view'
  * be told apart from a lookup that was never attempted: no row, count or existence fact
  * leaks out of a denied read.
  *
+ * The APPROVALS module is checked here too, on the live company, so a direct action call
+ * is refused like the REST surface when the module is disabled.
+ *
  * This is only the read gate. Tenant scope, the malformed site-binding filter and the
  * per-entity approve permission stay where they already live in the approval actions.
  */
@@ -36,6 +40,7 @@ export async function requireApprovalReader(): Promise<SessionUser> {
   if (!hasPermission(user.role, APPROVAL_READ_PERMISSION)) {
     throw new Error(`Forbidden: Missing required permission "${APPROVAL_READ_PERMISSION}"`)
   }
+  await requireApprovalsModule()
 
   return user
 }

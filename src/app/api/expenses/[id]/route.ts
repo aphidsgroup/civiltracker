@@ -5,6 +5,7 @@ import type { ApprovalEntityType, ApprovalStatus, Prisma } from '@prisma/client'
 import { requireUser } from '@/lib/auth/require-user'
 import { requireModuleEnabled } from '@/lib/auth/require-module'
 import { hasPermission } from '@/lib/permissions'
+import { isExpenseAmount } from '@/lib/validation/expenses'
 import type { SessionUser } from '@/types'
 
 /** Either type may front an expense: the bills workflow raises both. */
@@ -166,6 +167,83 @@ function optionalText(value: unknown, field: string) {
   return value.trim() || null
 }
 
+const JSON_WHITESPACE = new Set([' ', '\t', '\n', '\r'])
+
+/**
+ * Raw source of every number literal given as a top-level `amount` member of `text`,
+ * which must already have parsed as a JSON object. Parsing turns `1e3` into `1000`, so the
+ * exponent can only be seen here. Strings are skipped whole (escapes included), so an `e`
+ * or an `"amount"` inside any string value is never mistaken for a literal; nested values
+ * are skipped by depth; keys are compared decoded, so `"amount"` is still `amount`;
+ * and every duplicate key is reported, not only the one `JSON.parse` kept.
+ */
+function topLevelAmountLiterals(text: string): string[] {
+  const literals: string[] = []
+  let depth = 0
+  let expectingKey = false
+  let key: string | null = null
+  let valueKey: string | null = null
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    if (JSON_WHITESPACE.has(char)) continue
+
+    if (char === '"') {
+      const start = i
+      for (i++; text[i] !== '"'; i++) if (text[i] === '\\') i++
+      if (depth === 1 && expectingKey) {
+        key = JSON.parse(text.slice(start, i + 1)) as string
+        expectingKey = false
+      }
+      valueKey = null
+    } else if (char === '{' || char === '[') {
+      depth++
+      if (depth === 1) expectingKey = true
+      valueKey = null
+    } else if (char === '}' || char === ']') {
+      depth--
+      valueKey = null
+    } else if (char === ',') {
+      if (depth === 1) expectingKey = true
+      valueKey = null
+    } else if (char === ':') {
+      if (depth === 1) valueKey = key
+    } else {
+      // A bare literal: a number, `true`, `false` or `null`, running to the next delimiter.
+      const start = i
+      while (i + 1 < text.length && !JSON_WHITESPACE.has(text[i + 1]) && !',]}'.includes(text[i + 1])) i++
+      const literal = text.slice(start, i + 1)
+      if (depth === 1 && valueKey === 'amount' && /^-?\d/.test(literal)) literals.push(literal)
+      valueKey = null
+    }
+  }
+
+  return literals
+}
+
+/**
+ * Reads the edit body once, as text, so the amount can be judged by the literal the client
+ * actually sent: `{"amount": 1e3}` is refused like the string `"1e3"` instead of arriving
+ * as `1000`. Malformed JSON and anything but a JSON object are refused outright.
+ */
+async function readEditBody(request: Request): Promise<Record<string, unknown>> {
+  let text: string
+  let body: unknown
+  try {
+    text = await request.text()
+    body = JSON.parse(text)
+  } catch {
+    throw new ExpenseMutationError('Invalid request body', 400)
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new ExpenseMutationError('Invalid request body', 400)
+  }
+  if (topLevelAmountLiterals(text).some((literal) => /[eE]/.test(literal))) {
+    throw new ExpenseMutationError('Amount must be a positive amount of at most two decimals', 400)
+  }
+  return body as Record<string, unknown>
+}
+
 /** Validates the edit body into the exact column changes it asks for. */
 function parseExpenseEdit(body: Record<string, unknown>) {
   const data: {
@@ -179,11 +257,11 @@ function parseExpenseEdit(body: Record<string, unknown>) {
   } = {}
 
   if (body.amount !== undefined) {
-    const amount = typeof body.amount === 'string' ? Number(body.amount) : body.amount
-    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
-      throw new ExpenseMutationError('Amount must be a positive number', 400)
+    // Same bounded two-decimal rule as expense creation; a numeric string is refused.
+    if (!isExpenseAmount(body.amount)) {
+      throw new ExpenseMutationError('Amount must be a positive amount of at most two decimals', 400)
     }
-    data.amount = amount
+    data.amount = body.amount
   }
   if (body.category !== undefined) {
     if (typeof body.category !== 'string' || !EXPENSE_CATEGORIES.has(body.category)) {
@@ -231,16 +309,16 @@ export async function PATCH(
   const { id } = await params
   try {
     const editor = await requireExpenseEditor()
+
+    // The body is judged before the expense is read, so a malformed edit touches nothing.
+    const data = parseExpenseEdit(await readEditBody(request))
+
     const expense = await findEditableExpense(editor, id)
 
     // Only PENDING expenses can be edited
     if (expense.approvalStatus !== 'PENDING') {
       throw new ExpenseMutationError('Only PENDING expenses can be edited', 400)
     }
-
-    const body = await request.json().catch(() => null)
-    if (!body || typeof body !== 'object') throw new ExpenseMutationError('Invalid request body', 400)
-    const data = parseExpenseEdit(body as Record<string, unknown>)
 
     // What the approval shows the reviewer has to follow the expense it describes.
     const approvalSync: Prisma.ApprovalUpdateManyMutationInput = {

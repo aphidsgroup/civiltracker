@@ -66,7 +66,7 @@ beforeEach(() => {
   mocks.prisma.company.findUnique.mockResolvedValue({ modulesJson: ['SITES', 'TASKS'], status: 'ACTIVE' })
   // Field roles are assigned to site_listed by active membership (and ENGINEER to site_mine directly).
   mocks.prisma.companyMember.findFirst.mockResolvedValue({ siteIds: ['site_listed'] })
-  const sites = inMemoryDelegate(SITES)
+  const sites = inMemoryDelegate(SITES, (_row, key) => (key === 'company' ? { deletedAt: null, status: 'ACTIVE' } : undefined))
   mocks.prisma.site.findFirst.mockImplementation(sites.findFirst)
   mocks.prisma.site.findMany.mockImplementation(sites.findMany)
   mocks.prisma.checklistTemplate.findFirst.mockResolvedValue({ id: 'tpl_1', stages: [] })
@@ -204,7 +204,7 @@ describe('checklist scope for other roles', () => {
   it('refuses a tenant principal without a company', async () => {
     mocks.requireUser.mockResolvedValue({ ...principal('SITE_ENGINEER'), companyId: null })
     await expect(actions.getPendingTasks('site_mine')).rejects.toThrow(/FORBIDDEN/)
-    await expect(actions.getPendingChecklistPhotos()).resolves.toEqual([])
+    await expect(actions.getPendingChecklistPhotos()).rejects.toThrow(/FORBIDDEN/)
     expect(checklistDataQueries()).toBe(0)
   })
 })

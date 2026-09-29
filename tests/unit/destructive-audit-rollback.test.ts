@@ -22,7 +22,8 @@ const mocks = vi.hoisted(() => {
   const tx = {
     vendor: { findFirst: vi.fn(), updateMany: vi.fn() },
     sitePhoto: { deleteMany: vi.fn(), count: vi.fn() },
-    mediaAsset: { deleteMany: vi.fn() },
+    billAttachment: { count: vi.fn() },
+    mediaAsset: { updateMany: vi.fn(), deleteMany: vi.fn(), count: vi.fn() },
     auditLog: { create: vi.fn() },
   }
   return {
@@ -97,7 +98,10 @@ beforeEach(() => {
   mocks.prisma.sitePhoto.findFirst.mockImplementation(inMemoryDelegate(PHOTOS, siteRelation).findFirst)
   mocks.tx.sitePhoto.deleteMany.mockImplementation(stage('sitePhoto.deleteMany', () => ({ count: 1 })))
   mocks.tx.sitePhoto.count.mockResolvedValue(0)
+  mocks.tx.billAttachment.count.mockResolvedValue(0)
+  mocks.tx.mediaAsset.updateMany.mockImplementation(stage('mediaAsset.updateMany', () => ({ count: 1 })))
   mocks.tx.mediaAsset.deleteMany.mockImplementation(stage('mediaAsset.deleteMany', () => ({ count: 1 })))
+  mocks.tx.mediaAsset.count.mockResolvedValue(0)
 
   mocks.tx.auditLog.create.mockImplementation(stage('auditLog.create', () => ({ id: 'audit_1' })))
 
@@ -139,7 +143,7 @@ describe('deactivateVendorAction: mandatory audit', () => {
 describe('deleteSitePhotoAction: mandatory audit', () => {
   it('commits the delete together with its audit record, then destroys the asset', async () => {
     await expect(deleteSitePhotoAction('photo_1', 'Slab')).resolves.toEqual({ success: true })
-    expect(mocks.committed.map(([name]) => name)).toEqual(['sitePhoto.deleteMany', 'auditLog.create', 'mediaAsset.deleteMany'])
+    expect(mocks.committed.map(([name]) => name)).toEqual(['sitePhoto.deleteMany', 'auditLog.create', 'mediaAsset.updateMany', 'mediaAsset.deleteMany'])
     expect(mocks.committed[1][1]).toMatchObject({ userId: 'user_admin', companyId: 'company_1', action: 'DELETE', module: 'SITE_PHOTO', recordId: 'photo_1' })
     expect(mocks.destroy).toHaveBeenCalledWith('pub_1')
     expect(directWrites()).toBe(0)
@@ -152,6 +156,7 @@ describe('deleteSitePhotoAction: mandatory audit', () => {
     await expect(deleteSitePhotoAction('photo_1', 'Slab')).rejects.toBe(auditError)
 
     expect(mocks.tx.sitePhoto.deleteMany).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.mediaAsset.updateMany).not.toHaveBeenCalled()
     expect(mocks.tx.mediaAsset.deleteMany).not.toHaveBeenCalled()
     expect(mocks.committed).toEqual([])
     expect(mocks.destroy).not.toHaveBeenCalled()

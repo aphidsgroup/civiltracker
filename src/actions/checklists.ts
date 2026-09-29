@@ -14,6 +14,7 @@ import { requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
 import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 import { UPLOAD_POLICIES } from '@/lib/uploads/upload-policy'
+import { bindMediaClaim, claimMediaAsset } from '@/lib/uploads/media-claim'
 import { parseChecklistTaskName } from '@/lib/validation/checklists'
 import { revalidatePath } from 'next/cache'
 
@@ -465,6 +466,7 @@ export async function getPendingChecklistPhotos(siteId?: string) {
 }
 
 const MEDIA_NOT_FOUND = 'FORBIDDEN: Uploaded photo not found or access denied'
+const MEDIA_ALREADY_USED = 'FORBIDDEN: Uploaded photo is already attached'
 
 /*
  * Attaches a checklist completion photo uploaded through `/api/upload`. The live principal
@@ -487,18 +489,23 @@ export async function uploadChecklistPhotoAction(taskId: string, siteId: string,
     })
     if (!task) throw new Error('FORBIDDEN: Checklist task not found or access denied')
 
+    const assetPolicy = { id: assetId, companyId: user.companyId, siteId: site.id, module: 'SITE_PHOTO', uploadedById: user.id }
     const asset = await tx.mediaAsset.findFirst({
-      where: { id: assetId, companyId: user.companyId, siteId: site.id, module: 'SITE_PHOTO', uploadedById: user.id },
+      where: assetPolicy,
       select: { secureUrl: true, cloudinaryPublicId: true },
     })
     if (!asset) throw new Error(MEDIA_NOT_FOUND)
 
     // One upload backs one photo row, so deleting a photo never strands another's image.
+    // The claim is a guarded write on the asset row: a concurrent attach of the same upload
+    // (checklist or site photo) waits and is then refused, and a failure below rolls the
+    // claim back. The photo check covers photos attached before claims existed.
+    await claimMediaAsset(tx, assetPolicy, 'CHECKLIST_PHOTO', MEDIA_ALREADY_USED)
     const bound = await tx.sitePhoto.findFirst({
       where: { cloudinaryPublicId: asset.cloudinaryPublicId },
       select: { id: true },
     })
-    if (bound) throw new Error('FORBIDDEN: Uploaded photo is already attached')
+    if (bound) throw new Error(MEDIA_ALREADY_USED)
 
     const photo = await tx.sitePhoto.create({
       data: {
@@ -512,6 +519,7 @@ export async function uploadChecklistPhotoAction(taskId: string, siteId: string,
       },
       select: { id: true },
     })
+    await bindMediaClaim(tx, assetId, 'CHECKLIST_PHOTO', photo.id, MEDIA_ALREADY_USED)
 
     // Identifiers only: the event never carries the stored URL or provider public id.
     await tx.auditLog.create({

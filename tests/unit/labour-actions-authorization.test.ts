@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => {
     subcontractor: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
     contractorAttendance: { create: vi.fn(), deleteMany: vi.fn() },
     auditLog: { create: vi.fn() },
+    // No salary run covers the roll's day here; mobile-attendance-date-policy.test.ts covers one.
+    salaryRun: { findFirst: vi.fn() },
   }
   return {
     requireUser: vi.fn(),

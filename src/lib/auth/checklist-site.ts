@@ -2,6 +2,7 @@ import { Role } from '@prisma/client'
 import type { Prisma } from '@prisma/client'
 import { requireUser } from '@/lib/auth/require-user'
 import { requireModuleEnabled } from '@/lib/auth/require-module'
+import { activeClientSiteWhere } from '@/lib/auth/client-portal'
 import { assignedSiteScope } from '@/lib/auth/site-mutation'
 import { hasPermission } from '@/lib/permissions'
 import type { Permission } from '@/lib/permissions'
@@ -24,34 +25,46 @@ const CHECKLIST_MUTATION_GRANTS: Record<ChecklistMutation, Permission[]> = {
   photo: ['tasks.manage', 'sitePhotos.upload'],
 }
 
+/**
+ * Reading a checklist is an explicit grant too: managers (`tasks.manage`), field staff
+ * who view DPRs (`dpr.view`), and portal clients (`clientPortal.view`). Every other role
+ * (VENDOR, SUBCONTRACTOR, ACCOUNTANT, PURCHASE_MANAGER) reads nothing.
+ */
+const CHECKLIST_READ_GRANTS: Permission[] = ['tasks.manage', 'dpr.view', 'clientPortal.view']
+
+/**
+ * The live principal, checked before any checklist data is read: the mutation's grant
+ * (the read grant when none is passed), a tenant company for every role but SUPER_ADMIN,
+ * and the TASKS module on the live company. Reads and writes share this gate.
+ */
 async function requireChecklistPrincipal(mutation?: ChecklistMutation) {
   const user = await requireUser()
-  if (mutation) {
-    const grants = CHECKLIST_MUTATION_GRANTS[mutation]
-    if (!grants.some((permission) => hasPermission(user.role, permission))) {
-      throw new Error(`FORBIDDEN: Checklist ${mutation} requires ${grants.join(' or ')}`)
-    }
-    await requireModuleEnabled('TASKS')
+  const grants = mutation ? CHECKLIST_MUTATION_GRANTS[mutation] : CHECKLIST_READ_GRANTS
+  if (!grants.some((permission) => hasPermission(user.role, permission))) {
+    throw new Error(`FORBIDDEN: Checklist ${mutation ?? 'read'} requires ${grants.join(' or ')}`)
   }
+  if (user.role !== Role.SUPER_ADMIN && !user.companyId) throw new Error('FORBIDDEN: Tenant context required')
+  await requireModuleEnabled('TASKS')
   return user
 }
 
 /**
  * The live sites whose checklists `user` may read or write: any live site for
- * SUPER_ADMIN; a CLIENT only the live company sites they are the client of; every other
- * role its `assignedSiteScope` (SITE_ENGINEER / SUPERVISOR only their assigned sites).
+ * SUPER_ADMIN; a CLIENT only the live sites of their company explicitly assigned to them
+ * while that company is active; every other role its `assignedSiteScope`
+ * (SITE_ENGINEER / SUPERVISOR only their assigned sites via an active membership).
  */
 async function checklistSiteScope(user: SessionUser): Promise<Prisma.SiteWhereInput> {
   if (user.role === Role.SUPER_ADMIN) return { deletedAt: null }
   if (!user.companyId) throw new Error('FORBIDDEN: Tenant context required')
-  if (user.role === Role.CLIENT) return { companyId: user.companyId, deletedAt: null, clientUserId: user.id }
+  if (user.role === Role.CLIENT) return { ...activeClientSiteWhere(user.id), companyId: user.companyId }
   return assignedSiteScope(user, user.companyId)
 }
 
 /**
- * Resolves a site within the caller's `checklistSiteScope`. Reads pass no `mutation`;
- * every checklist write passes the grant it needs, which is checked on the live role and
- * the TASKS module before the site is read.
+ * Resolves a site within the caller's `checklistSiteScope`. Reads pass no `mutation` and
+ * need the checklist read grant; every write passes the grant it needs. Either way the
+ * live role and the TASKS module are checked before the site is read.
  */
 export async function requireChecklistSite(siteId: string, mutation?: ChecklistMutation) {
   const user = await requireChecklistPrincipal(mutation)
@@ -66,11 +79,11 @@ export async function requireChecklistSite(siteId: string, mutation?: ChecklistM
 
 /**
  * The sites whose checklists a tenant caller may read, all of the caller's company, for
- * reads that span sites. `null` when the caller has no single company to list (a
- * SUPER_ADMIN, or a principal without a company): such a read must name a site.
+ * reads that span sites; gated like any checklist read. `null` for a SUPER_ADMIN, who
+ * has no single company to list: such a read must name a site.
  */
 export async function listChecklistSites() {
-  const user = await requireUser()
+  const user = await requireChecklistPrincipal()
   if (user.role === Role.SUPER_ADMIN || !user.companyId) return null
   const sites = await prisma.site.findMany({ where: await checklistSiteScope(user), select: { id: true } })
   return { companyId: user.companyId, siteIds: sites.map((site) => site.id) }

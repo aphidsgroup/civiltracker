@@ -42,7 +42,10 @@ describe('checklist site resolver', () => {
     mocks.requireUser.mockResolvedValue({ id: 'client_1', role: 'CLIENT', companyId: 'company_1' })
     await requireChecklistSite('site_1')
     expect(mocks.prisma.site.findFirst).toHaveBeenCalledWith({
-      where: { id: 'site_1', deletedAt: null, companyId: 'company_1', clientUserId: 'client_1' },
+      where: {
+        id: 'site_1', deletedAt: null, companyId: 'company_1', clientUserId: 'client_1',
+        company: { deletedAt: null, status: { notIn: ['SUSPENDED', 'CANCELLED'] } },
+      },
       select: { id: true, companyId: true },
     })
   })

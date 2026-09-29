@@ -473,6 +473,12 @@ model MediaAsset {
   originalName       String?
   uploadedById       String
   createdAt          DateTime @default(now())
+  // One-time claim by the evidence record the upload backs (see src/lib/uploads/media-claim.ts).
+  // Null until claimed; set by a guarded updateMany inside the attaching transaction.
+  consumedAt         DateTime?
+  // EXPENSE_BILL | SITE_PHOTO | CHECKLIST_PHOTO, RETIRED while its record is deleted, LEGACY from the backfill.
+  consumedBy         String?
+  consumedRecordId   String?
 
   company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   site       Site?   @relation(fields: [siteId], references: [id], onDelete: Cascade)

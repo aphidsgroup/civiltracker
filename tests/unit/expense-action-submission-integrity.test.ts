@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => {
   }
 
   const tx = {
-    mediaAsset: { findFirst: vi.fn() },
+    mediaAsset: { findFirst: vi.fn(), updateMany: vi.fn() },
     billAttachment: { findFirst: vi.fn() },
     expense: {
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
@@ -181,6 +181,8 @@ beforeEach(() => {
     originalName: 'inv7.jpg',
   })
   mocks.tx.billAttachment.findFirst.mockResolvedValue(null)
+  // The one-time claim and its owner binding each match the single unconsumed upload.
+  mocks.tx.mediaAsset.updateMany.mockResolvedValue({ count: 1 })
 })
 
 describe('createExpenseAction authorizes before any read or write', () => {
@@ -322,7 +324,31 @@ describe('createExpenseAction writes expense, approval and timeline atomically',
     expect(mocks.tx.approval.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ entityType: 'BILL', entityId: 'expense_1', siteId: 'site_1' }),
     })
+    expect(mocks.tx.mediaAsset.updateMany.mock.calls).toEqual([
+      [{
+        where: { id: 'asset_inv7', companyId: 'company_1', siteId: 'site_1', module: 'BILL', uploadedById: 'engineer_1', consumedAt: null },
+        data: { consumedAt: expect.any(Date), consumedBy: 'EXPENSE_BILL' },
+      }],
+      [{
+        where: { id: 'asset_inv7', consumedBy: 'EXPENSE_BILL', consumedRecordId: null },
+        data: { consumedRecordId: 'expense_1' },
+      }],
+    ])
     expectNoGlobalWrites()
+  })
+
+  it('refuses an upload already consumed by another bill before any expense write', async () => {
+    mocks.tx.mediaAsset.updateMany.mockResolvedValueOnce({ count: 0 })
+
+    await expect(createExpenseAction(BILL_INPUT)).rejects.toThrow(/already attached/)
+
+    expect(mocks.tx.mediaAsset.updateMany).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.billAttachment.findFirst).not.toHaveBeenCalled()
+    expect(mocks.tx.expense.create).not.toHaveBeenCalled()
+    expect(mocks.tx.approval.create).not.toHaveBeenCalled()
+    expect(mocks.committed).toEqual([])
+    expectNoGlobalWrites()
+    expect(mocks.logActivity).not.toHaveBeenCalled()
   })
 
   it('binds a SUPER_ADMIN expense to the company that owns the live site', async () => {
@@ -348,6 +374,8 @@ describe('createExpenseAction writes expense, approval and timeline atomically',
     await expect(createExpenseAction(BILL_INPUT)).rejects.toThrow('approval insert failed')
 
     expect(mocks.tx.expense.create).toHaveBeenCalledTimes(1)
+    // Claim and binding both ran on the rolled-back transaction.
+    expect(mocks.tx.mediaAsset.updateMany).toHaveBeenCalledTimes(2)
     expect(mocks.tx.approvalTimeline.create).not.toHaveBeenCalled()
     expect(mocks.committed).toEqual([])
     expectNoGlobalWrites()

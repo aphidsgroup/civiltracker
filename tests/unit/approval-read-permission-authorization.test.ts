@@ -49,6 +49,7 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('@/lib/auth/require-user', () => ({ requireUser: mocks.requireUser }))
+vi.mock('@/lib/approvals/module-gate', () => ({ requireApprovalsModule: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma, default: mocks.prisma }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 vi.mock('@/lib/audit', () => ({ logActivity: mocks.logActivity }))

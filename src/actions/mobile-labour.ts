@@ -6,7 +6,7 @@ import { logActivity } from '@/lib/audit'
 import { auditLogData } from '@/lib/audit-data'
 import { AttendanceStatus, LabourTrade } from '@prisma/client'
 import type { Prisma } from '@prisma/client'
-import { requireAssignedScopeMutation, requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
+import { readsAssignedSitesOnly, requireAssignedScopeMutation, requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
 import type { TenantMutationUser } from '@/lib/auth/site-mutation'
 import { assertNoOtherSiteAttendanceFrom, upsertSiteAttendance } from '@/lib/labour-attendance'
 import { hasPermission } from '@/lib/permissions'
@@ -30,6 +30,8 @@ import {
  * run in one transaction with counted, company-scoped writes. Attendance rows are written
  * only on the site they are made for (`upsertSiteAttendance`): a row another site recorded
  * for the same worker and date is refused, and a worker is not moved while it has one.
+ * Marking the roll follows the date policy below and audits every row it writes, with the
+ * day and the before/after status, on the write transaction.
  *
  * Money policy: marking the roll and editing a worker move no money. An advance sent to
  * those actions is refused unless it is absent, null or numeric zero — before any read,
@@ -122,6 +124,53 @@ function startOfToday() {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   return today
+}
+
+/*
+ * Muster-roll date policy (`saveMobileAttendanceAction`). The date is a calendar day in UTC,
+ * stored at UTC midnight to match the `@db.Date` column, never shifted by the server's
+ * local timezone. Field roles (SITE_ENGINEER, SUPERVISOR, SUBCONTRACTOR) and any role
+ * without live `labour.manage` record only today. A labour manager (live `labour.manage`,
+ * not a field role) may correct at most the last `ATTENDANCE_CORRECTION_DAYS` days: one
+ * weekly pay cycle, the default salary-run period, so a missed or mistaken day can be fixed
+ * before the week is paid but settled history stays closed. No role records a future day.
+ * Whatever the role, a day covered by a salary run past DRAFT for the site or worker is
+ * closed to attendance changes.
+ */
+const ATTENDANCE_CORRECTION_DAYS = 7
+const DAY_MS = 24 * 60 * 60 * 1000
+const ATTENDANCE_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
+const SALARY_RUN_FINALIZED = 'FORBIDDEN: Attendance for this date is part of a submitted, approved or paid salary run'
+
+function startOfTodayUtc() {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+}
+
+/** Exactly `YYYY-MM-DD` naming a real calendar day, as UTC midnight; absent means `today`. */
+function parseAttendanceDate(raw: unknown, today: Date): Date {
+  if (raw === undefined) return today
+  const match = typeof raw === 'string' ? ATTENDANCE_DATE.exec(raw) : null
+  if (!match) throw new Error('Invalid attendance date')
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])]
+  const date = new Date(Date.UTC(year, month - 1, day))
+  // Round-trips only for a real day: refuses 2026-02-30, month 13 and two-digit-year remapping.
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    throw new Error('Invalid attendance date')
+  }
+  return date
+}
+
+/** Throws unless `user` may record attendance on `date` under the date policy; both are UTC midnights. */
+function requireAttendanceDateAllowed(user: TenantMutationUser, date: Date, today: Date) {
+  if (date.getTime() > today.getTime()) throw new Error('FORBIDDEN: Attendance cannot be recorded for a future date')
+  if (date.getTime() === today.getTime()) return
+  if (readsAssignedSitesOnly(user.role) || !hasPermission(user.role, 'labour.manage')) {
+    throw new Error("FORBIDDEN: Only today's attendance can be recorded by this role")
+  }
+  if (date.getTime() < today.getTime() - ATTENDANCE_CORRECTION_DAYS * DAY_MS) {
+    throw new Error(`FORBIDDEN: Attendance can be corrected only for the last ${ATTENDANCE_CORRECTION_DAYS} days`)
+  }
 }
 
 function plainWorker(worker: { id: string; name: string; trade: LabourTrade; phone: string | null; dailyWage: unknown; siteId: string }) {
@@ -220,14 +269,13 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
   const companyId = user.companyId
   if (!Array.isArray(records)) throw new Error('Invalid attendance records')
 
-  let targetDate = new Date()
-  if (dateIso) {
-    const parsed = new Date(dateIso)
-    if (!isNaN(parsed.getTime())) {
-      targetDate = parsed
-    }
-  }
-  targetDate.setHours(0, 0, 0, 0)
+  // The date policy is judged before any read or write, against one reading of today (UTC)
+  // so the default day, the policy and the correction flag cannot straddle midnight.
+  const today = startOfTodayUtc()
+  const targetDate = parseAttendanceDate(dateIso, today)
+  requireAttendanceDateAllowed(user, targetDate, today)
+  const dateKey = targetDate.toISOString().slice(0, 10)
+  const correction = targetDate.getTime() !== today.getTime()
 
   // Marking the roll moves no money: any row asking for an advance refuses the batch.
   for (const item of records) refuseAdvance(item?.advance)
@@ -241,9 +289,11 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
     }))
 
   // Every worker must be of this company on a site in the principal's scope, and each row
-  // must name the worker's own site; one bad row refuses the whole batch. The binding and
-  // the writes share one transaction, and each row is written on exactly that site.
+  // must name the worker's own site; one bad row refuses the whole batch. The binding, the
+  // salary-run check, the writes and their audit rows share one transaction, and each row
+  // is written on exactly that site: an audit failure rolls the whole batch back.
   const labourIds = [...new Set(marked.map((item) => item.labourId))]
+  const affectedSiteIds = [...new Set(marked.map((item) => item.siteId))]
   await prisma.$transaction(async (tx) => {
     const workers = labourIds.length > 0
       ? await tx.labour.findMany({
@@ -255,21 +305,58 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
     for (const item of marked) {
       if (siteOf.get(item.labourId) !== item.siteId) throw new Error(LABOUR_NOT_FOUND)
     }
+    if (marked.length === 0) return
+
+    // Any run past DRAFT covering the day — company-wide, for an affected site, or paying
+    // an affected worker — has settled that day's attendance.
+    const finalized = await tx.salaryRun.findFirst({
+      where: {
+        companyId,
+        status: { not: 'DRAFT' },
+        periodStart: { lte: targetDate },
+        periodEnd: { gte: targetDate },
+        OR: [
+          { siteId: null },
+          { siteId: { in: affectedSiteIds } },
+          { items: { some: { labourId: { in: labourIds } } } },
+        ],
+      },
+      select: { id: true },
+    })
+    if (finalized) throw new Error(SALARY_RUN_FINALIZED)
 
     // A new row starts with no advance; an update never touches the recorded advance.
     for (const item of marked) {
-      await upsertSiteAttendance(
+      const current = await tx.labourAttendance.findFirst({
+        where: { labourId: item.labourId, date: targetDate, siteId: item.siteId },
+        select: { status: true, startTime: true },
+      })
+      // The audit's before is copied out now, so the write below cannot change what it records.
+      const before = current ? { status: current.status, startTime: current.startTime } : null
+      const row = await upsertSiteAttendance(
         tx,
         { labourId: item.labourId, date: targetDate, siteId: item.siteId },
         { status: item.status, advance: 0, startTime: item.startTime, markedById: user.id },
         { status: item.status, startTime: item.startTime, markedById: user.id },
       )
+      const booking = { labourId: item.labourId, siteId: item.siteId, date: dateKey }
+      await tx.auditLog.create({
+        data: auditLogData({
+          userId: user.id,
+          companyId,
+          action: before ? 'UPDATE' : 'CREATE',
+          module: 'ATTENDANCE',
+          recordId: row.id,
+          description: `${user.name ?? user.email} ${correction ? 'corrected' : 'marked'} attendance for ${dateKey}: ${before?.status ?? 'unmarked'} → ${item.status}`,
+          before: before ? { ...booking, status: before.status, startTime: before.startTime } : null,
+          after: { ...booking, status: item.status, startTime: item.startTime ?? before?.startTime ?? null, correction },
+        }),
+      })
     }
   })
   const count = marked.length
 
   // Recalculate budget for all affected sites
-  const affectedSiteIds = [...new Set(marked.map((item) => item.siteId))]
   if (affectedSiteIds.length > 0) {
     const { syncSiteBudget } = await import('@/lib/budget')
     for (const sId of affectedSiteIds) {
@@ -279,18 +366,6 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
 
   revalidatePath('/mobile/attendance')
   revalidatePath('/labour/attendance')
-
-  if (count > 0) {
-    await logActivity({
-      userId: user.id,
-      companyId,
-      action: 'CREATE',
-      module: 'ATTENDANCE',
-      recordId: marked[0].siteId,
-      description: `${user.name ?? user.email} marked attendance for ${count} worker(s) for today`,
-      after: { count, date: new Date().toLocaleDateString('en-IN') },
-    })
-  }
 
   return { success: true, count }
 }

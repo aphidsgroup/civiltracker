@@ -4,6 +4,7 @@ import { requireAssignedScopeMutation } from '@/lib/auth/site-mutation'
 import { hasPermission } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 import { UPLOAD_POLICIES } from '@/lib/uploads/upload-policy'
+import { releaseMediaForDeletedRecord } from '@/lib/uploads/media-claim'
 import { revalidatePath } from 'next/cache'
 import { auditLogData } from '@/lib/audit-data'
 
@@ -15,7 +16,8 @@ const PHOTO_NOT_FOUND = 'FORBIDDEN: Photo not found or access denied'
  * SITE_PHOTO policy's module (TASKS) enabled, and only a photo on a live site of exactly the live company
  * within the principal's `assignedSiteScope` (field roles: their assigned sites). The
  * photo and its media row are deleted company-scoped, and audited, in one transaction; the external
- * asset is destroyed only after that commits, and only when no photo still references it.
+ * asset is destroyed only after that commits, and only when no photo still references it and
+ * no media row for it is claimed by another record (see `releaseMediaForDeletedRecord`).
  */
 export async function deleteSitePhotoAction(photoId: string, confirmationText?: string) {
   const policy = UPLOAD_POLICIES.SITE_PHOTO
@@ -66,12 +68,16 @@ export async function deleteSitePhotoAction(photoId: string, confirmationText?: 
       }),
     })
 
-    // Another photo (of any tenant) may share the public id; keep the asset if so.
-    const remaining = await tx.sitePhoto.count({ where: { cloudinaryPublicId: photo.cloudinaryPublicId } })
-    if (remaining > 0) return false
-
-    await tx.mediaAsset.deleteMany({ where: { cloudinaryPublicId: photo.cloudinaryPublicId, companyId } })
-    return true
+    // The media row is retired under its row lock before the remaining references are
+    // counted, so an attach of the same upload racing this delete either commits first
+    // (and is counted, keeping the file) or is refused. Another photo (of any tenant) may
+    // share the public id, or a bill attachment; the stored file is kept if so.
+    const shared = { where: { cloudinaryPublicId: photo.cloudinaryPublicId } }
+    return releaseMediaForDeletedRecord(
+      tx,
+      { cloudinaryPublicId: photo.cloudinaryPublicId, companyId, recordId: photo.id },
+      async () => (await tx.sitePhoto.count(shared)) > 0 || (await tx.billAttachment.count(shared)) > 0,
+    )
   })
 
   // The database has committed; a failed external delete only leaves an orphaned asset.

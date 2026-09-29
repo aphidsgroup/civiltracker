@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Row } from './support/prisma-where'
+import { isClaim, mediaAssetTable } from './support/media-asset-table'
+import type { Journal, MediaAssetUpdate } from './support/media-asset-table'
 
 /**
  * Regression for `POST /api/expenses` parsing its body with a permissive local schema.
@@ -11,11 +14,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * transaction access, and a bill is attached only from the caller's own MediaAsset.
  *
  * The transaction mock stages every write issued on `tx` and commits it only when the
- * callback resolves, so `committed` is what a real database would still hold.
+ * callback resolves, so `committed` is what a real database would still hold. The upload
+ * is claimed once by a guarded `updateMany` on the MediaAsset row; the table here honours
+ * that guard (`{ count: 1 }` unclaimed, `{ count: 0 }` consumed) and each transaction
+ * journals its own claim, so a failed or losing transaction rolls back only itself.
  */
 const mocks = vi.hoisted(() => {
-  const committed: Array<{ model: string; data: Record<string, unknown> }> = []
-  let staged: typeof committed = []
+  type Data = Record<string, unknown>
+  const committed: Array<{ model: string; data: Data }> = []
 
   const prisma = {
     $transaction: vi.fn(),
@@ -27,42 +33,53 @@ const mocks = vi.hoisted(() => {
     approvalTimeline: { create: vi.fn() },
   }
 
+  // Shared spies for assertions; `runTransaction` wraps them per transaction.
   const tx = {
-    mediaAsset: { findFirst: vi.fn() },
+    mediaAsset: { findFirst: vi.fn(), updateMany: vi.fn() },
     billAttachment: { findFirst: vi.fn() },
-    expense: {
-      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-        const { billAttachments, ...fields } = data as { billAttachments?: { create: Record<string, unknown> } }
-        const row = { id: 'expense_1', ...fields }
-        staged.push({ model: 'expense', data: row })
-        if (billAttachments) staged.push({ model: 'billAttachment', data: { expenseId: row.id, ...billAttachments.create } })
-        return row
-      }),
-    },
-    approval: {
-      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-        const row = { id: 'approval_1', ...data }
-        staged.push({ model: 'approval', data: row })
-        return row
-      }),
-    },
-    approvalTimeline: {
-      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-        const row = { id: 'timeline_1', ...data }
-        staged.push({ model: 'approvalTimeline', data: row })
-        return row
-      }),
-    },
+    expense: { create: vi.fn(async ({ data }: { data: Data }) => ({ id: 'expense_1', ...data })) },
+    approval: { create: vi.fn(async ({ data }: { data: Data }) => ({ id: 'approval_1', ...data })) },
+    approvalTimeline: { create: vi.fn(async ({ data }: { data: Data }) => ({ id: 'timeline_1', ...data })) },
   }
 
-  async function runTransaction(run: (client: typeof tx) => unknown) {
-    staged = []
+  // Each transaction stages its own writes and journals its own claim writes: a callback
+  // that throws commits nothing and undoes only its own claim, never a concurrent one's.
+  async function runTransaction(run: (client: unknown) => unknown) {
+    const staged: typeof committed = []
+    const journal: Array<() => void> = []
+    const client = {
+      ...tx,
+      mediaAsset: { ...tx.mediaAsset, updateMany: (args: unknown) => tx.mediaAsset.updateMany(args, journal) },
+      expense: {
+        create: async (args: { data: Data }) => {
+          const { billAttachments, ...row } = (await tx.expense.create(args)) as Data & { billAttachments?: { create: Data } }
+          staged.push({ model: 'expense', data: row })
+          if (billAttachments) staged.push({ model: 'billAttachment', data: { expenseId: row.id, ...billAttachments.create } })
+          return row
+        },
+      },
+      approval: {
+        create: async (args: { data: Data }) => {
+          const row = await tx.approval.create(args)
+          staged.push({ model: 'approval', data: row })
+          return row
+        },
+      },
+      approvalTimeline: {
+        create: async (args: { data: Data }) => {
+          const row = await tx.approvalTimeline.create(args)
+          staged.push({ model: 'approvalTimeline', data: row })
+          return row
+        },
+      },
+    }
     try {
-      const result = await run(tx)
+      const result = await run(client)
       committed.push(...staged)
       return result
-    } finally {
-      staged = []
+    } catch (error) {
+      for (const undo of journal.reverse()) undo()
+      throw error
     }
   }
 
@@ -110,6 +127,33 @@ const MEDIA_ASSET = {
   width: 800,
   height: 600,
   originalName: 'bill.jpg',
+}
+
+// The engineer's own BILL upload for site_1, and one an earlier bill already claimed.
+const ASSET_ROWS: Row[] = [
+  { id: 'asset_1', companyId: 'company_1', siteId: 'site_1', module: 'BILL', uploadedById: 'engineer_1', ...MEDIA_ASSET },
+  {
+    id: 'asset_claimed',
+    companyId: 'company_1',
+    siteId: 'site_1',
+    module: 'BILL',
+    uploadedById: 'engineer_1',
+    ...MEDIA_ASSET,
+    cloudinaryPublicId: 'civiltracker/company_1/bills/claimed',
+    consumedAt: new Date('2026-09-01'),
+    consumedBy: 'EXPENSE_BILL',
+    consumedRecordId: 'expense_0',
+  },
+]
+
+let assets: ReturnType<typeof mediaAssetTable>
+
+function asset(id: string) {
+  return assets.rows.find((row) => row.id === id)!
+}
+
+function claimCalls() {
+  return mocks.tx.mediaAsset.updateMany.mock.calls.map(([args]) => args as MediaAssetUpdate).filter(isClaim)
 }
 
 function postRaw(raw: string) {
@@ -176,15 +220,10 @@ beforeEach(() => {
       ? { id: 'site_1', companyId: 'company_1', name: 'Tower A' }
       : null
   })
-  mocks.tx.mediaAsset.findFirst.mockImplementation(async (args: { where: Record<string, unknown> }) =>
-    args.where.id === 'asset_1' &&
-    args.where.companyId === 'company_1' &&
-    args.where.siteId === 'site_1' &&
-    args.where.module === 'BILL' &&
-    args.where.uploadedById === 'engineer_1'
-      ? MEDIA_ASSET
-      : null
-  )
+  assets = mediaAssetTable(ASSET_ROWS)
+  // Found only by id, company, site, BILL module and uploader together.
+  mocks.tx.mediaAsset.findFirst.mockImplementation(assets.findFirst)
+  mocks.tx.mediaAsset.updateMany.mockImplementation((args: MediaAssetUpdate, journal?: Journal) => assets.updateMany(args, journal))
   mocks.tx.billAttachment.findFirst.mockResolvedValue(null)
 })
 
@@ -345,6 +384,62 @@ describe('POST /api/expenses binds site and media to the caller scope', () => {
     expect(response.status).toBe(403)
     expect(mocks.tx.expense.create).not.toHaveBeenCalled()
     expect(mocks.committed).toEqual([])
+    // Attached before claims existed: the claim matched, then rolled back with the refusal.
+    expect(asset('asset_1')).toMatchObject({ consumedAt: null, consumedBy: null, consumedRecordId: null })
+  })
+
+  it('answers an upload another bill already claimed with a safe 403, not a 500', async () => {
+    const response = await createExpense(postRequest({ ...VALID_BODY, mediaAssetId: 'asset_claimed' }))
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toEqual({ error: 'Forbidden: Uploaded bill is already attached' })
+    expect(claimCalls()).toHaveLength(1)
+    expect(mocks.tx.billAttachment.findFirst).not.toHaveBeenCalled()
+    expect(mocks.tx.expense.create).not.toHaveBeenCalled()
+    expect(mocks.tx.approval.create).not.toHaveBeenCalled()
+    expect(mocks.committed).toEqual([])
+    expect(asset('asset_claimed')).toMatchObject({ consumedBy: 'EXPENSE_BILL', consumedRecordId: 'expense_0' })
+  })
+
+  it('refuses a second POST of the same upload with 403 once it backs a bill', async () => {
+    expect((await createExpense(postRequest({ ...VALID_BODY, mediaAssetId: 'asset_1' }))).status).toBe(200)
+    const repeat = await createExpense(postRequest({ ...VALID_BODY, mediaAssetId: 'asset_1' }))
+
+    expect(repeat.status).toBe(403)
+    await expect(repeat.json()).resolves.toEqual({ error: 'Forbidden: Uploaded bill is already attached' })
+    expect(mocks.tx.expense.create).toHaveBeenCalledTimes(1)
+    expect(mocks.committed.filter((row) => row.model === 'billAttachment')).toHaveLength(1)
+  })
+
+  it('lets exactly one of two concurrent POSTs for the same upload claim it; the other gets 403', async () => {
+    // Both requests read the asset as usable before either claims it: the race a
+    // read-then-insert check loses. Only the guarded claim separates them.
+    let reads = 0
+    let bothRead!: () => void
+    const gate = new Promise<void>((resolve) => { bothRead = resolve })
+    mocks.tx.mediaAsset.findFirst.mockImplementation(async (args: { where?: Row }) => {
+      const row = await assets.findFirst(args)
+      if (++reads === 2) bothRead()
+      await gate
+      return row
+    })
+
+    const responses = await Promise.all([
+      createExpense(postRequest({ ...VALID_BODY, mediaAssetId: 'asset_1' })),
+      createExpense(postRequest({ ...VALID_BODY, mediaAssetId: 'asset_1' })),
+    ])
+
+    expect(reads).toBe(2)
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 403])
+    const loser = responses.find((response) => response.status === 403)!
+    await expect(loser.json()).resolves.toEqual({ error: 'Forbidden: Uploaded bill is already attached' })
+
+    expect(claimCalls()).toHaveLength(2)
+    expect(mocks.tx.expense.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.approval.create).toHaveBeenCalledTimes(1)
+    expect(mocks.committed.map((row) => row.model)).toEqual(['expense', 'billAttachment', 'approval', 'approvalTimeline'])
+    // The loser's rollback did not undo the winner's claim.
+    expect(asset('asset_1')).toMatchObject({ consumedBy: 'EXPENSE_BILL', consumedRecordId: 'expense_1' })
   })
 
   it.each([
@@ -438,13 +533,27 @@ describe('POST /api/expenses accepts a valid canonical body', () => {
     })
     expect(mocks.committed.map((row) => row.model)).toEqual(['expense', 'billAttachment', 'approval', 'approvalTimeline'])
     expect(mocks.committed[1].data).toEqual({ expenseId: 'expense_1', ...MEDIA_ASSET, uploadedById: 'engineer_1' })
+    expect(mocks.tx.mediaAsset.updateMany.mock.calls.map(([args]) => args)).toEqual([
+      {
+        where: { id: 'asset_1', companyId: 'company_1', siteId: 'site_1', module: 'BILL', uploadedById: 'engineer_1', consumedAt: null },
+        data: { consumedAt: expect.any(Date), consumedBy: 'EXPENSE_BILL' },
+      },
+      {
+        where: { id: 'asset_1', consumedBy: 'EXPENSE_BILL', consumedRecordId: null },
+        data: { consumedRecordId: 'expense_1' },
+      },
+    ])
+    expect(asset('asset_1')).toMatchObject({ consumedBy: 'EXPENSE_BILL', consumedRecordId: 'expense_1' })
   })
 
-  it('rolls back the expense and attachment when the approval write fails', async () => {
+  it('rolls back the expense, attachment and claim when the approval write fails', async () => {
     mocks.tx.approval.create.mockRejectedValueOnce(new Error('approval insert failed'))
     const response = await createExpense(postRequest({ ...VALID_BODY, mediaAssetId: 'asset_1' }))
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toEqual({ error: 'Failed to create expense' })
     expect(mocks.committed).toEqual([])
+    // The claim rolled back with the transaction, so the upload can be filed again.
+    expect(asset('asset_1')).toMatchObject({ consumedAt: null, consumedBy: null, consumedRecordId: null })
+    expect((await createExpense(postRequest({ ...VALID_BODY, mediaAssetId: 'asset_1' }))).status).toBe(200)
   })
 })

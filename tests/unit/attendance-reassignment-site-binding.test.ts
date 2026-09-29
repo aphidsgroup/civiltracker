@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
     labour: { findFirst: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
     labourAttendance: { findFirst: vi.fn(), upsert: vi.fn(), deleteMany: vi.fn() },
     auditLog: { create: vi.fn() },
+    salaryRun: { findFirst: vi.fn() },
   }
   return {
     requireUser: vi.fn(),
@@ -69,7 +70,25 @@ function today() {
   return date
 }
 
-const PAST = new Date('2026-09-01T00:00:00')
+/**
+ * The muster roll keys a day at UTC midnight and takes it as `YYYY-MM-DD`; a labour
+ * manager may correct the last seven days (mobile-attendance-date-policy.test.ts).
+ */
+function utcDaysAgo(days: number) {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - days))
+}
+
+function ymd(date: Date) {
+  return date.toISOString().slice(0, 10)
+}
+
+/** Re-keys a fixture row to the roll's UTC day; a no-op where local and UTC midnight coincide. */
+function onRollDay(id: string) {
+  ATTENDANCE.find((row) => row.id === id)!.date = utcDaysAgo(0)
+}
+
+const PAST = utcDaysAgo(3)
 
 let LABOUR: Row[]
 let ATTENDANCE: Row[]
@@ -155,6 +174,7 @@ const OTHER_SITE = /Attendance for this date is recorded on another site/
 
 describe('a worker moved to a new site: the new-site field user gets no write on old-site attendance', () => {
   it('saveMobileAttendanceAction refuses to overwrite today\'s old-site row, writing nothing', async () => {
+    onRollDay('att_old_today')
     const before = oldSiteRows()
 
     await expect(mobile.saveMobileAttendanceAction([
@@ -170,12 +190,14 @@ describe('a worker moved to a new site: the new-site field user gets no write on
   it('saveMobileAttendanceAction refuses to rewrite a historical old-site row by date', async () => {
     const before = oldSiteRows()
 
+    // A field role records only today, so a past date is refused before any read.
     await expect(mobile.saveMobileAttendanceAction(
       [{ labourId: 'lab_moved', siteId: 'site_new', status: 'HALF_DAY', advance: 0 }],
-      PAST.toISOString(),
-    )).rejects.toThrow(OTHER_SITE)
+      ymd(PAST),
+    )).rejects.toThrow(/Only today's attendance/)
 
     expect(oldSiteRows()).toBe(before)
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
   })
 
   it('addExistingWorkerToRoster refuses to flip the old-site row to the new site\'s roster', async () => {
@@ -245,14 +267,15 @@ describe('a worker moved to a new site: its old-site advance cannot be changed f
     mocks.requireUser.mockResolvedValue(principal('COMPANY_ADMIN'))
     const before = oldSiteRows()
 
+    // A correction inside the manager's window still never crosses sites.
     await expect(mobile.saveMobileAttendanceAction(
       [{ labourId: 'lab_moved', siteId: 'site_new', status: 'ABSENT', advance: 0 }],
-      PAST.toISOString(),
+      ymd(PAST),
     )).rejects.toThrow(OTHER_SITE)
     // An advance on the roll is refused outright, before any read.
     await expect(mobile.saveMobileAttendanceAction(
       [{ labourId: 'lab_moved', siteId: 'site_new', status: 'ABSENT', advance: 9999 }],
-      PAST.toISOString(),
+      ymd(PAST),
     )).rejects.toThrow(/advance is a payment/)
     await expect(mobile.addExistingWorkerToRoster('lab_moved', 'site_new')).rejects.toThrow(OTHER_SITE)
     expect((await post({ attendance: [{ labourId: 'lab_moved', status: 'ABSENT' }] })).status).toBe(403)
@@ -309,6 +332,7 @@ describe('reassignment never leaves a live same-key row on the old site', () => 
 
 describe('same-site attendance remains valid', () => {
   it('saveMobileAttendanceAction updates the same-site row in place, keeping its recorded advance', async () => {
+    onRollDay('att_stay_today')
     ATTENDANCE.find((row) => row.id === 'att_stay_today')!.advance = 150
 
     await expect(mobile.saveMobileAttendanceAction([{ labourId: 'lab_stay', siteId: 'site_new', status: 'PRESENT', advance: 0 }]))
@@ -319,9 +343,10 @@ describe('same-site attendance remains valid', () => {
   })
 
   it('saveMobileAttendanceAction creates a new-site row for a date with none', async () => {
-    const date = new Date('2026-09-10T00:00:00')
+    mocks.requireUser.mockResolvedValue(principal('COMPANY_ADMIN'))
+    const date = utcDaysAgo(2)
 
-    await mobile.saveMobileAttendanceAction([{ labourId: 'lab_moved', siteId: 'site_new', status: 'PRESENT' }], date.toISOString())
+    await mobile.saveMobileAttendanceAction([{ labourId: 'lab_moved', siteId: 'site_new', status: 'PRESENT' }], ymd(date))
 
     expect(ATTENDANCE.filter((row) => row.labourId === 'lab_moved' && (row.date as Date).getTime() === date.getTime()))
       .toEqual([expect.objectContaining({ siteId: 'site_new', status: 'PRESENT' })])

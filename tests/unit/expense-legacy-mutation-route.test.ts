@@ -275,7 +275,7 @@ describe('legacy expense mutation tenant scope', () => {
 
 describe('PATCH keeps the linked approval in step', () => {
   it('updates the expense, its mutable approval, a timeline entry and the audit record in one transaction', async () => {
-    const response = await PATCH(patchRequest({ amount: '60000', description: 'Steel bars' }), params('e_open'))
+    const response = await PATCH(patchRequest({ amount: 60000, description: 'Steel bars' }), params('e_open'))
 
     expect(response.status).toBe(200)
     expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
@@ -378,6 +378,128 @@ describe('PATCH keeps the linked approval in step', () => {
   ])('rejects invalid input %j before any transaction', async (body) => {
     expect((await PATCH(patchRequest(body), params('e_open'))).status).toBe(400)
     expectNoWrites()
+  })
+})
+
+describe('PATCH amount uses the strict creation rule', () => {
+  function rawPatchRequest(text: string) {
+    return new Request('http://test/api/expenses/x', { method: 'PATCH', body: text })
+  }
+
+  it.each([
+    ['exponent string', '1e3'],
+    ['numeric string', '1500.50'],
+    ['exponent-form number', 1e21],
+    ['sub-paisa exponent number', 1e-7],
+    ['three decimals', 10.123],
+    ['float noise', 0.1 + 0.2],
+    ['just over the column maximum', 1_000_000_000_000],
+    ['unsafe integer', Number.MAX_SAFE_INTEGER + 2],
+    ['zero', 0],
+    ['negative zero', -0],
+    ['negative', -5],
+    ['NaN (serialized to null)', NaN],
+    ['Infinity (serialized to null)', Infinity],
+    ['null', null],
+    ['boolean', true],
+    ['object', { value: 10 }],
+    ['array', [10]],
+    ['blank string', ''],
+  ])('refuses %s before any read or write', async (_label, amount) => {
+    const response = await PATCH(patchRequest({ amount }), params('e_open'))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'Amount must be a positive amount of at most two decimals' })
+    expectNoReads()
+    expectNoWrites()
+  })
+
+  it.each([
+    '{"amount": NaN}',
+    '{"amount": Infinity}',
+    '{"amount": 1e}',
+    '{"amount": 1500',
+    '{"amount": 01500}',
+    '',
+    'not json',
+    'null',
+    '1500',
+    '"text"',
+    '[{"amount": 1500}]',
+  ])('refuses the malformed body %j before any read or write', async (text) => {
+    const response = await PATCH(rawPatchRequest(text), params('e_open'))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'Invalid request body' })
+    expectNoReads()
+    expectNoWrites()
+  })
+
+  // `JSON.parse` turns each of these into a canonical-looking number (1000, 150, 100, ...),
+  // so only the raw literal shows the exponent.
+  it.each([
+    '{"amount": 1e3}',
+    '{"amount": 1E3}',
+    '{"amount": 1e+3}',
+    '{"amount": 1.5e2}',
+    '{"amount": 10000e-2}',
+    '{"amount": 1500.5E0}',
+    '{ "description" : "Steel", "amount"\n:\t1e3 }',
+    '{"\\u0061mount": 1e3}',
+    '{"amount": 1e3, "amount": 1500}',
+    '{"amount": 1500, "amount": 1e3}',
+  ])('refuses the raw exponent literal in %j before any read or write', async (text) => {
+    const response = await PATCH(rawPatchRequest(text), params('e_open'))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'Amount must be a positive amount of at most two decimals' })
+    expectNoReads()
+    expectNoWrites()
+  })
+
+  it.each([
+    ['a plain decimal literal', '{"amount": 1500.50}', { amount: 1500.5 }],
+    ['an integer literal', '{"amount": 60000}', { amount: 60000 }],
+    [
+      'an "e" or exponent text inside other string fields',
+      '{"notes": "see 1e3 \\"amount\\": 1e3", "description": "Cement 2E5 bags", "amount": 1500}',
+      { notes: 'see 1e3 "amount": 1e3', description: 'Cement 2E5 bags', amount: 1500 },
+    ],
+    ['exponent-like text in the bill number', '{"billNumber": "E-1e3", "amount": 250.25}', { billNumber: 'E-1e3', amount: 250.25 }],
+    ['an exponent under a nested "amount" key', '{"metadata": {"amount": 1e3, "list": [2E2]}, "amount": 10}', { amount: 10 }],
+    ['an escaped quote before the amount', '{"paidTo": "Ravi \\"e\\"", "amount": 99.99}', { paidTo: 'Ravi "e"', amount: 99.99 }],
+  ])('accepts %s', async (_label, text, data) => {
+    const response = await PATCH(rawPatchRequest(text), params('e_open'))
+
+    expect(response.status).toBe(200)
+    expect(mocks.tx.expense.updateMany.mock.calls[0][0].data).toEqual(data)
+  })
+
+  it('leaves exponent-free edits of other fields alone when no amount is sent', async () => {
+    const response = await PATCH(rawPatchRequest('{"description": "Exempt 1e3 energy"}'), params('e_open'))
+
+    expect(response.status).toBe(200)
+    expect(mocks.tx.expense.updateMany.mock.calls[0][0].data).toEqual({ description: 'Exempt 1e3 energy' })
+  })
+
+  it('refuses an invalid amount for an out-of-scope id without looking it up', async () => {
+    expect((await PATCH(patchRequest({ amount: 10.001 }), params('e_other_tenant'))).status).toBe(400)
+    expectNoReads()
+    expectNoWrites()
+  })
+
+  it.each([
+    [1500.5, 'NORMAL'],
+    [1500.55, 'NORMAL'],
+    [0.01, 'NORMAL'],
+    [50000.01, 'HIGH'],
+    [999_999_999_999.99, 'HIGH'],
+  ])('accepts the canonical amount %s and keeps the approval in step', async (amount, priority) => {
+    const response = await PATCH(patchRequest({ amount }), params('e_open'))
+
+    expect(response.status).toBe(200)
+    expect(mocks.tx.expense.updateMany.mock.calls[0][0].data).toEqual({ amount })
+    expect(mocks.tx.approval.updateMany.mock.calls[0][0].data).toMatchObject({ amount, priority })
   })
 })
 

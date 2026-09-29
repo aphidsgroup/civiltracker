@@ -20,7 +20,8 @@ import type { RelationResolver, Row } from './support/prisma-where'
 const mocks = vi.hoisted(() => {
   const tx = {
     sitePhoto: { deleteMany: vi.fn(), count: vi.fn() },
-    mediaAsset: { deleteMany: vi.fn() },
+    billAttachment: { count: vi.fn() },
+    mediaAsset: { updateMany: vi.fn(), deleteMany: vi.fn(), count: vi.fn() },
     auditLog: { create: vi.fn() },
   }
   return {
@@ -86,10 +87,17 @@ beforeEach(() => {
     return photos.updateMany(args)
   })
   mocks.tx.sitePhoto.count.mockResolvedValue(0)
+  mocks.tx.billAttachment.count.mockResolvedValue(0)
+  // The photo's own media row is retired, then deleted; no other row survives for the file.
+  mocks.tx.mediaAsset.updateMany.mockImplementation(async () => {
+    mocks.order.push('db:mediaAsset:retire')
+    return { count: 1 }
+  })
   mocks.tx.mediaAsset.deleteMany.mockImplementation(async () => {
     mocks.order.push('db:mediaAsset')
     return { count: 1 }
   })
+  mocks.tx.mediaAsset.count.mockResolvedValue(0)
   mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.tx) => unknown) => {
     const result = await fn(mocks.tx)
     mocks.order.push('commit')
@@ -214,8 +222,19 @@ describe('deleteSitePhotoAction database and cloud ordering', () => {
   it('deletes company-scoped rows in one transaction and destroys the asset only after commit', async () => {
     await deleteSitePhotoAction('photo_1', 'Slab')
     expect(mocks.tx.sitePhoto.deleteMany).toHaveBeenCalledWith({ where: { id: 'photo_1', companyId: 'company_1', site: { companyId: 'company_1', deletedAt: null } } })
-    expect(mocks.tx.mediaAsset.deleteMany).toHaveBeenCalledWith({ where: { cloudinaryPublicId: 'pub_1', companyId: 'company_1' } })
-    expect(mocks.order).toEqual(['db:sitePhoto', 'db:mediaAsset', 'commit', 'cloud:destroy'])
+    expect(mocks.tx.mediaAsset.updateMany).toHaveBeenCalledWith({
+      where: {
+        cloudinaryPublicId: 'pub_1',
+        companyId: 'company_1',
+        OR: [{ consumedRecordId: 'photo_1' }, { consumedAt: null }, { consumedBy: { in: ['RETIRED', 'LEGACY'] } }],
+      },
+      data: { consumedAt: expect.any(Date), consumedBy: 'RETIRED', consumedRecordId: 'photo_1' },
+    })
+    expect(mocks.tx.mediaAsset.deleteMany).toHaveBeenCalledWith({
+      where: { cloudinaryPublicId: 'pub_1', companyId: 'company_1', consumedBy: 'RETIRED', consumedRecordId: 'photo_1' },
+    })
+    expect(mocks.tx.mediaAsset.count).toHaveBeenCalledWith({ where: { cloudinaryPublicId: 'pub_1' } })
+    expect(mocks.order).toEqual(['db:sitePhoto', 'db:mediaAsset:retire', 'db:mediaAsset', 'commit', 'cloud:destroy'])
     expect(mocks.destroy).toHaveBeenCalledWith('pub_1')
     expect(mocks.prisma.sitePhoto.delete).not.toHaveBeenCalled()
     expect(mocks.prisma.mediaAsset.deleteMany).not.toHaveBeenCalled()
@@ -231,6 +250,7 @@ describe('deleteSitePhotoAction database and cloud ordering', () => {
   it('fails without cloud deletion when the guarded delete matches no row (raced away)', async () => {
     mocks.tx.sitePhoto.deleteMany.mockResolvedValue({ count: 0 })
     await expect(deleteSitePhotoAction('photo_1', 'Slab')).rejects.toThrow(/not found or access denied/)
+    expect(mocks.tx.mediaAsset.updateMany).not.toHaveBeenCalled()
     expect(mocks.tx.mediaAsset.deleteMany).not.toHaveBeenCalled()
     expect(mocks.destroy).not.toHaveBeenCalled()
   })
@@ -239,7 +259,24 @@ describe('deleteSitePhotoAction database and cloud ordering', () => {
     mocks.tx.sitePhoto.count.mockResolvedValue(1)
     await deleteSitePhotoAction('photo_1', 'Slab')
     expect(mocks.tx.sitePhoto.count).toHaveBeenCalledWith({ where: { cloudinaryPublicId: 'pub_1' } })
+    // Retired under its row lock before the references are counted, then kept.
+    expect(mocks.order).toEqual(['db:sitePhoto', 'db:mediaAsset:retire', 'commit'])
     expect(mocks.tx.mediaAsset.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.destroy).not.toHaveBeenCalled()
+  })
+
+  it('keeps the shared asset when a bill attachment still references it', async () => {
+    mocks.tx.billAttachment.count.mockResolvedValue(1)
+    await deleteSitePhotoAction('photo_1', 'Slab')
+    expect(mocks.tx.billAttachment.count).toHaveBeenCalledWith({ where: { cloudinaryPublicId: 'pub_1' } })
+    expect(mocks.tx.mediaAsset.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.destroy).not.toHaveBeenCalled()
+  })
+
+  it('keeps the stored file when a media row claimed by another record survives', async () => {
+    mocks.tx.mediaAsset.count.mockResolvedValue(1)
+    await deleteSitePhotoAction('photo_1', 'Slab')
+    expect(mocks.order).toEqual(['db:sitePhoto', 'db:mediaAsset:retire', 'db:mediaAsset', 'commit'])
     expect(mocks.destroy).not.toHaveBeenCalled()
   })
 

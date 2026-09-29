@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
     companyMember: { findFirst: vi.fn() },
     site: { findFirst: vi.fn() },
     projectChecklistTask: { findFirst: vi.fn() },
-    mediaAsset: { findFirst: vi.fn() },
+    mediaAsset: { findFirst: vi.fn(), updateMany: vi.fn(async () => ({ count: 1 })) },
     sitePhoto: { findFirst: vi.fn(), create: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
@@ -197,5 +197,24 @@ describe('uploadChecklistPhotoAction: only a tenant-owned uploaded asset', () =>
       },
       select: { id: true },
     })
+  })
+
+  it('claims the asset once, under the same exact policy, and binds the claim to the photo', async () => {
+    await uploadChecklistPhotoAction('task_1', 'site_1', 'asset_1')
+    expect(mocks.prisma.mediaAsset.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: 'asset_1', companyId: 'company_1', siteId: 'site_1', module: 'SITE_PHOTO', uploadedById: 'user_project_manager', consumedAt: null },
+      data: { consumedAt: expect.any(Date), consumedBy: 'CHECKLIST_PHOTO' },
+    })
+    expect(mocks.prisma.mediaAsset.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: 'asset_1', consumedBy: 'CHECKLIST_PHOTO', consumedRecordId: null },
+      data: { consumedRecordId: 'photo_new' },
+    })
+  })
+
+  it('refuses an upload another request has already claimed, before any photo write', async () => {
+    mocks.prisma.mediaAsset.updateMany.mockResolvedValueOnce({ count: 0 })
+    await expect(uploadChecklistPhotoAction('task_1', 'site_1', 'asset_1')).rejects.toThrow(/already attached/)
+    expect(mocks.prisma.sitePhoto.create).not.toHaveBeenCalled()
+    expect(mocks.prisma.auditLog.create).not.toHaveBeenCalled()
   })
 })

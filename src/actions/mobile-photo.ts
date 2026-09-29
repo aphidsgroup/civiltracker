@@ -3,9 +3,11 @@
 import { requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
 import { prisma } from '@/lib/prisma'
 import { UPLOAD_POLICIES } from '@/lib/uploads/upload-policy'
+import { bindMediaClaim, claimMediaAsset } from '@/lib/uploads/media-claim'
 import { revalidatePath } from 'next/cache'
 
 const MEDIA_NOT_FOUND = 'FORBIDDEN: Uploaded photo not found or access denied'
+const MEDIA_ALREADY_USED = 'FORBIDDEN: Uploaded photo is already attached'
 
 function boundedText(raw: unknown, max: number): string {
   return typeof raw === 'string' ? raw.trim().slice(0, max) : ''
@@ -36,18 +38,23 @@ export async function uploadMobileSitePhotoAction(formData: {
   const gps = boundedText(formData.gps, 100)
 
   const photo = await prisma.$transaction(async (tx) => {
+    const assetPolicy = { id: mediaAssetId, companyId: user.companyId, siteId: site.id, module: 'SITE_PHOTO', uploadedById: user.id }
     const asset = await tx.mediaAsset.findFirst({
-      where: { id: mediaAssetId, companyId: user.companyId, siteId: site.id, module: 'SITE_PHOTO', uploadedById: user.id },
+      where: assetPolicy,
       select: { id: true, secureUrl: true, cloudinaryPublicId: true },
     })
     if (!asset) throw new Error(MEDIA_NOT_FOUND)
 
     // One upload backs one photo row, so deleting a photo never strands another's image.
+    // The claim is a guarded write on the asset row: a concurrent attach of the same upload
+    // waits and is then refused, and a failure below rolls the claim back. The photo check
+    // covers photos attached before claims existed.
+    await claimMediaAsset(tx, assetPolicy, 'SITE_PHOTO', MEDIA_ALREADY_USED)
     const bound = await tx.sitePhoto.findFirst({
       where: { cloudinaryPublicId: asset.cloudinaryPublicId },
       select: { id: true },
     })
-    if (bound) throw new Error('FORBIDDEN: Uploaded photo is already attached')
+    if (bound) throw new Error(MEDIA_ALREADY_USED)
 
     const created = await tx.sitePhoto.create({
       data: {
@@ -61,6 +68,7 @@ export async function uploadMobileSitePhotoAction(formData: {
       },
       select: { id: true },
     })
+    await bindMediaClaim(tx, asset.id, 'SITE_PHOTO', created.id, MEDIA_ALREADY_USED)
 
     // Identifiers only: no stored URL, public id, or the caption/GPS text the client sent.
     await tx.auditLog.create({

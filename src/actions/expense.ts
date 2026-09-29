@@ -14,6 +14,9 @@ import {
 import { logActivity } from '@/lib/audit'
 import { EXPENSE_ATTACHMENT_NOT_FOUND as ATTACHMENT_NOT_FOUND, parseExpenseActionInput } from '@/lib/validation/expenses'
 import type { ExpenseActionInput } from '@/lib/validation/expenses'
+import { bindMediaClaim, claimMediaAsset } from '@/lib/uploads/media-claim'
+
+const ATTACHMENT_ALREADY_USED = 'Forbidden: Uploaded bill is already attached'
 
 /*
  * Records an expense and raises its approval. A bill attachment is named only by the id
@@ -70,9 +73,10 @@ export async function createExpenseAction(input: ExpenseActionInput) {
       height: number | null
       originalName: string | null
     } | null = null
+    const assetPolicy = { id: mediaAssetId, companyId, siteId: site.id, module: 'BILL', uploadedById: user.id }
     if (mediaAssetId) {
       attachment = await tx.mediaAsset.findFirst({
-        where: { id: mediaAssetId, companyId, siteId: site.id, module: 'BILL', uploadedById: user.id },
+        where: assetPolicy,
         select: {
           cloudinaryPublicId: true,
           secureUrl: true,
@@ -85,12 +89,15 @@ export async function createExpenseAction(input: ExpenseActionInput) {
       })
       if (!attachment) throw new Error(ATTACHMENT_NOT_FOUND)
 
-      // One upload backs one bill, so the same file cannot be claimed twice.
+      // One upload backs one bill. The claim is a guarded write on the asset row, so a
+      // concurrent request for the same upload waits and is then refused; it rolls back
+      // with this transaction. The attachment check covers bills filed before claims.
+      await claimMediaAsset(tx, assetPolicy, 'EXPENSE_BILL', ATTACHMENT_ALREADY_USED)
       const bound = await tx.billAttachment.findFirst({
         where: { cloudinaryPublicId: attachment.cloudinaryPublicId },
         select: { id: true },
       })
-      if (bound) throw new Error('Forbidden: Uploaded bill is already attached')
+      if (bound) throw new Error(ATTACHMENT_ALREADY_USED)
     }
 
     const created = await tx.expense.create({
@@ -124,6 +131,7 @@ export async function createExpenseAction(input: ExpenseActionInput) {
           : {}),
       },
     })
+    if (attachment) await bindMediaClaim(tx, mediaAssetId, 'EXPENSE_BILL', created.id, ATTACHMENT_ALREADY_USED)
 
     await createApprovalRequestRecord(tx, user, {
       companyId,

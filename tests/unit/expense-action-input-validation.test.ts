@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => {
   }
 
   const tx = {
-    mediaAsset: { findFirst: vi.fn() },
+    mediaAsset: { findFirst: vi.fn(), updateMany: vi.fn() },
     billAttachment: { findFirst: vi.fn() },
     expense: {
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
@@ -114,6 +114,7 @@ function expectRefusedBeforeAnyRead() {
   expect(mocks.prisma.companyMember.findFirst).not.toHaveBeenCalled()
   expect(mocks.tx.mediaAsset.findFirst).not.toHaveBeenCalled()
   expect(mocks.tx.billAttachment.findFirst).not.toHaveBeenCalled()
+  expect(mocks.tx.mediaAsset.updateMany).not.toHaveBeenCalled()
   expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
   expect(mocks.tx.expense.create).not.toHaveBeenCalled()
   expect(mocks.tx.approval.create).not.toHaveBeenCalled()
@@ -143,6 +144,8 @@ beforeEach(() => {
     originalName: 'inv7.jpg',
   })
   mocks.tx.billAttachment.findFirst.mockResolvedValue(null)
+  // The one-time claim and its owner binding each match the single unconsumed upload.
+  mocks.tx.mediaAsset.updateMany.mockResolvedValue({ count: 1 })
 })
 
 describe('createExpenseAction refuses an invalid amount before any read or write', () => {
@@ -285,6 +288,7 @@ describe('createExpenseAction normalizes a valid payload', () => {
     })).resolves.toEqual({ success: true, expenseId: 'expense_1' })
 
     expect(mocks.tx.mediaAsset.findFirst.mock.calls[0][0].where).toMatchObject({ id: 'asset_inv7' })
+    expect(mocks.tx.mediaAsset.updateMany.mock.calls[0][0].where).toMatchObject({ id: 'asset_inv7', consumedAt: null })
     expect(mocks.committed.map((entry) => entry.model)).toEqual(['expense', 'billAttachment', 'approval', 'approvalTimeline'])
     expect(mocks.committed[0].data).toMatchObject({ billNumber: 'INV-7', description: 'Expense for MATERIAL' })
     expect(mocks.committed[0].data.paidTo).toBeUndefined()
