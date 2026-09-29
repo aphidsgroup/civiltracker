@@ -2,6 +2,7 @@ import { AttendanceStatus } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { requireAssignedScopeMutation } from '@/lib/auth/site-mutation'
 import { AttendanceSiteConflictError, upsertSiteAttendance } from '@/lib/labour-attendance'
+import { assertPayrollPeriodOpen, payrollTransaction, PayrollPeriodClosedError } from '@/lib/payroll-period-lock'
 import { prisma } from '@/lib/prisma'
 
 const MAX_BATCH = 500
@@ -47,8 +48,10 @@ function parseMarks(body: unknown): Mark[] | null {
  * is read (SUPER_ADMIN is refused). Every worker must be of exactly the live company on a
  * site in the principal's `assignedSiteScope` (field roles: assigned live sites only); the
  * attendance row takes the worker's own site, and a row another site recorded for the same
- * worker today is refused, never overwritten. The lookup and every write run in one
- * transaction, and one bad row refuses the whole batch.
+ * worker today is refused, never overwritten. A day a salary run past DRAFT has settled
+ * for any marked worker or its site is refused (`assertPayrollPeriodOpen`). The lookup,
+ * that check and every write run in one serializable `payrollTransaction`, and one bad
+ * row refuses the whole batch.
  */
 export async function POST(request: Request) {
   let gate
@@ -73,13 +76,19 @@ export async function POST(request: Request) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
   try {
-    const count = await prisma.$transaction(async (tx) => {
+    const count = await payrollTransaction(prisma, async (tx) => {
       const workers = await tx.labour.findMany({
         where: { id: { in: marks.map((mark) => mark.labourId) }, companyId: user.companyId, site: scope },
         select: { id: true, siteId: true },
       })
       const siteOf = new Map(workers.map((worker) => [worker.id, worker.siteId]))
       if (marks.some((mark) => !siteOf.has(mark.labourId))) throw new AttendanceDenied(LABOUR_NOT_FOUND)
+      await assertPayrollPeriodOpen(
+        tx,
+        user.companyId,
+        today,
+        marks.map(({ labourId }) => ({ labourId, siteId: siteOf.get(labourId)! })),
+      )
 
       for (const { labourId, status } of marks) {
         await upsertSiteAttendance(
@@ -93,7 +102,11 @@ export async function POST(request: Request) {
     })
     return NextResponse.json({ success: true, count })
   } catch (error: unknown) {
-    if (error instanceof AttendanceDenied || error instanceof AttendanceSiteConflictError) return fail(error.message, 403)
+    if (
+      error instanceof AttendanceDenied ||
+      error instanceof AttendanceSiteConflictError ||
+      error instanceof PayrollPeriodClosedError
+    ) return fail(error.message, 403)
     throw error
   }
 }

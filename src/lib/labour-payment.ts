@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client'
 import { auditLogData } from '@/lib/audit-data'
 import type { TenantMutationUser } from '@/lib/auth/site-mutation'
+import { assertPayrollPeriodOpen } from '@/lib/payroll-period-lock'
 import { MAX_AMOUNT_10_2, paise, rupeeSum } from '@/lib/validation/financial-mutations'
 
 export const LABOUR_NOT_FOUND = 'FORBIDDEN: Labour not found or access denied'
@@ -10,14 +11,22 @@ function isoDate(date: Date) {
   return date.toISOString().slice(0, 10)
 }
 
+function startOfTodayUtc() {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+}
+
 /**
- * Pays a worker an advance inside the caller's transaction. `workerWhere` is the caller's
- * binding (company, current site, assigned scope) and must admit only active workers.
+ * Pays a worker an advance inside the caller's transaction, which must be a
+ * `payrollTransaction`. `workerWhere` is the caller's binding (company, current site,
+ * assigned scope) and must admit only active workers.
  *
  * The advance is booked on the worker's latest attendance *on its current site*, or on
  * its opening advance when it has none there: a log of a site it has since left is never
- * written. The write is guarded on the balance read and the audit record is written on the
- * same transaction, so a payment without its audit trail rolls back.
+ * written. Neither today nor the day of that attendance may be settled by a salary run
+ * past DRAFT (`assertPayrollPeriodOpen`). The write is guarded on the balance read and the
+ * audit record is written on the same transaction, so a payment without its audit trail
+ * rolls back.
  */
 export async function payLabourAdvance(
   tx: Prisma.TransactionClient,
@@ -36,6 +45,14 @@ export async function payLabourAdvance(
     orderBy: { date: 'desc' },
     select: { id: true, date: true, advance: true },
   })
+
+  // The payment day and the day of the row it is booked on must both be open.
+  const payrollScope = [{ labourId: worker.id, siteId: worker.siteId }]
+  const today = startOfTodayUtc()
+  await assertPayrollPeriodOpen(tx, user.companyId, today, payrollScope)
+  if (latest && latest.date.getTime() !== today.getTime()) {
+    await assertPayrollPeriodOpen(tx, user.companyId, latest.date, payrollScope)
+  }
 
   const current = Number(latest ? latest.advance : worker.openingAdvance)
   const next = rupeeSum(current, amount)

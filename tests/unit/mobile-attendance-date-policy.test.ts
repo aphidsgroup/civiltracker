@@ -129,7 +129,8 @@ Object.assign(mocks.prisma, {
   company: { findUnique: vi.fn(async () => ({ modulesJson: ['SITES', 'LABOUR'], status: 'ACTIVE' })) },
   // Supervisors and subcontractors are assigned site_a by membership; the engineer directly.
   companyMember: { findFirst: vi.fn(async () => ({ siteIds: ['site_a'] })) },
-  $transaction: vi.fn(async (fn: (client: typeof tx) => unknown) => {
+  // Options are recorded, not modelled: the store still rolls back on any throw.
+  $transaction: vi.fn(async (fn: (client: typeof tx) => unknown, _options?: unknown) => {
     const snapshot = structuredClone(store)
     try {
       return await fn(tx)
@@ -287,6 +288,9 @@ describe('a salary run past DRAFT closes the day', () => {
     expect(JSON.stringify(store.attendance)).toBe(before)
     expect(writes()).toBe(0)
     expect(mocks.syncSiteBudget).not.toHaveBeenCalled()
+    // The check and the writes share one SERIALIZABLE transaction, refused once, not retried.
+    expect($transaction).toHaveBeenCalledTimes(1)
+    expect($transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'Serializable' })
   })
 
   it('a submitted run covering today refuses a field role marking today', async () => {

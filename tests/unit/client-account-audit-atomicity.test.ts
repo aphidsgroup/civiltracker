@@ -24,8 +24,8 @@ type Store = {
 const mocks = vi.hoisted(() => {
   const tx = {
     user: { create: vi.fn() },
-    companyMember: { create: vi.fn(), update: vi.fn() },
-    site: { updateMany: vi.fn() },
+    companyMember: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    site: { findMany: vi.fn(), updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
   }
   return {
@@ -116,6 +116,16 @@ beforeEach(() => {
     Object.assign(store.members[where.id], data)
     return store.members[where.id]
   })
+  mocks.tx.companyMember.updateMany.mockImplementation(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+    const row = store.members[where.id as string]
+    const matches = Boolean(row) && Object.entries(where).every(([key, value]) => row[key] === value)
+    if (matches) Object.assign(row, data)
+    return { count: matches ? 1 : 0 }
+  })
+  mocks.tx.site.findMany.mockImplementation(async ({ where }: { where: { companyId: string; clientUserId: string } }) =>
+    Object.values(store.sites)
+      .filter(site => site.companyId === where.companyId && site.clientUserId === where.clientUserId)
+      .map(site => ({ id: site.id })))
   mocks.tx.site.updateMany.mockImplementation(async ({ where, data }: { where: { id: { in: string[] } }; data: Record<string, unknown> }) => {
     for (const id of where.id.in) Object.assign(store.sites[id], data)
     return { count: where.id.in.length }
@@ -183,10 +193,11 @@ describe('removeClientAccount: audited atomically', () => {
 
     expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
     expect(store.members.member_client.isActive).toBe(false)
-    expect(mocks.tx.companyMember.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'member_client', companyId },
+    expect(store.sites.site_2.clientUserId).toBeNull()
+    expect(mocks.tx.companyMember.updateMany).toHaveBeenCalledWith({
+      where: { id: 'member_client', companyId, userId: 'client_1', role: 'CLIENT', isActive: true },
       data: { isActive: false },
-    }))
+    })
     expect(store.audit).toEqual([expect.objectContaining({
       companyId, userId: 'admin_1', action: 'UPDATE', module: 'USER', recordId: 'client_1',
       before: expect.objectContaining({ isActive: true }),
@@ -200,7 +211,7 @@ describe('removeClientAccount: audited atomically', () => {
 
     await expect(removeClientAccount(removeForm())).rejects.toThrow(/audit store down/)
 
-    expect(mocks.tx.companyMember.update).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.companyMember.updateMany).toHaveBeenCalledTimes(1)
     expect(store).toEqual(emptyStore())
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
     noBareWrites()

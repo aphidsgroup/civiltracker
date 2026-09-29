@@ -21,6 +21,7 @@ import {
 } from '@/lib/approvals/site-binding'
 import { requireApprovalSubmitter, submitApprovalRequest } from '@/lib/approvals/submit'
 import { OPEN_APPROVAL_STATUSES } from '@/lib/approvals/valid-reads'
+import { lockPayrollPeriodForTransition, payrollTransaction } from '@/lib/payroll-period-lock'
 import type { ApprovalRequestInput } from '@/lib/approvals/submit'
 import type { ApprovalEntityType, ApprovalStatus, Prisma, SalaryRunStatus } from '@prisma/client'
 import type { SessionUser } from '@/types'
@@ -32,6 +33,28 @@ import type { SessionUser } from '@/types'
  * rejected approval never leaves its salary run sitting on an approved/payable status.
  */
 const REJECTED_SALARY_RUN_STATUS: SalaryRunStatus = 'DRAFT'
+
+/**
+ * The transaction an approve or mark-paid transition runs in. Either moves a salary run
+ * past DRAFT, closing its payroll period, so a SALARY_RUN transition runs as a serializable
+ * `payrollTransaction` that reads the period first (`lockPayrollPeriodForTransition`): an
+ * attendance or advance write racing it is aborted and retried against the closed period.
+ * Rejection returns the run to DRAFT, which closes nothing, and keeps the default.
+ */
+function approvalTransaction<T>(entityType: ApprovalEntityType, fn: (tx: Prisma.TransactionClient) => Promise<T>) {
+  return entityType === 'SALARY_RUN' ? payrollTransaction(prisma, fn) : prisma.$transaction(fn)
+}
+
+/**
+ * The payroll-period read of an approve or mark-paid transition, taken on its
+ * `approvalTransaction` client right after the linked salary run is re-resolved and before
+ * the approval or the run changes status, so the whole transition runs against a period
+ * a concurrent attendance or advance writer conflicts with. Any other type reads nothing.
+ */
+async function lockPayrollPeriodForSalaryRunApproval(tx: Prisma.TransactionClient, approval: LinkedApprovalEntityRef) {
+  if (approval.entityType !== 'SALARY_RUN') return
+  await lockPayrollPeriodForTransition(tx, { id: approval.entityId, companyId: approval.companyId, siteId: approval.siteId })
+}
 
 /** Human label for an entity type, e.g. MATERIAL_REQUEST -> "material request". */
 function approvalEntityLabel(entityType: ApprovalEntityType) {
@@ -310,8 +333,9 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
   // mandatory audit record are one unit of work: a linked row that cannot be reached
   // inside the approval tenant, or an audit write that fails, rolls the approval back to
   // its open status instead of leaving the approval, entity and audit trail out of sync.
-  const budgetSiteId = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  const budgetSiteId = await approvalTransaction(approval.entityType, async (tx: Prisma.TransactionClient) => {
     await assertLinkedApprovalEntityInTenant(tx, approval, 'approved')
+    await lockPayrollPeriodForSalaryRunApproval(tx, approval)
 
     // The exact site predicate rides on the conditional write itself, so a site deleted
     // or re-pointed at another tenant after the read above still stops the transition
@@ -528,8 +552,9 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
   // row that cannot be reached inside the approval tenant, or an audit write that fails,
   // rolls the approval back to APPROVED instead of leaving a PAID request pointing at an
   // unpaid record or an unaudited disbursement.
-  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  await approvalTransaction(approval.entityType, async (tx: Prisma.TransactionClient) => {
     await assertLinkedApprovalEntityInTenant(tx, approval, 'marked paid')
+    await lockPayrollPeriodForSalaryRunApproval(tx, approval)
 
     const transition = await tx.approval.updateMany({
       where: {

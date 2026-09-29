@@ -43,6 +43,8 @@ const mocks = vi.hoisted(() => ({
     client: { create: vi.fn(), findFirst: vi.fn() },
     payment: { create: vi.fn() },
     auditLog: { create: vi.fn() },
+    // No salary run has closed the day; payroll-period-lock.test.ts covers a closed one.
+    salaryRun: { findFirst: vi.fn(async () => null) },
     $transaction: vi.fn(),
   },
 }))

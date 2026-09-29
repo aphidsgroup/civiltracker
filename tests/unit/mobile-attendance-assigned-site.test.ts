@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => {
     labourAttendance: { findFirst: vi.fn(), upsert: vi.fn() },
     subcontractor: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
     contractorAttendance: { create: vi.fn(), deleteMany: vi.fn() },
+    // No salary run has closed the day; payroll-period-lock.test.ts covers a closed one.
+    salaryRun: { findFirst: vi.fn(async () => null) },
   }
   return {
     requireUser: vi.fn(),
@@ -318,6 +320,7 @@ describe('POST /api/attendance', () => {
     expect(status).toBe(200)
     expect(json).toEqual({ success: true, count: 2 })
     expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
+    expect(mocks.prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'Serializable' })
     expect(mocks.prisma.labour.findMany).not.toHaveBeenCalled()
     expect(mocks.prisma.labourAttendance.upsert).not.toHaveBeenCalled()
 

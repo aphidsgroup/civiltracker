@@ -10,6 +10,7 @@ import { readsAssignedSitesOnly, requireAssignedScopeMutation, requireAssignedSi
 import type { TenantMutationUser } from '@/lib/auth/site-mutation'
 import { assertNoOtherSiteAttendanceFrom, upsertSiteAttendance } from '@/lib/labour-attendance'
 import { hasPermission } from '@/lib/permissions'
+import { assertPayrollPeriodOpen, payrollTransaction } from '@/lib/payroll-period-lock'
 import {
   MAX_AMOUNT_10_2,
   MAX_AMOUNT_14_2,
@@ -31,7 +32,9 @@ import {
  * only on the site they are made for (`upsertSiteAttendance`): a row another site recorded
  * for the same worker and date is refused, and a worker is not moved while it has one.
  * Marking the roll follows the date policy below and audits every row it writes, with the
- * day and the before/after status, on the write transaction.
+ * day and the before/after status, on the write transaction. Every labour attendance and
+ * advance write runs in a `payrollTransaction` and refuses a day a salary run past DRAFT
+ * has settled (`assertPayrollPeriodOpen`) before its first mutation.
  *
  * Money policy: marking the roll and editing a worker move no money. An advance sent to
  * those actions is refused unless it is absent, null or numeric zero — before any read,
@@ -140,7 +143,6 @@ function startOfToday() {
 const ATTENDANCE_CORRECTION_DAYS = 7
 const DAY_MS = 24 * 60 * 60 * 1000
 const ATTENDANCE_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
-const SALARY_RUN_FINALIZED = 'FORBIDDEN: Attendance for this date is part of a submitted, approved or paid salary run'
 
 function startOfTodayUtc() {
   const now = new Date()
@@ -294,7 +296,7 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
   // is written on exactly that site: an audit failure rolls the whole batch back.
   const labourIds = [...new Set(marked.map((item) => item.labourId))]
   const affectedSiteIds = [...new Set(marked.map((item) => item.siteId))]
-  await prisma.$transaction(async (tx) => {
+  await payrollTransaction(prisma, async (tx) => {
     const workers = labourIds.length > 0
       ? await tx.labour.findMany({
           where: { id: { in: labourIds }, companyId, site: scope },
@@ -309,21 +311,7 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
 
     // Any run past DRAFT covering the day — company-wide, for an affected site, or paying
     // an affected worker — has settled that day's attendance.
-    const finalized = await tx.salaryRun.findFirst({
-      where: {
-        companyId,
-        status: { not: 'DRAFT' },
-        periodStart: { lte: targetDate },
-        periodEnd: { gte: targetDate },
-        OR: [
-          { siteId: null },
-          { siteId: { in: affectedSiteIds } },
-          { items: { some: { labourId: { in: labourIds } } } },
-        ],
-      },
-      select: { id: true },
-    })
-    if (finalized) throw new Error(SALARY_RUN_FINALIZED)
+    await assertPayrollPeriodOpen(tx, companyId, targetDate, marked)
 
     // A new row starts with no advance; an update never touches the recorded advance.
     for (const item of marked) {
@@ -396,7 +384,7 @@ export async function recordLabourAdvanceAction(input: {
   const reason = parseFinancialReason(input.reason, 'Advance reason')
   const today = startOfToday()
 
-  const next = await prisma.$transaction(async (tx) => {
+  const next = await payrollTransaction(prisma, async (tx) => {
     const worker = await tx.labour.findFirst({
       where: { ...companyLabourWhere(labourId, companyId, scope), siteId: site.id, isActive: true },
       select: { id: true, name: true },
@@ -405,6 +393,7 @@ export async function recordLabourAdvanceAction(input: {
     if (typed !== worker.name.trim()) {
       throw new Error('Advance confirmation text did not match the worker name.')
     }
+    await assertPayrollPeriodOpen(tx, companyId, today, [{ labourId: worker.id, siteId: site.id }])
 
     const attendance = await tx.labourAttendance.findFirst({
       where: { labourId: worker.id, siteId: site.id, date: today },
@@ -453,7 +442,7 @@ export async function addExistingWorkerToRoster(labourId: string, siteId: string
   const start = parseStartTime(startTime)
   const today = startOfToday()
 
-  const record = await prisma.$transaction(async (tx) => {
+  const record = await payrollTransaction(prisma, async (tx) => {
     // The worker's current site must be in scope too: a field role may not pull a worker
     // off a site it is not assigned to.
     const labour = await tx.labour.findFirst({
@@ -462,6 +451,7 @@ export async function addExistingWorkerToRoster(labourId: string, siteId: string
     })
     if (!labour) throw new Error(LABOUR_NOT_FOUND)
     if (labour.siteId !== site.id) await assertNoOtherSiteAttendanceFrom(tx, labour.id, site.id, today)
+    await assertPayrollPeriodOpen(tx, companyId, today, [{ labourId: labour.id, siteId: site.id }])
 
     // Mark them present for today to add them to the roster, only on this site's row.
     const attendance = await upsertSiteAttendance(
@@ -656,9 +646,9 @@ export async function removeLabourAttendanceAction(labourId: string, confirmatio
 
   const today = startOfToday()
 
-  // The worker re-read, the delete and the audit record share one transaction: an audit
-  // failure keeps the roster entry.
-  await prisma.$transaction(async (tx) => {
+  // The worker re-read, the payroll-period check, the delete and the audit record share one
+  // transaction: an audit failure keeps the roster entry.
+  await payrollTransaction(prisma, async (tx) => {
     const labour = await tx.labour.findFirst({
       where: companyLabourWhere(String(labourId ?? ''), companyId, scope),
       select: { id: true, name: true, siteId: true, trade: true }
@@ -668,6 +658,7 @@ export async function removeLabourAttendanceAction(labourId: string, confirmatio
     if ((confirmationText ?? '').trim() !== labour.name.trim()) {
       throw new Error('Roster removal confirmation text did not match the worker name')
     }
+    await assertPayrollPeriodOpen(tx, companyId, today, [{ labourId: labour.id, siteId: labour.siteId }])
 
     // Deleting a row that carries an advance deletes a payment record.
     const row = await tx.labourAttendance.findFirst({

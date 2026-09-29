@@ -77,6 +77,11 @@ vi.mock('@/lib/permissions', () => ({ hasPermission: mocks.hasPermission }))
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma, default: mocks.prisma }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 vi.mock('@/lib/audit', () => ({ logActivity: mocks.logActivity }))
+// The payroll-period read a SALARY_RUN transition takes is covered in payroll-period-lock.test.ts.
+vi.mock('@/lib/payroll-period-lock', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/payroll-period-lock')>()),
+  lockPayrollPeriodForTransition: vi.fn(),
+}))
 vi.mock('@/lib/budget', () => ({ syncSiteBudget: mocks.syncSiteBudget }))
 
 const { GET: listApprovals, POST: createApproval } = await import('@/app/api/approvals/route')

@@ -14,6 +14,7 @@ import {
   requireAssignedSiteMutation,
 } from '@/lib/auth/site-mutation'
 import { LABOUR_NOT_FOUND, payLabourAdvance } from '@/lib/labour-payment'
+import { payrollTransaction } from '@/lib/payroll-period-lock'
 import { MAX_AMOUNT_10_2, parseAmountText } from '@/lib/validation/financial-mutations'
 
 /**
@@ -163,7 +164,7 @@ export async function markLabourPaidAction(formData: FormData) {
   const id = requiredText(formData.get('id'), 'Labour')
   const amount = parseAmountText(formData.get('amount'), 'payment amount', { max: MAX_AMOUNT_10_2, positive: true })
 
-  await prisma.$transaction((tx) => payLabourAdvance(tx, user, { ...boundLabourWhere(id, user.companyId, scope), isActive: true }, amount))
+  await payrollTransaction(prisma, (tx) => payLabourAdvance(tx, user, { ...boundLabourWhere(id, user.companyId, scope), isActive: true }, amount))
 
   revalidatePath('/labour')
 }

@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache'
 import { Plus, Building2, Eye } from 'lucide-react'
 import bcrypt from 'bcryptjs'
 import DangerConfirmSubmit from '@/components/ui/DangerConfirmSubmit'
+import { canManageMemberWithRole } from '@/lib/permissions'
 import {
   CLIENT_PASSWORD_MIN_LENGTH,
   parseCreateClientAccountForm,
@@ -119,27 +120,67 @@ export async function createClientUser(formData: FormData) {
 
 export async function removeClientAccount(formData: FormData) {
   'use server'
+  // Live principal: role, membership and company status are re-read from the database.
   const actor = await requireClientManager()
   const companyId = actor.companyId
-  const memberId = formData.get('memberId') as string
-  const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
+  const memberId = formData.get('memberId')
+  const typedValue = formData.get('dangerConfirmText')
+  if (typeof memberId !== 'string' || !memberId.trim()) throw new Error('Client account not found.')
+  const typed = typeof typedValue === 'string' ? typedValue.trim() : undefined
 
   const member = await prisma.companyMember.findUnique({
-    where: { id: memberId, companyId },
+    where: { id: memberId.trim(), companyId },
     include: { user: { select: { id: true, name: true, email: true } } },
   })
-  if (!member) throw new Error('Client account not found.')
+  // This screen only ever deactivates CLIENT logins: employees and peer admins go through
+  // the team-management flow with its own hierarchy rules.
+  if (!member || member.companyId !== companyId || member.role !== 'CLIENT') {
+    throw new Error('Client account not found in your company.')
+  }
+  if (member.userId === actor.id) {
+    throw new Error('You cannot deactivate your own login.')
+  }
+  if (!canManageMemberWithRole(actor.role, member.role)) {
+    throw new Error('You do not have permission to manage this account.')
+  }
 
   const expected = (member.user.name ?? member.user.email).trim()
   if (typed !== expected) {
     throw new Error('Remove confirmation text did not match the client name/email.')
   }
 
+  // A retry after a successful deactivation changes nothing and records nothing.
+  if (!member.isActive) {
+    revalidatePath('/client-accounts')
+    return
+  }
+
   await prisma.$transaction(async tx => {
-    await tx.companyMember.update({
-      where: { id: member.id, companyId },
+    // Guarded on the state that was authorised: a concurrent role change, reactivation
+    // race or company move leaves count 0 and the whole removal rolls back.
+    const deactivated = await tx.companyMember.updateMany({
+      where: { id: member.id, companyId, userId: member.userId, role: 'CLIENT', isActive: true },
       data: { isActive: false },
     })
+    if (deactivated.count !== 1) {
+      throw new Error('Client account changed before it could be deactivated. Please retry.')
+    }
+
+    const clientSites = await tx.site.findMany({
+      where: { companyId, clientUserId: member.userId },
+      select: { id: true },
+    })
+    const clearedSiteIds = clientSites.map(site => site.id)
+    if (clearedSiteIds.length > 0) {
+      const cleared = await tx.site.updateMany({
+        where: { id: { in: clearedSiteIds }, companyId, clientUserId: member.userId },
+        data: { clientUserId: null },
+      })
+      if (cleared.count !== clearedSiteIds.length) {
+        throw new Error('Client site access changed before it could be removed. Please retry.')
+      }
+    }
+
     await tx.auditLog.create({
       data: {
         companyId,
@@ -147,12 +188,21 @@ export async function removeClientAccount(formData: FormData) {
         action: 'UPDATE',
         module: 'USER',
         recordId: member.userId,
-        before: { isActive: member.isActive, role: member.role, name: member.user.name, email: member.user.email },
+        before: {
+          memberId: member.id,
+          isActive: true,
+          role: member.role,
+          name: member.user.name,
+          email: member.user.email,
+          clientSiteIds: clearedSiteIds,
+        },
         after: {
+          memberId: member.id,
           isActive: false,
           role: member.role,
           name: member.user.name,
           email: member.user.email,
+          clientSiteIds: [],
           _description: `${actor.name ?? actor.email} deactivated client login "${member.user.name ?? member.user.email}"`,
         },
       },
