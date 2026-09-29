@@ -1,4 +1,9 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
+import {
+  SERIALIZABLE_TRANSACTION_ATTEMPTS,
+  SERIALIZABLE_TRANSACTION_OPTIONS,
+  serializableTransaction,
+} from '@/lib/serializable-transaction'
 
 /*
  * Payroll-period lock for attendance and labour-advance writes.
@@ -111,28 +116,17 @@ export async function lockPayrollPeriodForTransition(
   })
 }
 
-export const PAYROLL_TRANSACTION_OPTIONS = { isolationLevel: 'Serializable' } as const
-export const PAYROLL_TRANSACTION_ATTEMPTS = 3
-
-/** Prisma's code for a serialization failure or deadlock that rolled the transaction back. */
-function isSerializationFailure(error: unknown) {
-  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2034'
-}
+export const PAYROLL_TRANSACTION_OPTIONS = SERIALIZABLE_TRANSACTION_OPTIONS
+export const PAYROLL_TRANSACTION_ATTEMPTS = SERIALIZABLE_TRANSACTION_ATTEMPTS
 
 /**
  * Runs `fn` as one SERIALIZABLE interactive transaction, retrying it from the start (at
  * most `PAYROLL_TRANSACTION_ATTEMPTS` runs in all) only when the database rolled it back
  * for a serialization conflict. Any other error, and the last conflict, is thrown as is.
  */
-export async function payrollTransaction<T>(
+export function payrollTransaction<T>(
   client: Pick<PrismaClient, '$transaction'>,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return await client.$transaction(fn, PAYROLL_TRANSACTION_OPTIONS)
-    } catch (error) {
-      if (attempt >= PAYROLL_TRANSACTION_ATTEMPTS || !isSerializationFailure(error)) throw error
-    }
-  }
+  return serializableTransaction(client, fn)
 }

@@ -219,7 +219,9 @@ describe('site labour actions (F3-F4)', () => {
     await labourActions.updateSiteLabour('site_1', labourForm({ siteId: 'site_other', status: 'inactive' }))
     const call = mocks.prisma.labour.updateMany.mock.calls[0][0]
     expect(call.where).toEqual({ id: 'lab_1', companyId: 'company_1', siteId: 'site_1', site: { deletedAt: null } })
-    expect(call.data).toEqual({ name: 'Ravi K', phone: null, trade: 'MASON', dailyWage: 800, overtimeRate: 100, openingAdvance: 0, isActive: false })
+    // The opening advance is a payment balance, never an edit field
+    // (labour-roster-settlement-bypass.test.ts).
+    expect(call.data).toEqual({ name: 'Ravi K', phone: null, trade: 'MASON', dailyWage: 800, overtimeRate: 100, isActive: false })
   })
 
   it.each(['0', '-5', 'abc', 'Infinity', ''])('markSiteLabourPaid rejects amount %j', async (amount) => {

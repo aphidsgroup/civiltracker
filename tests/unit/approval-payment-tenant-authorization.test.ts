@@ -108,7 +108,7 @@ describe('markApprovalPaidAction tenant authorization', () => {
       include: SITE_BINDING_INCLUDE,
     })
     expect(mocks.tx.approval.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, currentStatus: 'APPROVED', ...SITE_SCOPE_PREDICATE },
+      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, currentStatus: 'APPROVED', requestedById: { not: 'accountant_1' }, ...SITE_SCOPE_PREDICATE },
     }))
     // The company predicate has to be carried by the transactional write itself, not by
     // a second unscoped write on the global client.
@@ -126,7 +126,7 @@ describe('markApprovalPaidAction tenant authorization', () => {
     })
     // The transition itself stays pinned to the approval's own company and its sites.
     expect(mocks.tx.approval.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, currentStatus: 'APPROVED', ...SITE_SCOPE_PREDICATE },
+      where: { id: 'approval_1', companyId: 'company_1', deletedAt: null, currentStatus: 'APPROVED', requestedById: { not: 'super_1' }, ...SITE_SCOPE_PREDICATE },
     }))
   })
 

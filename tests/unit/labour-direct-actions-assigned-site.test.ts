@@ -181,18 +181,20 @@ describe.each(FIELD_ROLES)('direct labour mutations for a field %s', (role) => {
 
   it('updateLabourAction moves an assigned worker between assigned sites', async () => {
     await labourActions.updateLabourAction(editForm('lab_mine', 'site_engineer'))
-    expect(mocks.prisma.labour.updateMany).toHaveBeenCalledTimes(1)
-    const [{ where, data }] = mocks.prisma.labour.updateMany.mock.calls[0]
+    expect(mocks.tx.labour.updateMany).toHaveBeenCalledTimes(1)
+    const [{ where, data }] = mocks.tx.labour.updateMany.mock.calls[0]
     expect(data).toMatchObject({ siteId: 'site_engineer' })
-    expect(where).toMatchObject({ id: 'lab_mine', companyId: 'company_1', site: expect.objectContaining({ companyId: 'company_1', deletedAt: null, OR: expect.any(Array) }) })
+    expect(where).toMatchObject({ id: 'lab_mine', companyId: 'company_1', siteId: 'site_mine', site: expect.objectContaining({ companyId: 'company_1', deletedAt: null, OR: expect.any(Array) }) })
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
   })
 
   it('updateLabourRosterAction edits an assigned worker', async () => {
     await labourActions.updateLabourRosterAction(rosterForm('lab_mine', 'site_mine'))
-    expect(mocks.prisma.labour.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'lab_mine', companyId: 'company_1' },
+    expect(mocks.tx.labour.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 'lab_mine', companyId: 'company_1', siteId: 'site_mine', site: expect.objectContaining({ OR: expect.any(Array) }) }),
       data: expect.objectContaining({ siteId: 'site_mine' }),
     }))
+    expect(mocks.prisma.labour.updateMany).not.toHaveBeenCalled()
   })
 
   it.each(['lab_theirs', 'lab_dead', 'lab_other'])('markLabourPaidAction refuses worker %s before any payment', async (id) => {
@@ -246,10 +248,14 @@ describe('privileged company roles keep company-wide labour management', () => {
     mocks.requireUser.mockResolvedValue(principal('COMPANY_ADMIN'))
 
     await labourActions.updateLabourAction(editForm('lab_theirs', 'site_mine'))
-    expect(mocks.prisma.labour.updateMany.mock.calls[0][0].where).toEqual({
-      id: 'lab_theirs', companyId: 'company_1', site: { companyId: 'company_1', deletedAt: null },
+    expect(mocks.tx.labour.updateMany.mock.calls[0][0].where).toEqual({
+      id: 'lab_theirs', companyId: 'company_1', site: { companyId: 'company_1', deletedAt: null }, siteId: 'site_theirs',
     })
+    // The move is audited on the edit transaction.
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
 
+    // A fresh read: the in-memory worker rows are not moved by the counted write above.
+    mocks.tx.labourAttendance.findFirst.mockReset()
     mocks.tx.labourAttendance.findFirst.mockResolvedValue(ATTENDANCE_THEIRS)
     await labourActions.markLabourPaidAction(form({ id: 'lab_theirs', amount: '100' }))
     expect(mocks.tx.labourAttendance.findFirst.mock.calls[0][0].where).toEqual({ labourId: 'lab_theirs', siteId: 'site_theirs' })
@@ -257,10 +263,10 @@ describe('privileged company roles keep company-wide labour management', () => {
       where: { id: 'att_any', labourId: 'lab_theirs', siteId: 'site_theirs', advance: 0 },
       data: { advance: 100 },
     })
-    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(1)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(2)
 
     await labourActions.deactivateLabourAction(form({ id: 'lab_theirs', dangerConfirmText: 'Kumar' }))
-    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(2)
+    expect(mocks.tx.auditLog.create).toHaveBeenCalledTimes(3)
     expect(mocks.prisma.companyMember.findFirst).not.toHaveBeenCalled()
   })
 

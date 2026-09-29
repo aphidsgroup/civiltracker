@@ -52,6 +52,12 @@ function parseActive(raw: FormDataEntryValue | null): boolean {
   throw new Error('Invalid labour status')
 }
 
+/**
+ * Edits a worker's master data on the bound site. The worker stays on that site (any
+ * `siteId` field is ignored), and an edit moves no money: the opening advance is a payment
+ * balance written only by `markSiteLabourPaid`, so an `openingAdvance` field is ignored
+ * and never written.
+ */
 export async function updateSiteLabour(siteId: string, formData: FormData) {
   const { user, site } = await requireLabourMutation(siteId)
   const id = formData.get('id') as string
@@ -60,13 +66,12 @@ export async function updateSiteLabour(siteId: string, formData: FormData) {
   const trade = parseTrade(formData.get('trade'))
   const dailyWage = parseNonNegativeAmount(formData.get('dailyWage'), 'daily wage', 0)
   const overtimeRate = parseNonNegativeAmount(formData.get('overtimeRate'), 'overtime rate', 0)
-  const openingAdvance = parseNonNegativeAmount(formData.get('openingAdvance'), 'opening advance', 0)
   const isActive = parseActive(formData.get('status'))
 
   await requireSiteLabour(id, user.companyId, site.id)
   const result = await prisma.labour.updateMany({
     where: siteLabourWhere(id, user.companyId, site.id),
-    data: { name, phone: phone || null, trade, dailyWage, overtimeRate, openingAdvance, isActive }
+    data: { name, phone: phone || null, trade, dailyWage, overtimeRate, isActive }
   })
   if (result.count !== 1) throw new Error(LABOUR_NOT_FOUND)
   revalidatePath(`/sites/${site.id}/labour`)

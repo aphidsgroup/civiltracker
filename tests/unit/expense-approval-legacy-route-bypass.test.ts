@@ -230,6 +230,8 @@ describe('POST /api/expenses/[id]/approve derives the approval from an exact ten
           companyId: 'company_1',
           deletedAt: null,
           currentStatus: { in: OPEN_STATUSES },
+          // Never the actor's own request (approval-self-approval.test.ts).
+          requestedById: { not: 'admin_1' },
           ...SITE_SCOPE_PREDICATE,
         },
         data: expect.objectContaining({ currentStatus: 'APPROVED', approvedById: 'admin_1' }),

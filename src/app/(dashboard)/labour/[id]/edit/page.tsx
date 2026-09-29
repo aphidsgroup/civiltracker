@@ -148,12 +148,12 @@ export default async function EditLabourPage({ params }: { params: Promise<{ id:
                 />
               </div>
 
-              {/* Opening Advance */}
+              {/* Opening Advance: a payment balance, shown only; it changes through Mark Paid. */}
               <div className="sm:col-span-2">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Upfront Advance Paid (₹)</label>
                 <input
-                  name="openingAdvance" type="number" step="0.01" defaultValue={Number(labour.openingAdvance) || ''} placeholder="0.00"
-                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
+                  type="number" readOnly disabled value={Number(labour.openingAdvance) || 0}
+                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm bg-slate-100 text-slate-500"
                 />
               </div>
             </div>

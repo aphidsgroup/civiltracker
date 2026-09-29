@@ -8,6 +8,7 @@ import { Plus, Building2, Eye } from 'lucide-react'
 import bcrypt from 'bcryptjs'
 import DangerConfirmSubmit from '@/components/ui/DangerConfirmSubmit'
 import { canManageMemberWithRole } from '@/lib/permissions'
+import { serializableTransaction } from '@/lib/serializable-transaction'
 import {
   CLIENT_PASSWORD_MIN_LENGTH,
   parseCreateClientAccountForm,
@@ -155,7 +156,9 @@ export async function removeClientAccount(formData: FormData) {
     return
   }
 
-  await prisma.$transaction(async tx => {
+  // Serializable and retried, like `assignClientSites`: see that action for how the two
+  // are coordinated so neither can leave a deactivated client holding a site pointer.
+  await serializableTransaction(prisma, async tx => {
     // Guarded on the state that was authorised: a concurrent role change, reactivation
     // race or company move leaves count 0 and the whole removal rolls back.
     const deactivated = await tx.companyMember.updateMany({
@@ -212,6 +215,22 @@ export async function removeClientAccount(formData: FormData) {
   revalidatePath('/client-accounts')
 }
 
+/*
+ * Replaces a client's site allow-list.
+ *
+ * Coordination with `removeClientAccount`: both run as a serializable, retried
+ * transaction whose first write is a guarded write of the same membership row
+ * (`id`, `companyId`, `userId`, `role: 'CLIENT'`, `isActive: true`). Here that write
+ * re-checks the target is still an active CLIENT of exactly this company *before any site
+ * pointer is touched*, and it also requires the allow-list read above to be current, so
+ * the audit's `before` is exact. Whichever of the two commits second either conflicts
+ * (`P2034`) and is re-run on the committed state, or waits on the row and then finds it
+ * changed:
+ *  - removal committed first: this write matches no row and the assignment is refused
+ *    without restoring a single pointer;
+ *  - assignment committed first: the removal re-reads the client's pointers on its own
+ *    snapshot and clears the newly assigned ones too.
+ */
 export async function assignClientSites(formData: FormData) {
   'use server'
   const actor = await requireClientManager()
@@ -226,7 +245,18 @@ export async function assignClientSites(formData: FormData) {
     throw new Error('Active client account not found in your company.')
   }
 
-  await prisma.$transaction(async tx => {
+  await serializableTransaction(prisma, async tx => {
+    const current = await tx.companyMember.updateMany({
+      where: {
+        id: member.id, companyId, userId: member.userId, role: 'CLIENT', isActive: true,
+        siteIds: { equals: member.siteIds },
+      },
+      data: { siteIds },
+    })
+    if (current.count !== 1) {
+      throw new Error('Client account changed before site access could be updated. Please retry.')
+    }
+
     await tx.site.updateMany({ where: { companyId, clientUserId: member.userId }, data: { clientUserId: null } })
     const assigned = await tx.site.updateMany({
       where: {
@@ -238,7 +268,6 @@ export async function assignClientSites(formData: FormData) {
     if (assigned.count !== siteIds.length) {
       throw new Error('One or more selected sites changed before client access could be assigned.')
     }
-    await tx.companyMember.update({ where: { id: member.id, companyId }, data: { siteIds } })
     await tx.auditLog.create({
       data: {
         companyId, userId: actor.id, action: 'UPDATE', module: 'USER', recordId: member.userId,

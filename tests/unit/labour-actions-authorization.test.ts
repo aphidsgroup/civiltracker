@@ -310,10 +310,13 @@ describe('updateLabourAction', () => {
 
   it('writes validated fields only to the live tenant worker', async () => {
     await updateLabourAction(labourForm({ overtimeRate: '120' }))
-    expect(mocks.prisma.labour.updateMany).toHaveBeenCalledWith({
-      where: { id: 'lab_1', companyId: 'company_1', site: { companyId: 'company_1', deletedAt: null } },
-      data: { siteId: 'site_2', name: 'Ravi K', phone: null, trade: 'MASON', dailyWage: 800, overtimeRate: 120, openingAdvance: 0, isActive: true },
+    // Guarded on the worker's current site; the opening advance is never an edit field
+    // (labour-roster-settlement-bypass.test.ts).
+    expect(mocks.tx.labour.updateMany).toHaveBeenCalledWith({
+      where: { id: 'lab_1', companyId: 'company_1', site: { companyId: 'company_1', deletedAt: null }, siteId: 'site_1' },
+      data: { siteId: 'site_2', name: 'Ravi K', phone: null, trade: 'MASON', dailyWage: 800, overtimeRate: 120, isActive: true },
     })
+    expect(mocks.prisma.labour.updateMany).not.toHaveBeenCalled()
     expect(mocks.redirect).toHaveBeenCalledWith('/labour')
   })
 })

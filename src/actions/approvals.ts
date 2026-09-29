@@ -307,6 +307,20 @@ function requireApprovableEntityTypes(user: SessionUser, verb: 'approve' | 'reje
  * payroll with `salary.markPaid`. Decided before any approval query, like the approve
  * gate.
  */
+const SELF_APPROVAL_FORBIDDEN = 'Forbidden: You cannot approve or disburse your own approval request'
+
+/**
+ * Separation of duties for the transitions that confer a benefit on the requester:
+ * approving and marking paid. The requester may not perform either on their own request,
+ * whatever their role. Refused on the loaded row before any transaction, and repeated as
+ * `requestedById: { not: user.id }` on the guarded transition write so a row whose
+ * requester changes to the actor in between cannot be transitioned either. Rejecting one's
+ * own request confers nothing — it withdraws it — and stays allowed.
+ */
+function assertNotRequester(user: SessionUser, approval: { requestedById: string }) {
+  if (approval.requestedById === user.id) throw new Error(SELF_APPROVAL_FORBIDDEN)
+}
+
 function requireDisbursableEntityTypes(user: SessionUser) {
   if (user.role === 'SUPER_ADMIN' || user.role === 'COMPANY_ADMIN') return APPROVAL_ENTITY_TYPES
   if (hasPermission(user.role, 'payments.manage')) return APPROVAL_ENTITY_TYPES
@@ -328,6 +342,7 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
   if (!verifyCanApproveEntity(user.role, approval.entityType)) {
     throw new Error(`Forbidden: Role ${user.role} is not authorized to approve ${approval.entityType}`)
   }
+  assertNotRequester(user, approval)
 
   // The conditional transition, its timeline entry, the linked entity mutation and the
   // mandatory audit record are one unit of work: a linked row that cannot be reached
@@ -339,13 +354,15 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
 
     // The exact site predicate rides on the conditional write itself, so a site deleted
     // or re-pointed at another tenant after the read above still stops the transition
-    // before any timeline or linked write.
+    // before any timeline or linked write; so does the requester, so the actor can never
+    // approve a request that is theirs when the write lands.
     const transition = await tx.approval.updateMany({
       where: {
         id,
         companyId: approval.companyId,
         deletedAt: null,
         currentStatus: { in: OPEN_APPROVAL_STATUSES },
+        requestedById: { not: user.id },
         ...approvalSiteScopeFilter(approval.companyId),
       },
       data: {
@@ -546,6 +563,7 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
   if ((confirmationText ?? '').trim() !== 'PAID') {
     throw new Error('Disbursement confirmation text must exactly match PAID')
   }
+  assertNotRequester(user, approval)
 
   // Disbursement moves money, so the conditional transition, its timeline entry, the
   // linked entity mutation and the mandatory audit record are one unit of work: a linked
@@ -562,6 +580,7 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
         companyId: approval.companyId,
         deletedAt: null,
         currentStatus: 'APPROVED',
+        requestedById: { not: user.id },
         ...approvalSiteScopeFilter(approval.companyId),
       },
       data: {

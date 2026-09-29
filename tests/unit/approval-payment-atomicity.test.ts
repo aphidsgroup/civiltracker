@@ -132,6 +132,8 @@ describe('markApprovalPaidAction runs disbursement as one unit of work', () => {
           companyId: 'company_1',
           deletedAt: null,
           currentStatus: 'APPROVED',
+          // Never the actor's own request (approval-self-approval.test.ts).
+          requestedById: { not: 'accountant_1' },
           ...SITE_SCOPE_PREDICATE,
         },
       })

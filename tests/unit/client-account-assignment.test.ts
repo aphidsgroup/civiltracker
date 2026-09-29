@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => {
   const tx = {
     user: { create: vi.fn() },
-    companyMember: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    companyMember: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     site: { updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
   }
@@ -48,6 +48,7 @@ beforeEach(() => {
   mocks.prisma.site.findMany.mockResolvedValue([{ id: 'site_1' }])
   mocks.tx.user.create.mockResolvedValue({ id: 'client_1' })
   mocks.tx.site.updateMany.mockResolvedValue({ count: 1 })
+  mocks.tx.companyMember.updateMany.mockResolvedValue({ count: 1 })
   mocks.prisma.$transaction.mockImplementation(async (callback: (client: typeof mocks.tx) => Promise<unknown>) => callback(mocks.tx))
 })
 
@@ -95,6 +96,13 @@ describe('client account site assignments', () => {
     await assignClientSites(form({ memberId: 'member_1', siteIds: ['site_1'] }))
     expect(mocks.tx.site.updateMany).toHaveBeenNthCalledWith(1, { where: { companyId, clientUserId: 'client_1' }, data: { clientUserId: null } })
     expect(mocks.tx.site.updateMany).toHaveBeenNthCalledWith(2, expect.objectContaining({ data: { clientUserId: 'client_1' } }))
-    expect(mocks.tx.companyMember.update).toHaveBeenCalledWith(expect.objectContaining({ data: { siteIds: ['site_1'] } }))
+    expect(mocks.tx.companyMember.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'member_1', companyId, userId: 'client_1', role: 'CLIENT', isActive: true,
+        siteIds: { equals: ['old_site'] },
+      },
+      data: { siteIds: ['site_1'] },
+    })
+    expect(mocks.tx.companyMember.update).not.toHaveBeenCalled()
   })
 })
