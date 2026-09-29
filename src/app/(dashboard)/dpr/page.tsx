@@ -1,6 +1,5 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus, FileText, AlertTriangle, Users } from 'lucide-react'
@@ -8,12 +7,12 @@ import { Plus, FileText, AlertTriangle, Users } from 'lucide-react'
 export const metadata = { title: 'DPR | Civil Tracker' }
 
 export default async function DprPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'dpr.view', module: 'DPR' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/dpr')
+  const { companyId } = gate.access
 
   const dprs = await prisma.dailyProgressReport.findMany({
-    where: { companyId },
+    where: { companyId, site: liveCompanySiteWhere(companyId) },
     include: {
       site: { select: { name: true } },
       createdBy: { select: { name: true } },

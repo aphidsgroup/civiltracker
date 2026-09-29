@@ -1,48 +1,16 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
-
-async function createMaterial(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  const companyId = session.user.companyId
-  const siteId = formData.get('siteId') as string
-  const name = formData.get('name') as string
-  const brand = formData.get('brand') as string
-  const unit = formData.get('unit') as string
-  const openingStock = formData.get('openingStock') as string
-  const minStock = formData.get('minStock') as string
-
-  if (!name || !siteId || !unit) return
-
-  const initialStock = openingStock ? parseFloat(openingStock) : 0
-
-  await prisma.material.create({
-    data: {
-      companyId,
-      siteId,
-      name,
-      brand: brand || null,
-      unit,
-      openingStock: initialStock,
-      currentStock: initialStock, // Set current to opening
-      minStock: minStock ? parseFloat(minStock) : 0,
-      isActive: true,
-    },
-  })
-
-  redirect('/materials')
-}
+import { createMaterialAction } from '@/actions/materials'
+import { MATERIAL_UNIT_LABELS, MATERIAL_UNITS } from '@/lib/validation/commercial-records'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export default async function NewMaterialPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'materials.create', module: 'MATERIALS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/materials/new')
 
+  // A field role is offered only the sites it may create material on.
   const sites = await prisma.site.findMany({
-    where: { companyId: session.user.companyId, status: 'ACTIVE', deletedAt: null },
+    where: { ...(await assignedSiteWhere(gate.access)), status: 'ACTIVE' },
     select: { id: true, name: true }
   })
 
@@ -54,11 +22,11 @@ export default async function NewMaterialPage() {
       
       <div className="p-6 max-w-2xl">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <form action={createMaterial}>
+          <form action={createMaterialAction}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Material Name *</label>
-                <input name="name" required placeholder="OPC Cement 43 Grade"
+                <input name="name" required maxLength={120} placeholder="OPC Cement 43 Grade"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
@@ -75,7 +43,7 @@ export default async function NewMaterialPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Brand / Make</label>
-                <input name="brand" placeholder="UltraTech, Tata Tiscon..."
+                <input name="brand" maxLength={120} placeholder="UltraTech, Tata Tiscon..."
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
               
@@ -83,26 +51,21 @@ export default async function NewMaterialPage() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Unit of Measurement *</label>
                 <select name="unit" required defaultValue="Bags"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent">
-                  <option value="Bags">Bags</option>
-                  <option value="MT">MT (Metric Ton)</option>
-                  <option value="Kgs">Kgs</option>
-                  <option value="Ltrs">Ltrs</option>
-                  <option value="Nos">Nos (Numbers)</option>
-                  <option value="Cum">Cum (Cubic Meter)</option>
-                  <option value="Sqft">Sqft</option>
-                  <option value="Rft">Rft</option>
+                  {MATERIAL_UNITS.map(unit => (
+                    <option key={unit} value={unit}>{MATERIAL_UNIT_LABELS[unit]}</option>
+                  ))}
                 </select>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Opening Stock</label>
-                <input name="openingStock" type="number" min="0" step="0.01" placeholder="0" defaultValue="0"
+                <input name="openingStock" type="number" min="0" max="99999999999.999" step="0.001" placeholder="0" defaultValue="0"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Low Stock Alert (Min Stock)</label>
-                <input name="minStock" type="number" min="0" step="0.01" placeholder="10"
+                <input name="minStock" type="number" min="0" max="99999999999.999" step="0.001" placeholder="10"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
             </div>

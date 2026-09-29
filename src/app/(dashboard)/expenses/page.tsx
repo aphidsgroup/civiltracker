@@ -1,6 +1,6 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
+import { exitDeniedPage, liveCompanySiteWhere, parsePageSize, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
@@ -9,32 +9,34 @@ import ExpenseTableClient from './ExpenseTableClient'
 export const dynamic = 'force-dynamic'
 
 export default async function ExpensesPage({ searchParams }: { searchParams: Promise<{ limit?: string; siteId?: string }> }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'expenses.view', module: 'EXPENSES' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/expenses')
+  const { user, companyId } = gate.access
   const { limit, siteId } = await searchParams
-  const take = limit ? parseInt(limit, 10) : 50
+  const take = parsePageSize(limit)
 
-  const siteFilter = siteId ? { siteId } : {}
+  const liveSite = liveCompanySiteWhere(companyId)
+  const sites = await prisma.site.findMany({
+    where: liveSite,
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  })
+
+  // A ?siteId= filter must name a live site of this company before any expense is read.
+  if (siteId && !sites.some((site) => site.id === siteId)) redirect('/expenses')
 
   const expenses = await prisma.expense.findMany({
-    where: { companyId, deletedAt: null, ...siteFilter },
+    where: { companyId, deletedAt: null, site: liveSite, ...(siteId ? { siteId } : {}) },
     include: { site: { select: { name: true } }, createdBy: { select: { name: true, id: true } } },
     orderBy: { createdAt: 'desc' },
     take,
-  })
-
-  const sites = await prisma.site.findMany({
-    where: { companyId, deletedAt: null },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
   })
 
   const total = expenses.reduce((s, e) => s + Number(e.amount), 0)
   const pending = expenses.filter(e => e.approvalStatus === 'PENDING').length
   const approved = expenses.filter(e => ['APPROVED', 'PAID'].includes(e.approvalStatus)).reduce((s, e) => s + Number(e.amount), 0)
 
-  const canEdit = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'ACCOUNTANT', 'SITE_ENGINEER', 'PROJECT_MANAGER'].includes(session.user.role)
+  const canEdit = ['COMPANY_ADMIN', 'ACCOUNTANT', 'SITE_ENGINEER', 'PROJECT_MANAGER'].includes(user.role)
 
   return (
     <div className="flex flex-col gap-5.5">
@@ -91,8 +93,8 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
           paidTo: e.paidTo,
           notes: e.notes,
         }))}
-        currentUserId={session.user.id}
-        currentUserRole={session.user.role}
+        currentUserId={user.id}
+        currentUserRole={user.role}
         canEdit={canEdit}
         hasMore={expenses.length === take}
         loadMoreHref={`/expenses?limit=${take + 50}${siteId ? `&siteId=${siteId}` : ''}`}

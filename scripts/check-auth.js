@@ -13,7 +13,7 @@ async function main() {
   
   console.log('\n=== USERS IN DB ===')
   for (const u of users) {
-    const match = await bcrypt.compare('Admin@123456', u.passwordHash)
+    const match = await bcrypt.compare(process.env.E2E_TEST_PASSWORD ?? '', u.passwordHash)
     console.log(`${u.email} | active=${u.isActive} | role=${u.role} | password_ok=${match}`)
   }
 

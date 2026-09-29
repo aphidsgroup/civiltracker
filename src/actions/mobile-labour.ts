@@ -1,10 +1,183 @@
 'use server'
 
-import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/audit'
+import { auditLogData } from '@/lib/audit-data'
 import { AttendanceStatus, LabourTrade } from '@prisma/client'
+import type { Prisma } from '@prisma/client'
+import { readsAssignedSitesOnly, requireAssignedScopeMutation, requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
+import type { TenantMutationUser } from '@/lib/auth/site-mutation'
+import { assertNoOtherSiteAttendanceFrom, upsertSiteAttendance } from '@/lib/labour-attendance'
+import { hasPermission } from '@/lib/permissions'
+import { assertPayrollPeriodOpen, payrollTransaction } from '@/lib/payroll-period-lock'
+import {
+  MAX_AMOUNT_10_2,
+  MAX_AMOUNT_14_2,
+  paise,
+  parseAmountText,
+  parseFinancialReason,
+  rupeeSum,
+} from '@/lib/validation/financial-mutations'
+
+/*
+ * Muster-roll actions. Marking the roll (attendance, roster, contractor headcount) needs
+ * live `attendance.mark` + LABOUR; editing an existing worker's master data (wage, site)
+ * needs live `labour.manage` + LABOUR. Both are checked before any read. Every site is a
+ * live site of exactly the live company that the principal may act on (`assignedSiteScope`:
+ * SITE_ENGINEER and SUPERVISOR only their assigned sites), and every worker and
+ * contractor log must sit on such a site too, so a field role can neither write on nor
+ * pull a worker off a site it is not assigned to. Multi-step money and attendance changes
+ * run in one transaction with counted, company-scoped writes. Attendance rows are written
+ * only on the site they are made for (`upsertSiteAttendance`): a row another site recorded
+ * for the same worker and date is refused, and a worker is not moved while it has one.
+ * Marking the roll follows the date policy below and audits every row it writes, with the
+ * day and the before/after status, on the write transaction. Every labour attendance and
+ * advance write runs in a `payrollTransaction` and refuses a day a salary run past DRAFT
+ * has settled (`assertPayrollPeriodOpen`) before its first mutation.
+ *
+ * Money policy: marking the roll and editing a worker move no money. An advance sent to
+ * those actions is refused unless it is absent, null or numeric zero — before any read,
+ * except that a worker move reports a site-history conflict first — and an attendance
+ * update never touches the stored advance. An advance is recorded only explicitly
+ * (`recordLabourAdvanceAction`, or a contractor log's daily advance), which needs live
+ * `payments.manage`, strict decimal text within the column, the stored name typed back,
+ * a reason, the exact current site binding, a guarded write and its audit row in the same
+ * transaction. Removing a row or log that carries an advance needs `payments.manage` too.
+ */
+
+const LABOUR_NOT_FOUND = 'FORBIDDEN: Labour not found or access denied'
+const SUBCONTRACTOR_NOT_FOUND = 'FORBIDDEN: Subcontractor not found or access denied'
+const CONTRACTOR_LOG_NOT_FOUND = 'FORBIDDEN: Contractor attendance not found or access denied'
+const LABOUR_ADVANCE_CHANGED = 'Labour advance changed. Refresh and retry.'
+const SUBCONTRACTOR_ADVANCE_CHANGED = 'Subcontractor advance changed. Refresh and retry.'
+const DEFAULT_DAILY_WAGE = 650
+
+/** Throws unless the live role may move money; call after the action's gate. */
+function requirePaymentsManage(user: TenantMutationUser) {
+  if (!hasPermission(user.role, 'payments.manage')) {
+    throw new Error('FORBIDDEN: Missing required permission "payments.manage"')
+  }
+}
+
+/** A contractor log's daily advance that asks for no money: absent, blank, numeric zero or zero decimal text. */
+function isNoMoney(raw: unknown) {
+  if (raw === undefined || raw === null || raw === '' || raw === 0) return true
+  return typeof raw === 'string' && /^0+(\.0{1,2})?$/.test(raw.trim())
+}
+
+/** Refuses an advance on a path that moves no money: only absent, null or numeric zero pass. */
+function refuseAdvance(raw: unknown) {
+  if (raw !== undefined && raw !== null && raw !== 0) {
+    throw new Error('FORBIDDEN: An advance is a payment; record it separately with a confirmation and reason')
+  }
+}
+
+function requireAttendanceScope() {
+  return requireAssignedScopeMutation('attendance.mark', 'LABOUR')
+}
+
+/** A worker of exactly `companyId` whose current site is in the principal's `scope`. */
+function companyLabourWhere(id: string, companyId: string, scope: Prisma.SiteWhereInput) {
+  return { id, companyId, site: scope }
+}
+
+function requiredName(raw: unknown, field: string): string {
+  const text = typeof raw === 'string' ? raw.trim() : ''
+  if (!text) throw new Error(`${field} is required`)
+  return text
+}
+
+/** A finite non-negative amount; missing becomes `fallback`. */
+function parseAmount(raw: unknown, field: string, fallback: number): number {
+  if (raw === undefined || raw === null || raw === '') return fallback
+  const value = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.trim()) : NaN
+  if (!Number.isFinite(value) || value < 0) throw new Error(`Invalid ${field}`)
+  return value
+}
+
+/** A trade from the enum; `OTHERS` is stored as HELPER with the custom name tagged in `phone`. */
+function parseTrade(trade: unknown, customTrade: unknown): { trade: LabourTrade; customTag: string | null } {
+  if (trade === 'OTHERS') {
+    const custom = typeof customTrade === 'string' ? customTrade.trim() : ''
+    if (!custom) throw new Error('Custom trade is required')
+    return { trade: LabourTrade.HELPER, customTag: `CUSTOM_TRADE:${custom}` }
+  }
+  if (trade === undefined || trade === null || trade === '') return { trade: LabourTrade.HELPER, customTag: null }
+  if (typeof trade !== 'string' || !(Object.values(LabourTrade) as string[]).includes(trade)) {
+    throw new Error('Invalid labour trade')
+  }
+  return { trade: trade as LabourTrade, customTag: null }
+}
+
+function parseStatus(raw: unknown): AttendanceStatus {
+  if (typeof raw !== 'string' || !(Object.values(AttendanceStatus) as string[]).includes(raw)) {
+    throw new Error('Invalid attendance status')
+  }
+  return raw as AttendanceStatus
+}
+
+function parseStartTime(raw: unknown): string | undefined {
+  if (raw === undefined || raw === null) return undefined
+  if (typeof raw !== 'string' || raw.length > 16) throw new Error('Invalid start time')
+  return raw
+}
+
+function startOfToday() {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return today
+}
+
+/*
+ * Muster-roll date policy (`saveMobileAttendanceAction`). The date is a calendar day in UTC,
+ * stored at UTC midnight to match the `@db.Date` column, never shifted by the server's
+ * local timezone. Field roles (SITE_ENGINEER, SUPERVISOR, SUBCONTRACTOR) and any role
+ * without live `labour.manage` record only today. A labour manager (live `labour.manage`,
+ * not a field role) may correct at most the last `ATTENDANCE_CORRECTION_DAYS` days: one
+ * weekly pay cycle, the default salary-run period, so a missed or mistaken day can be fixed
+ * before the week is paid but settled history stays closed. No role records a future day.
+ * Whatever the role, a day covered by a salary run past DRAFT for the site or worker is
+ * closed to attendance changes.
+ */
+const ATTENDANCE_CORRECTION_DAYS = 7
+const DAY_MS = 24 * 60 * 60 * 1000
+const ATTENDANCE_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
+
+function startOfTodayUtc() {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+}
+
+/** Exactly `YYYY-MM-DD` naming a real calendar day, as UTC midnight; absent means `today`. */
+function parseAttendanceDate(raw: unknown, today: Date): Date {
+  if (raw === undefined) return today
+  const match = typeof raw === 'string' ? ATTENDANCE_DATE.exec(raw) : null
+  if (!match) throw new Error('Invalid attendance date')
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])]
+  const date = new Date(Date.UTC(year, month - 1, day))
+  // Round-trips only for a real day: refuses 2026-02-30, month 13 and two-digit-year remapping.
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    throw new Error('Invalid attendance date')
+  }
+  return date
+}
+
+/** Throws unless `user` may record attendance on `date` under the date policy; both are UTC midnights. */
+function requireAttendanceDateAllowed(user: TenantMutationUser, date: Date, today: Date) {
+  if (date.getTime() > today.getTime()) throw new Error('FORBIDDEN: Attendance cannot be recorded for a future date')
+  if (date.getTime() === today.getTime()) return
+  if (readsAssignedSitesOnly(user.role) || !hasPermission(user.role, 'labour.manage')) {
+    throw new Error("FORBIDDEN: Only today's attendance can be recorded by this role")
+  }
+  if (date.getTime() < today.getTime() - ATTENDANCE_CORRECTION_DAYS * DAY_MS) {
+    throw new Error(`FORBIDDEN: Attendance can be corrected only for the last ${ATTENDANCE_CORRECTION_DAYS} days`)
+  }
+}
+
+function plainWorker(worker: { id: string; name: string; trade: LabourTrade; phone: string | null; dailyWage: unknown; siteId: string }) {
+  return { id: worker.id, name: worker.name, trade: worker.trade, phone: worker.phone, dailyWage: Number(worker.dailyWage), siteId: worker.siteId }
+}
 
 export async function addMobileWorkerAction(formData: {
   name: string
@@ -14,29 +187,19 @@ export async function addMobileWorkerAction(formData: {
   siteId: string
   startTime?: string
 }) {
-  const user = await requireUser()
-  if (!user.companyId) throw new Error('No active company context')
-
-  if (!formData.name || !formData.siteId) {
-    throw new Error('Name and site are required')
-  }
-
-  let tradeVal = (formData.trade as LabourTrade) || 'HELPER'
-  let phoneVal: string | null = null
-
-  if (formData.trade === 'OTHERS' && formData.customTrade?.trim()) {
-    tradeVal = 'HELPER' // Fallback enum
-    phoneVal = `CUSTOM_TRADE:${formData.customTrade.trim()}`
-  }
+  const { user, site } = await requireAssignedSiteMutation(String(formData?.siteId ?? ''), 'attendance.mark', 'LABOUR')
+  const name = requiredName(formData.name, 'Name')
+  const { trade, customTag } = parseTrade(formData.trade, formData.customTrade)
+  const dailyWage = parseAmount(formData.dailyRate, 'daily rate', 0) || DEFAULT_DAILY_WAGE
 
   const worker = await prisma.labour.create({
     data: {
       companyId: user.companyId,
-      siteId: formData.siteId,
-      name: formData.name.trim(),
-      trade: tradeVal,
-      phone: phoneVal,
-      dailyWage: Number(formData.dailyRate) || 650,
+      siteId: site.id,
+      name,
+      trade,
+      phone: customTag,
+      dailyWage,
       isActive: true,
     }
   })
@@ -47,13 +210,13 @@ export async function addMobileWorkerAction(formData: {
     action: 'CREATE',
     module: 'LABOUR',
     recordId: worker.id,
-    description: `${user.name ?? user.email} registered worker "${formData.name.trim()}" (${tradeVal}) at site`,
-    after: { name: formData.name, trade: tradeVal, dailyRate: formData.dailyRate },
+    description: `${user.name ?? user.email} registered worker "${name}" (${trade}) at site`,
+    after: { name, trade, dailyRate: dailyWage },
   })
 
   revalidatePath('/mobile/attendance')
   revalidatePath('/labour/attendance')
-  return { success: true, worker }
+  return { success: true, worker: plainWorker(worker) }
 }
 
 export async function updateWorkerAction(formData: {
@@ -63,58 +226,40 @@ export async function updateWorkerAction(formData: {
   customTrade?: string
   dailyWage: number
   siteId: string
+  /** Accepted only as absent or zero: an advance is recorded by `recordLabourAdvanceAction`. */
   advance?: number
 }) {
-  const user = await requireUser()
-  if (!user.companyId) throw new Error('No active company context')
+  const { user, site, scope } = await requireAssignedSiteMutation(String(formData?.siteId ?? ''), 'labour.manage', 'LABOUR')
+  const companyId = user.companyId
+  const id = requiredName(formData.id, 'Labour')
+  const name = requiredName(formData.name, 'Name')
+  const { trade, customTag } = parseTrade(formData.trade, formData.customTrade)
+  const dailyWage = parseAmount(formData.dailyWage, 'daily wage', 0) || DEFAULT_DAILY_WAGE
 
-  let tradeVal = (formData.trade as LabourTrade) || 'HELPER'
-  let phoneVal: string | null = null
-
-  if (formData.trade === 'OTHERS' && formData.customTrade?.trim()) {
-    tradeVal = 'HELPER'
-    phoneVal = `CUSTOM_TRADE:${formData.customTrade.trim()}`
-  } else if (formData.trade !== 'OTHERS') {
-    // If switching back from custom trade to standard trade, clear custom trade tag
-    const existing = await prisma.labour.findUnique({ where: { id: formData.id }, select: { phone: true } })
-    if (existing?.phone?.startsWith('CUSTOM_TRADE:')) {
-      phoneVal = null
-    } else {
-      phoneVal = existing?.phone || null
-    }
-  }
-
-  const worker = await prisma.labour.update({
-    where: { id: formData.id, companyId: user.companyId },
-    data: {
-      name: formData.name.trim(),
-      trade: tradeVal,
-      phone: phoneVal !== undefined ? phoneVal : undefined,
-      dailyWage: Number(formData.dailyWage) || 650,
-      siteId: formData.siteId,
-    }
-  })
-
-  // Upsert today's attendance record with advance payment
-  if (formData.advance !== undefined) {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    await prisma.labourAttendance.upsert({
-      where: { labourId_date: { labourId: formData.id, date: today } },
-      create: {
-        labourId: formData.id,
-        siteId: formData.siteId,
-        date: today,
-        status: 'PRESENT',
-        advance: Number(formData.advance) || 0,
-        markedById: user.id
-      },
-      update: {
-        advance: Number(formData.advance) || 0,
-        markedById: user.id
-      }
+  const worker = await prisma.$transaction(async (tx) => {
+    const existing = await tx.labour.findFirst({
+      where: companyLabourWhere(id, companyId, scope),
+      select: { id: true, phone: true, siteId: true },
     })
-  }
+    if (!existing) throw new Error(LABOUR_NOT_FOUND)
+
+    const today = startOfToday()
+    if (existing.siteId !== site.id) await assertNoOtherSiteAttendanceFrom(tx, existing.id, site.id, today)
+    // After the site-history check, so a move over another site's attendance is reported
+    // as that conflict, and before any write.
+    refuseAdvance(formData.advance)
+
+    // A standard trade clears a previous custom-trade tag but keeps a real phone number.
+    const phone = customTag ?? (existing.phone?.startsWith('CUSTOM_TRADE:') ? null : existing.phone ?? null)
+
+    const updated = await tx.labour.updateMany({
+      where: companyLabourWhere(existing.id, companyId, scope),
+      data: { name, trade, phone, dailyWage, siteId: site.id },
+    })
+    if (updated.count !== 1) throw new Error(LABOUR_NOT_FOUND)
+
+    return { id: existing.id, name, trade, phone, dailyWage, siteId: site.id }
+  })
 
   revalidatePath('/mobile/attendance')
   revalidatePath('/labour/attendance')
@@ -122,49 +267,84 @@ export async function updateWorkerAction(formData: {
 }
 
 export async function saveMobileAttendanceAction(records: { labourId: string; status: string; siteId: string; advance?: number, startTime?: string }[], dateIso?: string) {
-  const user = await requireUser()
-  if (!user.companyId) throw new Error('No active company context')
+  const { user, scope } = await requireAttendanceScope()
+  const companyId = user.companyId
+  if (!Array.isArray(records)) throw new Error('Invalid attendance records')
 
-  let targetDate = new Date()
-  if (dateIso) {
-    const parsed = new Date(dateIso)
-    if (!isNaN(parsed.getTime())) {
-      targetDate = parsed
+  // The date policy is judged before any read or write, against one reading of today (UTC)
+  // so the default day, the policy and the correction flag cannot straddle midnight.
+  const today = startOfTodayUtc()
+  const targetDate = parseAttendanceDate(dateIso, today)
+  requireAttendanceDateAllowed(user, targetDate, today)
+  const dateKey = targetDate.toISOString().slice(0, 10)
+  const correction = targetDate.getTime() !== today.getTime()
+
+  // Marking the roll moves no money: any row asking for an advance refuses the batch.
+  for (const item of records) refuseAdvance(item?.advance)
+  const marked = records
+    .filter((item) => item?.status)
+    .map((item) => ({
+      labourId: requiredName(item.labourId, 'Labour'),
+      siteId: requiredName(item.siteId, 'Site'),
+      status: parseStatus(item.status),
+      startTime: parseStartTime(item.startTime),
+    }))
+
+  // Every worker must be of this company on a site in the principal's scope, and each row
+  // must name the worker's own site; one bad row refuses the whole batch. The binding, the
+  // salary-run check, the writes and their audit rows share one transaction, and each row
+  // is written on exactly that site: an audit failure rolls the whole batch back.
+  const labourIds = [...new Set(marked.map((item) => item.labourId))]
+  const affectedSiteIds = [...new Set(marked.map((item) => item.siteId))]
+  await payrollTransaction(prisma, async (tx) => {
+    const workers = labourIds.length > 0
+      ? await tx.labour.findMany({
+          where: { id: { in: labourIds }, companyId, site: scope },
+          select: { id: true, siteId: true },
+        })
+      : []
+    const siteOf = new Map(workers.map((worker) => [worker.id, worker.siteId]))
+    for (const item of marked) {
+      if (siteOf.get(item.labourId) !== item.siteId) throw new Error(LABOUR_NOT_FOUND)
     }
-  }
-  targetDate.setHours(0, 0, 0, 0)
+    if (marked.length === 0) return
 
-  let count = 0
-  for (const item of records) {
-    if (!item.status) continue
-    await prisma.labourAttendance.upsert({
-      where: {
-        labourId_date: {
-          labourId: item.labourId,
-          date: targetDate
-        }
-      },
-      create: {
-        labourId: item.labourId,
-        siteId: item.siteId,
-        date: targetDate,
-        status: item.status as AttendanceStatus,
-        advance: Number(item.advance) || 0,
-        startTime: item.startTime,
-        markedById: user.id
-      },
-      update: {
-        status: item.status as AttendanceStatus,
-        advance: item.advance !== undefined ? Number(item.advance) : undefined,
-        startTime: item.startTime !== undefined ? item.startTime : undefined,
-        markedById: user.id
-      }
-    })
-    count++
-  }
+    // Any run past DRAFT covering the day — company-wide, for an affected site, or paying
+    // an affected worker — has settled that day's attendance.
+    await assertPayrollPeriodOpen(tx, companyId, targetDate, marked)
 
-  // Recalculate budget for all affected sites (if they gave advances)
-  const affectedSiteIds = [...new Set(records.map(r => r.siteId))]
+    // A new row starts with no advance; an update never touches the recorded advance.
+    for (const item of marked) {
+      const current = await tx.labourAttendance.findFirst({
+        where: { labourId: item.labourId, date: targetDate, siteId: item.siteId },
+        select: { status: true, startTime: true },
+      })
+      // The audit's before is copied out now, so the write below cannot change what it records.
+      const before = current ? { status: current.status, startTime: current.startTime } : null
+      const row = await upsertSiteAttendance(
+        tx,
+        { labourId: item.labourId, date: targetDate, siteId: item.siteId },
+        { status: item.status, advance: 0, startTime: item.startTime, markedById: user.id },
+        { status: item.status, startTime: item.startTime, markedById: user.id },
+      )
+      const booking = { labourId: item.labourId, siteId: item.siteId, date: dateKey }
+      await tx.auditLog.create({
+        data: auditLogData({
+          userId: user.id,
+          companyId,
+          action: before ? 'UPDATE' : 'CREATE',
+          module: 'ATTENDANCE',
+          recordId: row.id,
+          description: `${user.name ?? user.email} ${correction ? 'corrected' : 'marked'} attendance for ${dateKey}: ${before?.status ?? 'unmarked'} → ${item.status}`,
+          before: before ? { ...booking, status: before.status, startTime: before.startTime } : null,
+          after: { ...booking, status: item.status, startTime: item.startTime ?? before?.startTime ?? null, correction },
+        }),
+      })
+    }
+  })
+  const count = marked.length
+
+  // Recalculate budget for all affected sites
   if (affectedSiteIds.length > 0) {
     const { syncSiteBudget } = await import('@/lib/budget')
     for (const sId of affectedSiteIds) {
@@ -175,161 +355,343 @@ export async function saveMobileAttendanceAction(records: { labourId: string; st
   revalidatePath('/mobile/attendance')
   revalidatePath('/labour/attendance')
 
-  if (count > 0 && records[0]?.siteId) {
-    await logActivity({
-      userId: user.id,
-      companyId: user.companyId,
-      action: 'CREATE',
-      module: 'ATTENDANCE',
-      recordId: records[0].siteId,
-      description: `${user.name ?? user.email} marked attendance for ${count} worker(s) for today`,
-      after: { count, date: new Date().toLocaleDateString('en-IN') },
-    })
-  }
-
   return { success: true, count }
 }
 
-export async function addExistingWorkerToRoster(labourId: string, siteId: string, startTime?: string) {
-  const user = await requireUser()
-  if (!user.companyId) throw new Error('No active company context')
+/**
+ * Records an advance paid to a worker today. Needs live `payments.manage` + LABOUR; the
+ * site must be in the principal's assigned scope and be the worker's current site, and the
+ * worker must be active and marked on that site today. The amount is strict positive
+ * decimal text within `Decimal(10, 2)`; `expectedAdvance` is the balance the payer saw and
+ * must still be the stored one. The worker's name is typed back and a reason given. The
+ * write is guarded on the balance read and audited on the same transaction, so an advance
+ * without its audit trail rolls back.
+ */
+export async function recordLabourAdvanceAction(input: {
+  labourId: string
+  siteId: string
+  amount: string
+  expectedAdvance: string
+  confirmationText: string
+  reason: string
+}) {
+  const { user, site, scope } = await requireAssignedSiteMutation(String(input?.siteId ?? ''), 'payments.manage', 'LABOUR')
+  const companyId = user.companyId
+  const labourId = requiredName(input.labourId, 'Labour')
+  const amount = parseAmountText(input.amount, 'advance amount', { max: MAX_AMOUNT_10_2, positive: true })
+  const expected = parseAmountText(input.expectedAdvance, 'expected advance', { max: MAX_AMOUNT_10_2 })
+  const typed = typeof input.confirmationText === 'string' ? input.confirmationText.trim() : ''
+  const reason = parseFinancialReason(input.reason, 'Advance reason')
+  const today = startOfToday()
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  // Mark them present for today to add them to the roster
-  const record = await prisma.labourAttendance.upsert({
-    where: {
-      labourId_date: {
-        labourId,
-        date: today
-      }
-    },
-    create: {
-      labourId,
-      siteId,
-      date: today,
-      status: 'PRESENT',
-      advance: 0,
-      startTime,
-      markedById: user.id
-    },
-    update: {
-      status: 'PRESENT',
-      startTime: startTime !== undefined ? startTime : undefined
+  const next = await payrollTransaction(prisma, async (tx) => {
+    const worker = await tx.labour.findFirst({
+      where: { ...companyLabourWhere(labourId, companyId, scope), siteId: site.id, isActive: true },
+      select: { id: true, name: true },
+    })
+    if (!worker) throw new Error(LABOUR_NOT_FOUND)
+    if (typed !== worker.name.trim()) {
+      throw new Error('Advance confirmation text did not match the worker name.')
     }
+    await assertPayrollPeriodOpen(tx, companyId, today, [{ labourId: worker.id, siteId: site.id }])
+
+    const attendance = await tx.labourAttendance.findFirst({
+      where: { labourId: worker.id, siteId: site.id, date: today },
+      select: { id: true, advance: true },
+    })
+    if (!attendance) throw new Error('No attendance today for this worker on this site. Mark attendance first.')
+
+    const current = Number(attendance.advance)
+    if (paise(current) !== paise(expected)) throw new Error(LABOUR_ADVANCE_CHANGED)
+    const total = rupeeSum(current, amount)
+    if (paise(total) > paise(MAX_AMOUNT_10_2)) throw new Error('Advance would exceed the labour advance limit.')
+
+    const result = await tx.labourAttendance.updateMany({
+      where: { id: attendance.id, labourId: worker.id, siteId: site.id, date: today, advance: attendance.advance },
+      data: { advance: total },
+    })
+    if (result.count !== 1) throw new Error(LABOUR_ADVANCE_CHANGED)
+
+    const booking = { siteId: site.id, attendanceId: attendance.id, attendanceDate: today.toISOString() }
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId,
+        action: 'PAID',
+        module: 'LABOUR',
+        recordId: worker.id,
+        description: `${user.name ?? user.email} paid ₹${amount.toLocaleString('en-IN')} advance to worker "${worker.name}": ${reason}`,
+        before: { ...booking, advance: current },
+        after: { ...booking, advance: total, paidAmount: amount, reason },
+      }),
+    })
+    return total
   })
 
-  // Update their default site assignment too
-  await prisma.labour.update({
-    where: { id: labourId },
-    data: { siteId }
+  const { syncSiteBudget } = await import('@/lib/budget')
+  await syncSiteBudget(site.id)
+
+  revalidatePath('/mobile/attendance')
+  revalidatePath('/labour/attendance')
+  return { success: true, advance: next }
+}
+
+export async function addExistingWorkerToRoster(labourId: string, siteId: string, startTime?: string) {
+  const { user, site, scope } = await requireAssignedSiteMutation(String(siteId ?? ''), 'attendance.mark', 'LABOUR')
+  const companyId = user.companyId
+  const start = parseStartTime(startTime)
+  const today = startOfToday()
+
+  const record = await payrollTransaction(prisma, async (tx) => {
+    // The worker's current site must be in scope too: a field role may not pull a worker
+    // off a site it is not assigned to.
+    const labour = await tx.labour.findFirst({
+      where: companyLabourWhere(String(labourId ?? ''), companyId, scope),
+      select: { id: true, siteId: true },
+    })
+    if (!labour) throw new Error(LABOUR_NOT_FOUND)
+    if (labour.siteId !== site.id) await assertNoOtherSiteAttendanceFrom(tx, labour.id, site.id, today)
+    await assertPayrollPeriodOpen(tx, companyId, today, [{ labourId: labour.id, siteId: site.id }])
+
+    // Mark them present for today to add them to the roster, only on this site's row.
+    const attendance = await upsertSiteAttendance(
+      tx,
+      { labourId: labour.id, date: today, siteId: site.id },
+      { status: 'PRESENT', advance: 0, startTime: start, markedById: user.id },
+      { status: 'PRESENT', startTime: start },
+    )
+
+    // Update their default site assignment too
+    const moved = await tx.labour.updateMany({
+      where: companyLabourWhere(labour.id, companyId, scope),
+      data: { siteId: site.id }
+    })
+    if (moved.count !== 1) throw new Error(LABOUR_NOT_FOUND)
+
+    return { id: attendance.id }
   })
 
   revalidatePath('/mobile/attendance')
   return { success: true, record }
 }
 
+/**
+ * Logs a contractor's headcount for today. Needs live `attendance.mark` + LABOUR on an
+ * assigned site. With no daily advance (absent or zero) it moves no money.
+ *
+ * A daily advance is a payment and additionally needs live `payments.manage`, strict
+ * positive decimal text within `Decimal(10, 2)`, the subcontractor's stored name typed
+ * back (`advanceConfirmation`) and a reason. It is paid only to an existing active
+ * subcontractor of the live company bound to exactly this site — never one created here,
+ * company-wide or of another site. The log, the guarded advance increment and the audit
+ * row share one transaction.
+ */
 export async function saveContractorAttendance(data: {
   siteId: string
   contractorName: string
   contractorType: string
   labourCount: number
-  dailyAdvance: number
+  dailyAdvance?: string | number
+  advanceConfirmation?: string
+  advanceReason?: string
   startTime?: string
 }) {
-  const user = await requireUser()
-  if (!user.companyId) throw new Error('No active company context')
+  const { user, site } = await requireAssignedSiteMutation(String(data?.siteId ?? ''), 'attendance.mark', 'LABOUR')
+  const companyId = user.companyId
+  const contractorName = requiredName(data.contractorName, 'Contractor name')
+  const contractorType = typeof data.contractorType === 'string' ? data.contractorType.trim() : ''
+  const labourCount = data.labourCount
+  if (typeof labourCount !== 'number' || !Number.isInteger(labourCount) || labourCount < 0) {
+    throw new Error('Invalid labour count')
+  }
+  const startTime = parseStartTime(data.startTime)
 
-  // Find or create subcontractor
-  let sub = await prisma.subcontractor.findFirst({
-    where: {
-      companyId: user.companyId,
-      name: { equals: data.contractorName, mode: 'insensitive' }
+  if (!isNoMoney(data.dailyAdvance)) {
+    requirePaymentsManage(user)
+    const advance = {
+      amount: parseAmountText(typeof data.dailyAdvance === 'string' ? data.dailyAdvance : null, 'daily advance', { max: MAX_AMOUNT_10_2, positive: true }),
+      typed: typeof data.advanceConfirmation === 'string' ? data.advanceConfirmation.trim() : '',
+      reason: parseFinancialReason(data.advanceReason ?? null, 'Advance reason'),
     }
-  })
-
-  if (!sub) {
-    sub = await prisma.subcontractor.create({
-      data: {
-        companyId: user.companyId,
-        name: data.contractorName,
-        trade: data.contractorType,
-      }
-    })
+    const attendance = await prisma.$transaction((tx) =>
+      logPaidContractorAttendance(tx, user, site.id, { contractorName, contractorType, labourCount, startTime }, advance),
+    )
+    revalidatePath('/mobile/attendance')
+    revalidatePath('/sites/[id]', 'page')
+    return { success: true, attendance }
   }
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const attendance = await prisma.$transaction(async (tx) => {
+    // Find or create the subcontractor: only one of this company that is unbound or bound
+    // to this site, never a same-named one of another site or tenant.
+    let sub = await tx.subcontractor.findFirst({
+      where: {
+        companyId,
+        name: { equals: contractorName, mode: 'insensitive' },
+        OR: [{ siteId: null }, { siteId: site.id }],
+      },
+      select: { id: true },
+    })
 
-  // Log the daily attendance for this contractor
-  const attendance = await prisma.contractorAttendance.create({
-    data: {
-      companyId: user.companyId,
-      siteId: data.siteId,
-      subcontractorId: sub.id,
-      date: today,
-      contractorType: data.contractorType,
-      labourCount: data.labourCount,
-      startTime: data.startTime,
-      dailyAdvance: data.dailyAdvance,
-      createdById: user.id
+    if (!sub) {
+      sub = await tx.subcontractor.create({
+        data: {
+          companyId,
+          name: contractorName,
+          trade: contractorType,
+        },
+        select: { id: true },
+      })
     }
-  })
 
-  // Update total advance on the subcontractor record
-  if (data.dailyAdvance > 0) {
-    await prisma.subcontractor.update({
-      where: { id: sub.id },
+    const today = startOfToday()
+
+    // Log the daily attendance for this contractor
+    const log = await tx.contractorAttendance.create({
       data: {
-        advance: {
-          increment: data.dailyAdvance
-        }
+        companyId,
+        siteId: site.id,
+        subcontractorId: sub.id,
+        date: today,
+        contractorType,
+        labourCount,
+        startTime,
+        dailyAdvance: 0,
+        createdById: user.id
       }
     })
-  }
+
+    return { id: log.id }
+  })
 
   revalidatePath('/mobile/attendance')
   revalidatePath('/sites/[id]', 'page')
   return { success: true, attendance }
 }
 
+/** The paid path of `saveContractorAttendance`, inside the caller's transaction. */
+async function logPaidContractorAttendance(
+  tx: Prisma.TransactionClient,
+  user: TenantMutationUser,
+  siteId: string,
+  log: { contractorName: string; contractorType: string; labourCount: number; startTime: string | undefined },
+  advance: { amount: number; typed: string; reason: string },
+) {
+  const companyId = user.companyId
+  const bound = { companyId, siteId, isActive: true, status: 'Active' }
+  // Exactly one match, so a same-named pair never lets the confirmation pick either.
+  const matches = await tx.subcontractor.findMany({
+    where: { ...bound, name: { equals: log.contractorName, mode: 'insensitive' } },
+    select: { id: true, name: true, advance: true },
+    take: 2,
+  })
+  if (matches.length !== 1) throw new Error(SUBCONTRACTOR_NOT_FOUND)
+  const sub = matches[0]
+  if (advance.typed !== sub.name.trim()) {
+    throw new Error('Advance confirmation text did not match the subcontractor name.')
+  }
+
+  const current = Number(sub.advance)
+  const total = rupeeSum(current, advance.amount)
+  if (paise(total) > paise(MAX_AMOUNT_14_2)) throw new Error('Advance would exceed the subcontractor advance limit.')
+
+  const today = startOfToday()
+  const created = await tx.contractorAttendance.create({
+    data: {
+      companyId,
+      siteId,
+      subcontractorId: sub.id,
+      date: today,
+      contractorType: log.contractorType,
+      labourCount: log.labourCount,
+      startTime: log.startTime,
+      dailyAdvance: advance.amount,
+      createdById: user.id,
+    },
+    select: { id: true },
+  })
+
+  const result = await tx.subcontractor.updateMany({
+    where: { ...bound, id: sub.id, advance: sub.advance },
+    data: { advance: total },
+  })
+  if (result.count !== 1) throw new Error(SUBCONTRACTOR_ADVANCE_CHANGED)
+
+  await tx.auditLog.create({
+    data: auditLogData({
+      userId: user.id,
+      companyId,
+      action: 'PAID',
+      module: 'SUBCONTRACTOR',
+      recordId: sub.id,
+      description: `${user.name ?? user.email} paid ₹${advance.amount.toLocaleString('en-IN')} daily advance to subcontractor "${sub.name}": ${advance.reason}`,
+      before: { siteId, advance: current },
+      after: {
+        siteId,
+        advance: total,
+        paidAmount: advance.amount,
+        reason: advance.reason,
+        contractorAttendanceId: created.id,
+        date: today.toISOString(),
+        labourCount: log.labourCount,
+      },
+    }),
+  })
+  return { id: created.id }
+}
+
 export async function removeLabourAttendanceAction(labourId: string, confirmationText?: string) {
-  const user = await requireUser()
-  if (!user.companyId) throw new Error('No active company context')
+  const { user, scope } = await requireAttendanceScope()
+  const companyId = user.companyId
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const today = startOfToday()
 
-  const labour = await prisma.labour.findUnique({
-    where: { id: labourId },
-    select: { id: true, name: true, companyId: true, siteId: true, trade: true }
-  })
+  // The worker re-read, the payroll-period check, the delete and the audit record share one
+  // transaction: an audit failure keeps the roster entry.
+  await payrollTransaction(prisma, async (tx) => {
+    const labour = await tx.labour.findFirst({
+      where: companyLabourWhere(String(labourId ?? ''), companyId, scope),
+      select: { id: true, name: true, siteId: true, trade: true }
+    })
 
-  if (!labour || labour.companyId !== user.companyId) {
-    throw new Error('Unauthorized or not found')
-  }
-  if ((confirmationText ?? '').trim() !== labour.name.trim()) {
-    throw new Error('Roster removal confirmation text did not match the worker name')
-  }
-
-  // Delete today's attendance record
-  await prisma.labourAttendance.deleteMany({
-    where: {
-      labourId,
-      date: today
+    if (!labour) throw new Error(LABOUR_NOT_FOUND)
+    if ((confirmationText ?? '').trim() !== labour.name.trim()) {
+      throw new Error('Roster removal confirmation text did not match the worker name')
     }
-  })
+    await assertPayrollPeriodOpen(tx, companyId, today, [{ labourId: labour.id, siteId: labour.siteId }])
 
-  await logActivity({
-    userId: user.id,
-    companyId: user.companyId,
-    action: 'DELETE',
-    module: 'ATTENDANCE',
-    recordId: labour.id,
-    description: `${user.name ?? user.email} removed worker "${labour.name}" from today's roster`,
-    before: { labourId: labour.id, name: labour.name, trade: labour.trade, siteId: labour.siteId, date: today.toISOString() },
-    after: { removedFromRoster: true, date: today.toISOString() },
+    // Deleting a row that carries an advance deletes a payment record.
+    const row = await tx.labourAttendance.findFirst({
+      where: { labourId: labour.id, siteId: labour.siteId, date: today },
+      select: { advance: true },
+    })
+    const advance = row ? Number(row.advance) : 0
+    if (paise(advance) !== 0) requirePaymentsManage(user)
+
+    // Delete today's attendance record on the worker's current site, never another site's,
+    // and only while it still carries the advance just checked.
+    await tx.labourAttendance.deleteMany({
+      where: {
+        labourId: labour.id,
+        siteId: labour.siteId,
+        date: today,
+        labour: { companyId },
+        advance: row ? row.advance : 0,
+      }
+    })
+
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId,
+        action: 'DELETE',
+        module: 'ATTENDANCE',
+        recordId: labour.id,
+        description: `${user.name ?? user.email} removed worker "${labour.name}" from today's roster`,
+        before: { labourId: labour.id, name: labour.name, trade: labour.trade, siteId: labour.siteId, date: today.toISOString(), advance },
+        after: { removedFromRoster: true, date: today.toISOString() },
+      }),
+    })
   })
 
   revalidatePath('/mobile/attendance')
@@ -338,56 +700,65 @@ export async function removeLabourAttendanceAction(labourId: string, confirmatio
 }
 
 export async function removeContractorAttendanceAction(attendanceId: string, confirmationText?: string) {
-  const user = await requireUser()
-  if (!user.companyId) throw new Error('No active company context')
+  const { user, scope } = await requireAttendanceScope()
+  const companyId = user.companyId
 
   // Find the record to reverse the advance amount if any
-  const record = await prisma.contractorAttendance.findUnique({
-    where: { id: attendanceId, companyId: user.companyId },
+  const record = await prisma.contractorAttendance.findFirst({
+    where: {
+      id: String(attendanceId ?? ''),
+      companyId,
+      site: scope,
+      subcontractor: { companyId },
+    },
     include: { subcontractor: { select: { name: true, trade: true } } }
   })
 
-  if (!record) {
-    throw new Error('Unauthorized or not found')
-  }
+  if (!record) throw new Error(CONTRACTOR_LOG_NOT_FOUND)
 
   const expected = (record.subcontractor?.name || `${record.contractorType} ${record.labourCount}`).trim()
   if ((confirmationText ?? '').trim() !== expected) {
     throw new Error('Contractor log confirmation text did not match the contractor label')
   }
+  // Deleting a log that carries a daily advance reverses a payment.
+  if (paise(Number(record.dailyAdvance)) !== 0) requirePaymentsManage(user)
 
-  if (Number(record.dailyAdvance) > 0) {
-    await prisma.subcontractor.update({
-      where: { id: record.subcontractorId },
-      data: {
-        advance: {
-          decrement: record.dailyAdvance
-        }
-      }
+  // The log is deleted, its advance reversed and the deletion audited together, or none.
+  await prisma.$transaction(async (tx) => {
+    const removed = await tx.contractorAttendance.deleteMany({
+      where: { id: record.id, companyId }
     })
-  }
-  await prisma.contractorAttendance.delete({
-    where: { id: attendanceId }
-  })
+    if (removed.count !== 1) throw new Error(CONTRACTOR_LOG_NOT_FOUND)
 
-  await logActivity({
-    userId: user.id,
-    companyId: user.companyId,
-    action: 'DELETE',
-    module: 'ATTENDANCE',
-    recordId: attendanceId,
-    description: `${user.name ?? user.email} deleted contractor log "${expected}" from today's roster`,
-    before: {
-      contractorType: record.contractorType,
-      labourCount: record.labourCount,
-      dailyAdvance: Number(record.dailyAdvance),
-      subcontractorId: record.subcontractorId,
-      subcontractorName: record.subcontractor?.name,
-      date: record.date.toISOString(),
-      startTime: record.startTime,
-      siteId: record.siteId,
-    },
-    after: { deleted: true },
+    if (Number(record.dailyAdvance) > 0) {
+      const result = await tx.subcontractor.updateMany({
+        where: { id: record.subcontractorId, companyId },
+        data: { advance: { decrement: record.dailyAdvance } },
+      })
+      if (result.count !== 1) throw new Error(SUBCONTRACTOR_NOT_FOUND)
+    }
+
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId,
+        action: 'DELETE',
+        module: 'ATTENDANCE',
+        recordId: record.id,
+        description: `${user.name ?? user.email} deleted contractor log "${expected}" from today's roster`,
+        before: {
+          contractorType: record.contractorType,
+          labourCount: record.labourCount,
+          dailyAdvance: Number(record.dailyAdvance),
+          subcontractorId: record.subcontractorId,
+          subcontractorName: record.subcontractor?.name,
+          date: record.date.toISOString(),
+          startTime: record.startTime,
+          siteId: record.siteId,
+        },
+        after: { deleted: true },
+      }),
+    })
   })
 
   revalidatePath('/mobile/attendance')

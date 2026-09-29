@@ -60,6 +60,18 @@ export function TemplateBuilderClient({ template }: { template: Template }) {
     })
   }
 
+  const handleDelete = (
+    kind: 'stage' | 'category' | 'task',
+    target: { id: string, name: string },
+    action: (id: string, templateId: string, confirmation: string) => Promise<void>,
+  ) => {
+    const typed = window.prompt(`Type "${target.name}" to permanently delete this ${kind}${kind === 'task' ? '' : ' and everything in it'}.`)
+    if (typed === null) return
+    startTransition(async () => {
+      await action(target.id, template.id, typed)
+    })
+  }
+
   return (
     <div className="space-y-6">
       {/* Template Info */}
@@ -103,7 +115,7 @@ export function TemplateBuilderClient({ template }: { template: Template }) {
                   <span className="font-black text-slate-800 text-[15px]">{stage.name}</span>
                 </button>
                 <button 
-                  onClick={() => startTransition(() => { deleteStage(stage.id, template.id) })}
+                  onClick={() => handleDelete('stage', stage, deleteStage)}
                   disabled={isPending}
                   className="p-2 text-slate-400 hover:text-rose-500 transition-colors"
                 >
@@ -123,7 +135,7 @@ export function TemplateBuilderClient({ template }: { template: Template }) {
                             <span className="font-bold text-slate-700 text-sm">{category.name}</span>
                           </button>
                           <button 
-                            onClick={() => startTransition(() => { deleteCategory(category.id, template.id) })}
+                            onClick={() => handleDelete('category', category, deleteCategory)}
                             disabled={isPending}
                             className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors"
                           >
@@ -140,7 +152,7 @@ export function TemplateBuilderClient({ template }: { template: Template }) {
                                   <span className="text-sm font-medium text-slate-600">{task.name}</span>
                                 </div>
                                 <button 
-                                  onClick={() => startTransition(() => { deleteTask(task.id, template.id) })}
+                                  onClick={() => handleDelete('task', task, deleteTask)}
                                   disabled={isPending}
                                   className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-rose-500 transition-all"
                                 >

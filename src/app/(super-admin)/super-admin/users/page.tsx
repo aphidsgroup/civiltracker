@@ -1,12 +1,10 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { requireSuperAdminPage } from '@/lib/pages/super-admin-page-access'
 import Link from 'next/link'
 import { Users, UserCheck, UserX, Search } from 'lucide-react'
 
 export default async function SAUsersPage() {
-  const session = await auth()
-  if (session?.user?.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  await requireSuperAdminPage()
 
   const members = await prisma.companyMember.findMany({
     include: {

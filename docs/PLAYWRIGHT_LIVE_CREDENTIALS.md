@@ -23,7 +23,7 @@ Example:
 ```env
 BASE_URL=https://civiltracker.buildogram.in
 E2E_SUPER_ADMIN_EMAIL=admin@civiltracker.in
-E2E_SUPER_ADMIN_PASSWORD=Admin@123456
+E2E_SUPER_ADMIN_PASSWORD=<set-in-secure-environment>
 E2E_COMPANY_ADMIN_EMAIL=
 E2E_COMPANY_ADMIN_PASSWORD=
 E2E_SITE_ENGINEER_EMAIL=

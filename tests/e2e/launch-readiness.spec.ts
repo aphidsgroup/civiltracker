@@ -28,22 +28,22 @@ function envCreds(prefix: 'SUPER_ADMIN' | 'COMPANY_ADMIN' | 'SITE_ENGINEER' | 'C
 
 const superAdminCreds = envCreds('SUPER_ADMIN', {
   email: 'admin@civiltracker.in',
-  password: 'Admin@123456',
+  password: process.env.E2E_TEST_PASSWORD ?? '',
 })
 
 const companyAdminCreds = envCreds('COMPANY_ADMIN', {
   email: 'arun@madras-crafters.in',
-  password: 'Admin@123456',
+  password: process.env.E2E_TEST_PASSWORD ?? '',
 })
 
 const siteEngineerCreds = envCreds('SITE_ENGINEER', {
   email: 'murugan@madras-crafters.in',
-  password: 'Admin@123456',
+  password: process.env.E2E_TEST_PASSWORD ?? '',
 })
 
 const clientCreds = envCreds('CLIENT', {
   email: 'client@annanagar.in',
-  password: 'Admin@123456',
+  password: process.env.E2E_TEST_PASSWORD ?? '',
 })
 
 const hasExplicitCompanyAdminCreds = Boolean(process.env.E2E_COMPANY_ADMIN_EMAIL && process.env.E2E_COMPANY_ADMIN_PASSWORD)

@@ -1,5 +1,5 @@
 import React from 'react'
-import { requireUser } from '@/lib/auth/require-user'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { redirect } from 'next/navigation'
@@ -70,13 +70,15 @@ export default async function BillDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const user = await requireUser()
-  if (!user.companyId) redirect('/login')
-
   const params = await paramsPromise
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'bills.view', module: 'BILLS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/bills/${params.id}`)
+  const { user, companyId } = gate.access
 
-  const expense = await prisma.expense.findUnique({
-    where: { id: params.id },
+  // Exact tenant, never soft deleted, on a live site of that same company. A bill of
+  // another tenant, or one pinned to a foreign or dead site, answers like a missing one.
+  const expense = await prisma.expense.findFirst({
+    where: { id: params.id, companyId, deletedAt: null, site: liveCompanySiteWhere(companyId) },
     include: { site: true, createdBy: true, billAttachments: true },
   })
 

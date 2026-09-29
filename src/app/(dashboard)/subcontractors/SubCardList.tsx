@@ -60,9 +60,28 @@ function SubCard({ sub, updateAction, markPaidAction, deactivateAction }: {
     ? Math.min(100, Math.round((sub.raBilled / sub.workOrderValue) * 100))
     : 0
 
+  // A change to any balance needs the name typed back and a reason, as the action enforces.
+  const toPaise = (n: number) => Math.round(n * 100)
+  const financialChanged = ([
+    [workOrderValue, sub.workOrderValue],
+    [raBilled, sub.raBilled],
+    [advance, sub.advance],
+    [retention, sub.retention],
+  ] as const).some(([typed, stored]) => toPaise(parseFloat(typed) || 0) !== toPaise(stored))
+
   const handleSave = () => {
+    let typed: string | null = null
+    let reason: string | null = null
+    if (financialChanged) {
+      typed = window.prompt(`Balances changed. Type "${sub.name}" to confirm.`)
+      if (typed === null) return
+      reason = window.prompt('Reason for the balance change')
+      if (reason === null) return
+    }
     startTransition(async () => {
       const fd = new FormData()
+      if (typed !== null) fd.append('dangerConfirmText', typed)
+      if (reason !== null) fd.append('reason', reason)
       fd.append('id', sub.id)
       fd.append('name', name)
       fd.append('phone', phone)
@@ -79,10 +98,16 @@ function SubCard({ sub, updateAction, markPaidAction, deactivateAction }: {
   }
 
   const handleMarkPaid = () => {
+    const typed = window.prompt(`Type "${sub.name}" to record a payment of ${fmt(sub.pending)}.`)
+    if (typed === null) return
+    const reason = window.prompt('Payment reason (e.g. RA bill number, NEFT reference)')
+    if (reason === null) return
     startTransition(async () => {
       const fd = new FormData()
       fd.append('id', sub.id)
-      fd.append('amount', String(sub.pending))
+      fd.append('amount', sub.pending.toFixed(2))
+      fd.append('dangerConfirmText', typed)
+      fd.append('reason', reason)
       await markPaidAction(fd)
     })
   }

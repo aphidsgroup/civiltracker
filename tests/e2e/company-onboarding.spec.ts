@@ -4,7 +4,7 @@ test.describe('Phase 9 Multi-Tenant Onboarding', () => {
   test('Super Admin can navigate to company creation and see limits', async ({ page }) => {
     await page.goto('/login')
     await page.fill('input[name="email"]', 'admin@civiltracker.in')
-    await page.fill('input[name="password"]', 'Admin@123456')
+    await page.fill('input[name="password"]', process.env.E2E_TEST_PASSWORD ?? '')
     await page.locator('button:has-text("Sign in"), button[type="submit"]').first().click()
     await page.waitForURL('**/super-admin/dashboard')
 

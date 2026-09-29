@@ -1,51 +1,27 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { updateSubcontractorAction } from '@/actions/subcontractors'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
+/* The live-authorized subcontractor update, then back to the list as before. */
 async function updateSubcontractor(formData: FormData) {
   'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  const companyId = session.user.companyId
-  const id = formData.get('id') as string
-  const name = formData.get('name') as string
-  const phone = formData.get('phone') as string
-  const trade = formData.get('trade') as string
-  const gst = formData.get('gst') as string
-  const workOrderValue = formData.get('workOrderValue') as string
-  const raBilled = formData.get('raBilled') as string
-  const advance = formData.get('advance') as string
-  const retention = formData.get('retention') as string
-  const status = formData.get('status') as string
-
-  if (!id || !name) return
-
-  await prisma.subcontractor.updateMany({
-    where: { id, companyId },
-    data: {
-      name,
-      phone: phone || null,
-      trade: trade || null,
-      gst: gst || null,
-      workOrderValue: workOrderValue ? parseFloat(workOrderValue) : 0,
-      raBilled: raBilled ? parseFloat(raBilled) : 0,
-      advance: advance ? parseFloat(advance) : 0,
-      retention: retention ? parseFloat(retention) : 0,
-      status: status || 'Active',
-    },
-  })
-
+  await updateSubcontractorAction(formData)
   redirect('/subcontractors')
 }
 
-export default async function EditSubcontractorPage({ params }: { params: { id: string } }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+export default async function EditSubcontractorPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  // Same live permission and module `updateSubcontractorAction` enforces.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'materials.update', module: 'MATERIALS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/subcontractors/${id}/edit`)
+  const { companyId } = gate.access
 
+  // Exactly this active subcontractor of this company, company-wide or on a live site of
+  // it; a deactivated one is no longer listed, so it cannot be opened by id either.
   const sub = await prisma.subcontractor.findFirst({
-    where: { id: params.id, companyId: session.user.companyId },
+    where: { id, companyId, isActive: true, OR: [{ siteId: null }, { site: { companyId, deletedAt: null } }] },
   })
 
   if (!sub) redirect('/subcontractors')
@@ -109,7 +85,7 @@ export default async function EditSubcontractorPage({ params }: { params: { id: 
                   type="number" 
                   name="workOrderValue" 
                   step="0.01"
-                  defaultValue={Number(sub.workOrderValue) || ''}
+                  defaultValue={Number(sub.workOrderValue)}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
                 />
               </div>
@@ -120,7 +96,7 @@ export default async function EditSubcontractorPage({ params }: { params: { id: 
                   type="number" 
                   name="raBilled" 
                   step="0.01"
-                  defaultValue={Number(sub.raBilled) || ''}
+                  defaultValue={Number(sub.raBilled)}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
                 />
               </div>
@@ -131,7 +107,7 @@ export default async function EditSubcontractorPage({ params }: { params: { id: 
                   type="number" 
                   name="advance" 
                   step="0.01"
-                  defaultValue={Number(sub.advance) || ''}
+                  defaultValue={Number(sub.advance)}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
                 />
               </div>
@@ -142,7 +118,7 @@ export default async function EditSubcontractorPage({ params }: { params: { id: 
                   type="number" 
                   name="retention" 
                   step="0.01"
-                  defaultValue={Number(sub.retention) || ''}
+                  defaultValue={Number(sub.retention)}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
                 />
               </div>
@@ -158,6 +134,27 @@ export default async function EditSubcontractorPage({ params }: { params: { id: 
                   <option value="Inactive">Inactive</option>
                   <option value="Completed">Completed</option>
                 </select>
+              </div>
+
+              {/* Required by the server only when a balance above changes. */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Type &quot;{sub.name}&quot; to change balances</label>
+                <input
+                  type="text"
+                  name="dangerConfirmText"
+                  autoComplete="off"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Reason for balance change</label>
+                <input
+                  type="text"
+                  name="reason"
+                  maxLength={500}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20]"
+                />
               </div>
             </div>
 

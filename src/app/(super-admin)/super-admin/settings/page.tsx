@@ -1,11 +1,9 @@
-import { auth } from '@/lib/auth'
-import { redirect } from 'next/navigation'
+import { requireSuperAdminPage } from '@/lib/pages/super-admin-page-access'
 import { Settings, Sliders, AlertTriangle } from 'lucide-react'
 import SuperAdminPasswordForm from '@/components/super-admin/SuperAdminPasswordForm'
 
 export default async function SettingsPage() {
-  const session = await auth()
-  if (session?.user?.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  await requireSuperAdminPage()
 
   const sections = [
     {

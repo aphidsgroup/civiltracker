@@ -1,22 +1,18 @@
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Upload, Check } from 'lucide-react'
+import { requireTenantMutation } from '@/lib/auth/site-mutation'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export default async function UploadBillPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-
-  const sites = await prisma.site.findMany({
-    where: { companyId: session.user.companyId, deletedAt: null },
-    orderBy: { name: 'asc' }
-  })
+  // Same live permission and module the bill upload policy enforces. The form reads no
+  // company data, so nothing is queried beyond the gate.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'bills.upload', module: 'BILLS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/bills/upload')
 
   async function uploadBill(_formData: FormData) {
     'use server'
-    const session = await auth()
-    if (!session?.user?.companyId) throw new Error('Unauthorized')
+    await requireTenantMutation('bills.upload', 'BILLS')
 
     // In a real implementation this would upload to Cloudinary and create the DB record
     // For now we just mock the process and redirect

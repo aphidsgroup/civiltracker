@@ -1,38 +1,89 @@
 'use server'
 
-import { requireUser } from '@/lib/auth/require-user'
+import { requireAssignedSiteMutation } from '@/lib/auth/site-mutation'
 import { prisma } from '@/lib/prisma'
+import { UPLOAD_POLICIES } from '@/lib/uploads/upload-policy'
+import { bindMediaClaim, claimMediaAsset } from '@/lib/uploads/media-claim'
 import { revalidatePath } from 'next/cache'
 
+const MEDIA_NOT_FOUND = 'FORBIDDEN: Uploaded photo not found or access denied'
+const MEDIA_ALREADY_USED = 'FORBIDDEN: Uploaded photo is already attached'
+
+function boundedText(raw: unknown, max: number): string {
+  return typeof raw === 'string' ? raw.trim().slice(0, max) : ''
+}
+
+/*
+ * Attaches a photo uploaded through `/api/upload` to a site. The live principal must
+ * hold a SITE_PHOTO upload grant with the TASKS module enabled, the site must be a live
+ * company site the principal is assigned to, and the photo must be a MediaAsset the same
+ * user uploaded as a SITE_PHOTO for exactly that site and company that no photo row uses
+ * yet (the same single-use policy as a checklist photo). The stored URL and public id
+ * come from that asset; nothing the browser sends is used as a URL. The asset is read,
+ * its use checked, the photo created and a SITE_PHOTO CREATE audit event appended on one
+ * transaction client, so a photo without its audit rolls back.
+ */
 export async function uploadMobileSitePhotoAction(formData: {
   siteId: string
-  imageUrl: string
+  mediaAssetId: string
   caption: string
   gps: string
 }) {
-  const user = await requireUser()
+  const policy = UPLOAD_POLICIES.SITE_PHOTO
+  const { user, site } = await requireAssignedSiteMutation(String(formData?.siteId ?? ''), policy.permissions, policy.module)
 
-  // Resolve companyId — site engineers may not have it in their JWT
-  let companyId = user.companyId ?? null
-  if (!companyId) {
-    const site = await prisma.site.findUnique({ where: { id: formData.siteId }, select: { companyId: true } })
-    if (!site) throw new Error('Site not found')
-    companyId = site.companyId
-  }
+  const mediaAssetId = typeof formData.mediaAssetId === 'string' ? formData.mediaAssetId.trim() : ''
+  if (!mediaAssetId || mediaAssetId.length > 64) throw new Error(MEDIA_NOT_FOUND)
+  const caption = boundedText(formData.caption, 500)
+  const gps = boundedText(formData.gps, 100)
 
-  await prisma.sitePhoto.create({
-    data: {
-      companyId,
-      siteId: formData.siteId,
-      secureUrl: formData.imageUrl,
-      cloudinaryPublicId: `field_gps_${Date.now()}`,
-      caption: formData.caption.trim() || 'Site Operations Photo',
-      category: formData.gps ? `GPS:${formData.gps}` : 'Civil',
-      uploadedById: user.id
-    }
+  const photo = await prisma.$transaction(async (tx) => {
+    const assetPolicy = { id: mediaAssetId, companyId: user.companyId, siteId: site.id, module: 'SITE_PHOTO', uploadedById: user.id }
+    const asset = await tx.mediaAsset.findFirst({
+      where: assetPolicy,
+      select: { id: true, secureUrl: true, cloudinaryPublicId: true },
+    })
+    if (!asset) throw new Error(MEDIA_NOT_FOUND)
+
+    // One upload backs one photo row, so deleting a photo never strands another's image.
+    // The claim is a guarded write on the asset row: a concurrent attach of the same upload
+    // waits and is then refused, and a failure below rolls the claim back. The photo check
+    // covers photos attached before claims existed.
+    await claimMediaAsset(tx, assetPolicy, 'SITE_PHOTO', MEDIA_ALREADY_USED)
+    const bound = await tx.sitePhoto.findFirst({
+      where: { cloudinaryPublicId: asset.cloudinaryPublicId },
+      select: { id: true },
+    })
+    if (bound) throw new Error(MEDIA_ALREADY_USED)
+
+    const created = await tx.sitePhoto.create({
+      data: {
+        companyId: user.companyId,
+        siteId: site.id,
+        secureUrl: asset.secureUrl,
+        cloudinaryPublicId: asset.cloudinaryPublicId,
+        caption: caption || 'Site Operations Photo',
+        category: gps ? `GPS:${gps}` : 'Civil',
+        uploadedById: user.id,
+      },
+      select: { id: true },
+    })
+    await bindMediaClaim(tx, asset.id, 'SITE_PHOTO', created.id, MEDIA_ALREADY_USED)
+
+    // Identifiers only: no stored URL, public id, or the caption/GPS text the client sent.
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        companyId: user.companyId,
+        module: 'SITE_PHOTO',
+        action: 'CREATE',
+        recordId: created.id,
+        after: { change: 'SITE_PHOTO_ATTACHED', photoId: created.id, mediaAssetId: asset.id, siteId: site.id, hasCaption: !!caption, hasGps: !!gps },
+      },
+    })
+    return created
   })
 
   revalidatePath('/mobile/site-photo')
-  return { success: true }
+  return { success: true, id: photo.id }
 }
-

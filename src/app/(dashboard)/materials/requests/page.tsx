@@ -1,12 +1,18 @@
-import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { AlertCircle, Plus } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 export default async function MaterialsRequestsPage() {
-  const user = await requireUser()
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'materials.view', module: 'MATERIALS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/materials/requests')
+  const { companyId } = gate.access
+
+  // A field role sees only the requests of its assigned live sites.
   const requests = await prisma.purchaseRequest.findMany({
-    where: { companyId: user.companyId! },
-    include: { site: true },
+    where: { companyId, site: await assignedSiteWhere(gate.access) },
+    include: { site: { select: { name: true } } },
     orderBy: { createdAt: 'desc' }
   })
 

@@ -48,7 +48,7 @@ async function run() {
     console.log(`[${vp.name}] Logging in...`);
     await page.goto(`${BASE_URL}/login`);
     await page.fill('input[type="email"]', 'admin@civiltracker.in');
-    await page.fill('input[type="password"]', 'Admin@123456');
+    await page.fill('input[type="password"]', process.env.E2E_TEST_PASSWORD ?? '');
     await page.click('button[type="submit"]');
     
     try {

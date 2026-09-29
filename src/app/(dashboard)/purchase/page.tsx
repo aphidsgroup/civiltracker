@@ -1,13 +1,19 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export default async function PurchasePage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  // Purchase staff raise orders (`materials.update`); approvers read the queue they approve.
+  const gate = await resolveTenantPageAccess({
+    grants: [
+      { permission: 'materials.update', module: 'MATERIALS' },
+      { permission: 'purchase.approve', module: 'MATERIALS' },
+    ],
+  })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/purchase')
+  const { companyId, can } = gate.access
 
   const requests = await prisma.purchaseRequest.findMany({
-    where: { companyId: session.user.companyId },
+    where: { companyId, site: liveCompanySiteWhere(companyId) },
     include: { site: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
     take: 50,
@@ -30,9 +36,11 @@ export default async function PurchasePage() {
       {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white">
         <div className="text-base font-bold text-slate-800">Purchase Requests & Orders</div>
-        <a href="/purchase/new" className="bg-[#fc6e20] text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-[#e85b0d] transition-colors">
-          + Create PO
-        </a>
+        {can('materials.update') && (
+          <a href="/purchase/new" className="bg-[#fc6e20] text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-[#e85b0d] transition-colors">
+            + Create PO
+          </a>
+        )}
       </div>
 
       <div className="p-6">

@@ -30,7 +30,7 @@ type Checklist = {
   stages: Stage[]
 }
 
-export function ChecklistClient({ siteId, checklist }: { siteId: string, checklist: Checklist }) {
+export function ChecklistClient({ siteId, siteName, checklist }: { siteId: string, siteName: string, checklist: Checklist }) {
   const [isPending, startTransition] = useTransition()
   const [activeStage, setActiveStage] = useState(checklist.stages[0]?.id)
   
@@ -81,17 +81,19 @@ export function ChecklistClient({ siteId, checklist }: { siteId: string, checkli
     })
   }
 
-  const handleDeleteTask = async (taskId: string) => {
-    if (!confirm('Are you sure you want to delete this task?')) return
+  const handleDeleteTask = async (task: Task) => {
+    const typed = window.prompt(`Type "${task.name}" to permanently delete this task, its progress and its photos.`)
+    if (typed === null) return
     startTransition(async () => {
-      await deleteChecklistTask(siteId, taskId)
+      await deleteChecklistTask(siteId, task.id, typed)
     })
   }
 
   const handleResetChecklist = async () => {
-    if (!confirm('WARNING: This will permanently delete the current checklist and all its progress for this site. You will be prompted to select a new template. Are you sure?')) return
+    const typed = window.prompt(`WARNING: This will permanently delete the current checklist and all its progress for this site. You will be prompted to select a new template. Type "${siteName}" to confirm.`)
+    if (typed === null) return
     startTransition(async () => {
-      await deleteProjectChecklist(siteId)
+      await deleteProjectChecklist(siteId, typed)
     })
   }
 
@@ -196,7 +198,7 @@ export function ChecklistClient({ siteId, checklist }: { siteId: string, checkli
                             </p>
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                               <button onClick={() => { setEditingTaskId(task.id); setEditTaskName(task.name) }} className="p-1 text-slate-400 hover:text-blue-500 rounded"><Pencil size={13} /></button>
-                              <button onClick={() => handleDeleteTask(task.id)} className="p-1 text-slate-400 hover:text-red-500 rounded"><Trash2 size={13} /></button>
+                              <button onClick={() => handleDeleteTask(task)} className="p-1 text-slate-400 hover:text-red-500 rounded"><Trash2 size={13} /></button>
                             </div>
                           </div>
                         )}

@@ -1,6 +1,5 @@
-import { auth } from '@/lib/auth'
+import { getClientPortalSites } from '@/lib/auth/client-portal'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Download, Receipt, CheckCircle2, Clock, AlertCircle, Wallet, ShieldCheck, FileText, Sparkles } from 'lucide-react'
 
@@ -10,22 +9,17 @@ export const metadata = {
 }
 
 export default async function ClientPortalPaymentsPage() {
-  const session = await auth();
-  if (!session?.user) redirect('/login');
+  const assignedSites = await getClientPortalSites()
+  const invoiceScopes = assignedSites.flatMap((site) => site.clientId
+    ? [{ siteId: site.id, clientId: site.clientId, companyId: site.companyId }]
+    : [])
 
-  const clientRecord = await prisma.client.findFirst({
-    where: {
-      OR: [
-        { email: session.user.email },
-        { companyId: session.user.companyId }
-      ]
-    }
-  });
-
-  const client = clientRecord || { id: session.user.id, companyId: session.user.companyId };
-
-  // Exact prompt query requirement
-  const rawInvoices = await prisma.invoice.findMany({ where: { clientId: client.id }, orderBy: { createdAt: 'desc' } });
+  const rawInvoices = invoiceScopes.length > 0
+    ? await prisma.invoice.findMany({
+        where: { OR: invoiceScopes },
+        orderBy: { createdAt: 'desc' },
+      })
+    : []
 
   const displayInvoices = rawInvoices
 

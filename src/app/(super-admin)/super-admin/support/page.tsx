@@ -1,25 +1,13 @@
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { getSupportApprovalOverview } from '@/lib/approvals/support-overview'
+import { requireSuperAdminPage } from '@/lib/pages/super-admin-page-access'
 import { LifeBuoy, Clock, CheckCircle, Building } from 'lucide-react'
 
 export default async function SupportPage() {
-  const session = await auth()
-  if (session?.user?.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  // The live principal decides, never the JWT role claim: a demoted or deactivated
+  // super admin is turned away on the next render, before any approval read.
+  const user = await requireSuperAdminPage()
 
-  const pendingApprovals = await prisma.approval.findMany({
-    where: { deletedAt: null, currentStatus: 'PENDING' },
-    include: {
-      company: { select: { name: true } },
-      requestedBy: { select: { name: true, email: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
-  })
-
-  const totalPending = await prisma.approval.count({ where: { deletedAt: null, currentStatus: 'PENDING' } })
-  const totalApproved = await prisma.approval.count({ where: { deletedAt: null, currentStatus: 'APPROVED' } })
-  const totalCompanies = await prisma.company.count()
+  const { pendingApprovals, totalPending, totalApproved, totalCompanies } = await getSupportApprovalOverview(user)
 
   function priorityStyle(priority: string) {
     if (priority === 'URGENT') return 'bg-rose-100 text-rose-700 font-bold'

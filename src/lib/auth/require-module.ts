@@ -17,7 +17,7 @@ const MODULE_ALIASES: Record<string, string[]> = {
   TASKS: ['tasks'],
 }
 
-function isModuleEnabled(modulesJson: unknown, moduleName: string): boolean {
+export function isModuleEnabled(modulesJson: unknown, moduleName: string): boolean {
   const canonical = moduleName.trim().toUpperCase()
   const aliases = new Set([canonical, ...(MODULE_ALIASES[canonical] ?? [])].map((value) => value.toLowerCase()))
 

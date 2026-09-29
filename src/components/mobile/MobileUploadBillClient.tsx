@@ -126,14 +126,8 @@ export default function MobileUploadBillClient({
         paidTo: formData.paidTo,
         billNumber: formData.billNumber,
         notes: `${formData.notes}${gpsCoords ? ` [GPS:${gpsCoords}]` : ''}`,
-        ...(uploadResult ? {
-          cloudinaryPublicId: uploadResult.publicId,
-          secureUrl: uploadResult.url,
-          format: file?.type.split('/')[1] || 'jpg',
-          bytes: file?.size || 1024
-        } : {
-          secureUrl: previewUrl || undefined
-        })
+        // The server copies every attachment field from the uploaded asset itself.
+        ...(uploadResult ? { mediaAssetId: uploadResult.assetId } : {})
       })
 
       router.push('/mobile/home')

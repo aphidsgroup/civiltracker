@@ -1,8 +1,7 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Users, Plus, UserCheck, UserMinus, Shield } from 'lucide-react'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export const metadata = { title: 'Employees | Civil Tracker' }
 export const dynamic = 'force-dynamic'
@@ -26,9 +25,10 @@ const roleColors: Record<string, string> = {
 }
 
 export default async function EmployeesPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  // Same live permission as the member management pages this one links to.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'company.manage' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/employees')
+  const { companyId } = gate.access
 
   // Only show employee roles (not CLIENT)
   const employeeRoles = ['COMPANY_ADMIN', 'PROJECT_MANAGER', 'SITE_ENGINEER', 'SUPERVISOR', 'ACCOUNTANT', 'PURCHASE_MANAGER']
@@ -44,8 +44,8 @@ export default async function EmployeesPage() {
     orderBy: { joinedAt: 'desc' },
   })
 
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
+  const company = await prisma.company.findFirst({
+    where: { id: companyId, deletedAt: null },
     select: { userLimit: true },
   })
 

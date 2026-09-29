@@ -1,19 +1,20 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { Prisma, ApprovalStatus } from '@prisma/client'
-import { redirect } from 'next/navigation'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
 import BillApprovalList from '@/components/bills/BillApprovalList'
 
-export default async function BillsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
-  
-  const { tab } = await searchParams
-  const activeTab = tab || 'PENDING'
+const TABS = ['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'PAID'] as const
 
-  const whereClause: Prisma.ExpenseWhereInput = { companyId, deletedAt: null }
+export default async function BillsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'bills.view', module: 'BILLS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/bills')
+  const { companyId } = gate.access
+
+  const { tab } = await searchParams
+  const activeTab = TABS.find((t) => t === tab) ?? 'PENDING'
+
+  const whereClause: Prisma.ExpenseWhereInput = { companyId, deletedAt: null, site: liveCompanySiteWhere(companyId) }
   if (activeTab !== 'ALL') {
     whereClause.approvalStatus = activeTab as ApprovalStatus
   }
@@ -32,7 +33,7 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
           <p className="text-slate-500 text-xs m-0">{bills.length} bills found</p>
         </div>
         <div className="flex bg-slate-100 p-1 rounded-lg overflow-x-auto w-full sm:w-auto">
-          {['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'PAID'].map(t => (
+          {TABS.map(t => (
             <Link key={t} href={`/bills?tab=${t}`} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${activeTab === t ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
               {t}
             </Link>

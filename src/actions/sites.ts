@@ -1,125 +1,41 @@
 'use server'
 
-import { prisma } from '@/lib/prisma'
-import { requirePermission } from '@/lib/auth/require-permission'
-import { requireCompanyAccess } from '@/lib/auth/require-company-access'
-import { slugify } from '@/lib/utils'
-import { SiteStatus } from '@prisma/client'
-import { logActivity } from '@/lib/audit'
+import { requireAssignedScopeMutation, requireTenantMutation } from '@/lib/auth/site-mutation'
+import { createSiteForTenant } from '@/lib/sites/create-site'
+import { updateSiteForTenant } from '@/lib/sites/update-site'
+import { parseCreateSiteInput, parseUpdateSiteInput } from '@/lib/validation/sites'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function createSite(data: any) {
-  const user = await requirePermission('sites.create')
-  const companyId = user.companyId
+const SITE_NOT_FOUND = 'FORBIDDEN: Site not found or access denied'
 
-  if (!companyId) {
-    throw new Error('User does not belong to a company')
-  }
-
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-    include: { _count: { select: { sites: true } } }
-  })
-
-  if (!company) throw new Error('Company not found')
-
-  if (company.status === 'SUSPENDED' || company.status === 'CANCELLED') {
-    throw new Error('Company is suspended or cancelled')
-  }
-
-  if (company._count.sites >= company.siteLimit) {
-    throw new Error(`Site limit reached (${company.siteLimit}). Please upgrade your plan.`)
-  }
-
-  const slug = slugify(data.name)
-  const existing = await prisma.site.findFirst({
-    where: { companyId, slug, deletedAt: null }
-  })
-  
-  if (existing) {
-    throw new Error('A site with a similar name already exists.')
-  }
-
-  const site = await prisma.site.create({
-    data: {
-      companyId,
-      name: data.name,
-      slug,
-      location: data.location,
-      address: data.address,
-      clientName: data.clientName,
-      clientPhone: data.clientPhone,
-      clientEmail: data.clientEmail,
-      mapLink: data.mapLink,
-      projectType: data.projectType,
-      contractType: data.contractType,
-      areaSqft: data.areaSqft ? Number(data.areaSqft) : null,
-      floors: data.floors ? Number(data.floors) : null,
-      budget: data.budget ? Number(data.budget) : 0,
-      contractValue: data.contractValue ? Number(data.contractValue) : null,
-      startDate: data.startDate ? new Date(data.startDate) : null,
-      targetEndDate: data.targetEndDate ? new Date(data.targetEndDate) : null,
-      assignedPmId: data.assignedPmId,
-      assignedEngineerId: data.assignedEngineerId,
-      status: SiteStatus.PLANNING,
-      createdById: user.id,
-    }
-  })
-
-  await logActivity({
-    userId: user.id,
-    companyId,
-    action: 'CREATE',
-    module: 'SITE',
-    recordId: site.id,
-    description: `${user.name ?? user.email} created new project site "${data.name}" at ${data.location}`,
-    after: { name: data.name, location: data.location, budget: data.budget },
-  })
-
-  return { success: true, siteId: site.id }
+/**
+ * Live `sites.create` + SITES before the payload is even parsed; then the payload is
+ * validated as an exact field set (`parseCreateSiteInput`) and written by the shared
+ * `createSiteForTenant`, which binds assignees to active members of the live company and
+ * applies the site limit and duplicate rule before the first write. Status and company
+ * are server-owned.
+ */
+export async function createSite(input: unknown) {
+  const user = await requireTenantMutation('sites.create', 'SITES')
+  const data = parseCreateSiteInput(input)
+  const siteId = await createSiteForTenant(user, data)
+  return { success: true, siteId }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function updateSite(siteId: string, data: any) {
-  const user = await requirePermission('sites.update')
-  
-  const existingSite = await prisma.site.findUnique({ where: { id: siteId } })
-  if (!existingSite) throw new Error('Site not found')
-  await requireCompanyAccess(existingSite.companyId)
+/**
+ * Live `sites.update` + SITES and the principal's assigned-site scope before the payload
+ * is even parsed; the payload is validated field by field with the create rules
+ * (`parseUpdateSiteInput`): only the sent keys of the allowlist are written. The write
+ * goes through the audited update service shared with `updateSiteDetails`: the site is
+ * re-read in exactly the live company inside the scope, a lone date is checked against
+ * the stored other date, sent assignees must be active members of the live company, and
+ * the guarded write (which must match exactly one live row) and the required audit record
+ * share one transaction, so an audit failure rolls the update back.
+ */
+export async function updateSite(siteId: string, input: unknown) {
+  const { user, scope } = await requireAssignedScopeMutation('sites.update', 'SITES')
+  const data = parseUpdateSiteInput(input)
+  if (typeof siteId !== 'string' || !siteId) throw new Error(SITE_NOT_FOUND)
 
-  await prisma.site.update({
-    where: { id: siteId },
-    data: {
-      name: data.name,
-      location: data.location,
-      address: data.address,
-      clientName: data.clientName,
-      clientPhone: data.clientPhone,
-      clientEmail: data.clientEmail,
-      mapLink: data.mapLink,
-      projectType: data.projectType,
-      contractType: data.contractType,
-      areaSqft: data.areaSqft ? Number(data.areaSqft) : null,
-      floors: data.floors ? Number(data.floors) : null,
-      budget: data.budget ? Number(data.budget) : undefined,
-      contractValue: data.contractValue ? Number(data.contractValue) : null,
-      startDate: data.startDate ? new Date(data.startDate) : null,
-      targetEndDate: data.targetEndDate ? new Date(data.targetEndDate) : null,
-      assignedPmId: data.assignedPmId,
-      assignedEngineerId: data.assignedEngineerId || null,
-    }
-  })
-
-  await logActivity({
-    userId: user.id,
-    companyId: existingSite.companyId,
-    action: 'UPDATE',
-    module: 'SITE',
-    recordId: siteId,
-    description: `${user.name ?? user.email} updated site "${existingSite.name}"`,
-    before: { name: existingSite.name, status: existingSite.status },
-    after: { name: data.name, location: data.location },
-  })
-
-  return { success: true, siteId: existingSite.id }
+  const updatedId = await updateSiteForTenant(user, siteId, scope, data)
+  return { success: true, siteId: updatedId }
 }

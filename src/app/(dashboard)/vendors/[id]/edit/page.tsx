@@ -1,51 +1,26 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { updateVendorAction } from '@/actions/vendors'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
+/* The live-authorized vendor update, then back to the list as before. */
 async function updateVendor(formData: FormData) {
   'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  const companyId = session.user.companyId
-  const id = formData.get('id') as string
-  const name = formData.get('name') as string
-  const email = formData.get('email') as string
-  const phone = formData.get('phone') as string
-  const gst = formData.get('gst') as string
-  const category = formData.get('category') as string
-  const paymentTerms = formData.get('paymentTerms') as string
-  const address = formData.get('address') as string
-  const amountPayable = formData.get('amountPayable') as string
-  const isActive = formData.get('isActive') === 'true'
-
-  if (!id || !name) return
-
-  await prisma.vendor.updateMany({
-    where: { id, companyId },
-    data: {
-      name,
-      email: email || null,
-      phone: phone || null,
-      gst: gst || null,
-      category: category || null,
-      paymentTerms: paymentTerms || null,
-      address: address || null,
-      amountPayable: amountPayable ? parseFloat(amountPayable) : 0,
-      isActive,
-    },
-  })
-
+  await updateVendorAction(formData)
   redirect('/vendors')
 }
 
-export default async function EditVendorPage({ params }: { params: { id: string } }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+export default async function EditVendorPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  // Same live permission and module `updateVendorAction` enforces.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'materials.update', module: 'MATERIALS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/vendors/${id}/edit`)
+  const { companyId } = gate.access
 
+  // Exactly this vendor of this company, company-wide or on a live site of it.
   const vendor = await prisma.vendor.findFirst({
-    where: { id: params.id, companyId: session.user.companyId },
+    where: { id, companyId, OR: [{ siteId: null }, { site: { companyId, deletedAt: null } }] },
   })
 
   if (!vendor) redirect('/vendors')
@@ -125,23 +100,24 @@ export default async function EditVendorPage({ params }: { params: { id: string 
             </div>
 
             <div className="grid grid-cols-2 gap-4">
+              {/* The payable is changed only by a confirmed adjustment or settlement on the vendor list. */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Amount Payable (₹)</label>
-                <input
-                  name="amountPayable" type="number" step="0.01" defaultValue={Number(vendor.amountPayable) || ''}
-                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
-                />
+                <div className="px-4 py-2.5 text-sm font-bold text-slate-700">{Number(vendor.amountPayable).toLocaleString('en-IN')}</div>
               </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Status</label>
-                <select
-                  name="isActive" required defaultValue={vendor.isActive ? 'true' : 'false'}
-                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all bg-white"
-                >
-                  <option value="true">Active</option>
-                  <option value="false">Inactive</option>
-                </select>
-              </div>
+              {/* Deactivation goes through the confirmed Remove Vendor action; only reactivation is offered here. */}
+              {!vendor.isActive && (
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Status</label>
+                  <select
+                    name="isActive" required defaultValue="false"
+                    className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all bg-white"
+                  >
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="pt-4 flex justify-end">

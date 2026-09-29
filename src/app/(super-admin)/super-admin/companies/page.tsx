@@ -1,6 +1,5 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
+import { requireSuperAdminPage } from '@/lib/pages/super-admin-page-access'
 import Link from 'next/link'
 import { getInitials } from '@/lib/utils'
 import ResponsiveTable from '@/components/responsive/ResponsiveTable'
@@ -13,8 +12,7 @@ export default async function CompaniesPage({
 }: {
   searchParams: Promise<{ [key: string]: string | undefined }>
 }) {
-  const session = await auth()
-  if (session?.user?.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  await requireSuperAdminPage()
 
   const resolvedSearchParams = await searchParams
   const tab = resolvedSearchParams.tab || 'all'

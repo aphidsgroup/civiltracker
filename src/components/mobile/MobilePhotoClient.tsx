@@ -109,12 +109,12 @@ export default function MobilePhotoClient({
         const errData = await res.json().catch(() => ({}))
         throw new Error(errData?.error || 'Upload failed')
       }
-      const { url: cloudinaryUrl } = await res.json()
+      const { url: cloudinaryUrl, assetId } = await res.json()
 
       if (siteId) {
         await uploadMobileSitePhotoAction({
           siteId,
-          imageUrl: cloudinaryUrl,
+          mediaAssetId: assetId,
           caption: caption || `${captureTag} progress photo`,
           gps: finalGps
         })
@@ -176,13 +176,13 @@ export default function MobilePhotoClient({
         const errData = await res.json().catch(() => ({}))
         throw new Error(errData?.error || 'Upload failed')
       }
-      const { url: cloudinaryUrl } = await res.json()
+      const { url: cloudinaryUrl, assetId } = await res.json()
 
       // delete old, create new
       if (photo.dbId) await deleteSitePhotoAction(photo.dbId, getPhotoDeleteLabel(photo))
       await uploadMobileSitePhotoAction({
         siteId: photo.siteId,
-        imageUrl: cloudinaryUrl,
+        mediaAssetId: assetId,
         caption: photo.title,
         gps: ''
       })

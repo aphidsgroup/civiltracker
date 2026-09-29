@@ -1,14 +1,33 @@
 import { getSiteCostReport, getVendorPayableReport, getClientReceivableReport } from '@/actions/reports'
-import { requireUser } from '@/lib/auth/require-user'
+import { exitDeniedPage, readsAssignedSitesOnly, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
+import type { Permission } from '@/lib/permissions'
 import { formatINR } from '@/lib/reports/money'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import ExportButtons from './ExportButtons'
 import { ArrowLeft } from 'lucide-react'
 
+/** The permission each report opens under; site cost is a finance report. */
+const REPORT_PERMISSIONS: ReadonlyMap<string, Permission> = new Map<string, Permission>([
+  ['site-cost', 'reports.finance'],
+  ['vendor-payable', 'reports.vendorPayable'],
+  ['client-receivable', 'reports.clientReceivable'],
+])
+
 export default async function ReportDetailPage({ params }: { params: Promise<{ reportType: string }> }) {
-  await requireUser()
   const { reportType } = await params
+  const permission = REPORT_PERMISSIONS.get(reportType)
+  if (!permission) notFound()
+
+  // Live page guard before any report data is read.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission, module: 'REPORTS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/reports/${reportType}`)
+  const { user, can } = gate.access
+  if (user.role === 'CLIENT' || !can('reports.view')) exitDeniedPage({ status: 'denied', redirectTo: '/dashboard' }, `/reports/${reportType}`)
+  // The vendor and client ledgers are company-wide with no site to scope by.
+  const fieldRole = readsAssignedSitesOnly(user.role)
+  if (fieldRole && reportType !== 'site-cost') redirect('/reports')
+  const showExport = can('reports.export') && !fieldRole
 
   let title = ''
   let description = ''
@@ -20,7 +39,9 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ r
   switch (reportType) {
     case 'site-cost':
       title = 'Site Cost Report'
-      description = 'Aggregated cost breakdown across all active sites.'
+      description = fieldRole
+        ? 'Aggregated cost breakdown across your assigned sites.'
+        : 'Aggregated cost breakdown across all active sites.'
       columns = [
         { key: 'name', label: 'Site Name' },
         { key: 'budget', label: 'Budget', isMoney: true },
@@ -67,7 +88,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ r
           <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
           <p className="text-sm text-gray-500">{description}</p>
         </div>
-        <ExportButtons reportType={reportType} filters={{}} />
+        {showExport && <ExportButtons reportType={reportType} filters={{}} />}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">

@@ -1,13 +1,16 @@
 import { getFounderDashboardStats } from '@/actions/reports'
 import { Card } from '@/components/ui/card'
-import { requireUser } from '@/lib/auth/require-user'
 import { formatCompactINR } from '@/lib/reports/money'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { Activity, AlertTriangle, Building2, TrendingUp, Wallet, Banknote, CreditCard, Users, Landmark, Target } from 'lucide-react'
 import Link from 'next/link'
 
 export default async function ReportsDashboard() {
-  await requireUser()
-  const stats = await getFounderDashboardStats()
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'reports.view', module: 'REPORTS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/reports')
+
+  // The overview is a finance report: reports.view alone opens the page, not the figures.
+  const stats = gate.access.can('reports.finance') ? await getFounderDashboardStats() : null
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
@@ -22,6 +25,11 @@ export default async function ReportsDashboard() {
         </div>
       </div>
 
+      {!stats ? (
+        <Card className="p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
+          <p className="text-sm text-gray-600">Your role does not include financial reports. Open Detailed Reports for the reports available to you.</p>
+        </Card>
+      ) : <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center gap-3 mb-2 text-gray-500">
@@ -70,29 +78,29 @@ export default async function ReportsDashboard() {
           <p className="text-2xl font-bold text-orange-900">{formatCompactINR(stats.pendingApprovalAmount)}</p>
         </Card>
 
-        <Card className="p-4 rounded-xl border border-red-100 shadow-sm bg-red-50/50">
+        {stats.vendorPayable !== null && <Card className="p-4 rounded-xl border border-red-100 shadow-sm bg-red-50/50">
           <div className="flex items-center gap-3 mb-2">
             <Banknote className="w-5 h-5 text-red-600" />
             <h3 className="font-semibold text-sm uppercase tracking-wider text-red-800">Vendor Payable</h3>
           </div>
           <p className="text-2xl font-bold text-red-900">{formatCompactINR(stats.vendorPayable)}</p>
-        </Card>
+        </Card>}
 
-        <Card className="p-4 rounded-xl border border-blue-100 shadow-sm bg-[#fff7ed]/50">
+        {stats.salaryPayable !== null && <Card className="p-4 rounded-xl border border-blue-100 shadow-sm bg-[#fff7ed]/50">
           <div className="flex items-center gap-3 mb-2">
             <Users className="w-5 h-5 text-[#fc6e20]" />
             <h3 className="font-semibold text-sm uppercase tracking-wider text-[#e85b0d]">Salary Payable</h3>
           </div>
           <p className="text-2xl font-bold text-blue-900">{formatCompactINR(stats.salaryPayable)}</p>
-        </Card>
+        </Card>}
 
-        <Card className="p-4 rounded-xl border border-green-100 shadow-sm bg-green-50/50">
+        {stats.clientReceivable !== null && <Card className="p-4 rounded-xl border border-green-100 shadow-sm bg-green-50/50">
           <div className="flex items-center gap-3 mb-2">
             <Landmark className="w-5 h-5 text-green-600" />
             <h3 className="font-semibold text-sm uppercase tracking-wider text-green-800">Client Recv.</h3>
           </div>
           <p className="text-2xl font-bold text-green-900">{formatCompactINR(stats.clientReceivable)}</p>
-        </Card>
+        </Card>}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
@@ -103,13 +111,13 @@ export default async function ReportsDashboard() {
               <span className="text-sm font-medium text-gray-700">Material Costs</span>
               <span className="font-bold text-gray-900">{formatCompactINR(stats.materialCost)}</span>
             </div>
-            <div className="flex justify-between items-center pb-2 border-b border-gray-100">
+            {stats.labourCost !== null && <div className="flex justify-between items-center pb-2 border-b border-gray-100">
               <span className="text-sm font-medium text-gray-700">Labour & Salary</span>
               <span className="font-bold text-gray-900">{formatCompactINR(stats.labourCost)}</span>
-            </div>
+            </div>}
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-gray-700">Other Expenses</span>
-              <span className="font-bold text-gray-900">{formatCompactINR(stats.totalActualSpend - stats.materialCost - stats.labourCost)}</span>
+              <span className="font-bold text-gray-900">{formatCompactINR(stats.totalActualSpend - stats.materialCost - (stats.labourCost ?? 0))}</span>
             </div>
           </div>
         </Card>
@@ -125,14 +133,15 @@ export default async function ReportsDashboard() {
               <span className="text-sm font-medium text-gray-700">Over Budget Sites</span>
               <span className="font-bold text-orange-600">{stats.overBudgetSites}</span>
             </div>
-            <div className="flex justify-between items-center">
+            {stats.profitMarginPercent !== null && <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-gray-700">Estimated Profitability Margin</span>
               <span className="font-bold text-emerald-600">{stats.profitMarginPercent.toFixed(1)}%</span>
-            </div>
+            </div>}
           </div>
-          <p className="text-xs text-gray-500 mt-4">* Profitability is an estimate based on recorded client contract value minus all approved material, labour, and expense payouts.</p>
+          {stats.profitMarginPercent !== null && <p className="text-xs text-gray-500 mt-4">* Profitability is an estimate based on recorded client contract value minus all approved material, labour, and expense payouts.</p>}
         </Card>
       </div>
+      </>}
     </div>
   )
 }

@@ -1,64 +1,30 @@
-import { auth } from '@/lib/auth'
+import { createDpr } from '@/actions/dpr'
 import { prisma } from '@/lib/prisma'
+import { assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { hasPermission } from '@/lib/permissions'
-import { Role } from '@prisma/client'
-import { createApprovalAction } from '@/actions/approvals'
-import { ClipboardList, Send } from 'lucide-react'
+import { ClipboardList } from 'lucide-react'
 import DprFormClient from './DprFormClient'
 
 export default async function MobileDprPage({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
-  const session = await auth()
-  if (!session?.user) redirect('/login')
+  // Live principal, `dpr.create` and the DPR module, never the JWT claims, before any read.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'dpr.create', module: 'DPR' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/mobile/dpr')
 
-  const companyId = session.user.companyId
-  if (!companyId) redirect('/login')
+  // The same policy `createDpr` enforces: ACTIVE live sites of the live company, and for a
+  // field role only the sites it is assigned to — none when it has no assignment.
+  const siteWhere = await assignedSiteWhere(gate.access)
 
   const { siteId } = await searchParams
 
   const sites = await prisma.site.findMany({
-    where: { companyId, deletedAt: null },
+    where: { ...siteWhere, status: 'ACTIVE' },
     select: { id: true, name: true }
   })
+  const defaultSiteId = sites.some((site) => site.id === siteId) ? siteId : undefined
 
   async function submitDpr(formData: FormData) {
     'use server'
-    const session = await auth()
-    if (!session?.user?.companyId) return
-    if (!hasPermission(session.user.role as Role, 'dpr.create')) {
-      throw new Error('FORBIDDEN: Missing required permission "dpr.create"')
-    }
-
-    const siteId = formData.get('siteId') as string
-    const workDone = formData.get('workDone') as string
-    const labourCount = parseInt(formData.get('labourCount') as string) || 0
-    const delayReason = formData.get('delayReason') as string
-    const dateStr = formData.get('date') as string
-    const date = dateStr ? new Date(dateStr) : new Date()
-
-    const dpr = await prisma.dailyProgressReport.create({
-      data: {
-        companyId: session.user.companyId,
-        siteId,
-        workDone,
-        labourCount,
-        delayReason,
-        date,
-        createdById: session.user.id
-      }
-    })
-
-    await createApprovalAction({
-      siteId,
-      entityType: 'DPR',
-      entityId: dpr.id,
-      title: `DPR: ${workDone.substring(0, 35)}...`,
-      description: `Work completed: ${workDone}\nLabour count: ${labourCount}\nDelay rationale: ${delayReason || 'None'}`,
-      priority: 'NORMAL',
-      approvalType: 'OPERATIONAL',
-    })
-
+    await createDpr(formData)
     redirect('/mobile/home')
   }
 
@@ -70,8 +36,8 @@ export default async function MobileDprPage({ searchParams }: { searchParams: Pr
         </div>
         <h1 className="text-lg font-bold text-gray-900">Submit Daily Progress</h1>
       </div>
-      
-      <DprFormClient sites={sites} defaultSiteId={siteId} submitAction={submitDpr} />
+
+      <DprFormClient sites={sites} defaultSiteId={defaultSiteId} submitAction={submitDpr} />
     </div>
   )
 }

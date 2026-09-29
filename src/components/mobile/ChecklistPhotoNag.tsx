@@ -99,10 +99,10 @@ export function ChecklistPhotoNag() {
         const err = await res.json().catch(() => ({}))
         throw new Error(err?.error || 'Upload failed')
       }
-      const { url: cloudinaryUrl } = await res.json()
+      const { assetId } = await res.json()
 
-      // Step 2: Save the real Cloudinary URL to the database
-      await uploadChecklistPhotoAction(task.taskId, task.siteId, cloudinaryUrl)
+      // Step 2: Attach the uploaded asset; the server derives its URL from the asset record
+      await uploadChecklistPhotoAction(task.taskId, task.siteId, assetId)
 
       setStatus('success')
       setPreviewUrl(null)

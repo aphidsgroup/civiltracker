@@ -1,10 +1,11 @@
 import { redirect } from 'next/navigation'
-import { auth } from '@/lib/auth'
+import { requireUser } from '@/lib/auth/require-user'
 import { getRoleRedirect } from '@/lib/permissions'
-import { Role } from '@prisma/client'
 
 export default async function HomePage() {
-  const session = await auth()
-  if (!session?.user) redirect('/login')
-  redirect(getRoleRedirect(session.user.role as Role))
+  // The live role picks the home, never the JWT role claim; a principal that cannot be
+  // resolved (revoked, deactivated, suspended company) goes to /login.
+  const user = await requireUser().catch(() => null)
+  if (!user) redirect('/login')
+  redirect(getRoleRedirect(user.role))
 }

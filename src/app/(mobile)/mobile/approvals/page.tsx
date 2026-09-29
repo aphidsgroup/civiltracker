@@ -1,9 +1,8 @@
-import { auth } from '@/lib/auth'
-import { redirect } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import MobileCardList from '@/components/responsive/MobileCardList'
 import { getApprovalsAction } from '@/actions/approvals'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import { ArrowLeft, CheckSquare } from 'lucide-react'
 
 export default async function MobileApprovalsPage({
@@ -11,8 +10,9 @@ export default async function MobileApprovalsPage({
 }: {
   searchParams?: Promise<{ status?: string }>
 }) {
-  const session = await auth()
-  if (!session?.user) redirect('/login')
+  // Same live gate as the desktop approval center, before any approval query.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'approvals.view', module: 'APPROVALS' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/mobile/approvals')
 
   const params = searchParams ? await searchParams : {}
   const activeStatus = params.status || 'ALL'

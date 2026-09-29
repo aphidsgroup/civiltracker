@@ -1,26 +1,13 @@
-import { auth } from '@/lib/auth'
+import { getClientPortalSite, getClientPortalSites } from '@/lib/auth/client-portal'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import { Camera, CheckCircle2 } from 'lucide-react'
 import { ClientPhotoApproveCard } from '@/components/client/ClientPhotoApproveCard'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ClientPhotosPage() {
-  const session = await auth()
-  if (!session?.user) redirect('/login')
-
-  const clientRecord = await prisma.client.findFirst({
-    where: { email: session.user.email }
-  })
-
-  // Find their assigned site
-  const site = await prisma.site.findFirst({
-    where: clientRecord?.siteId
-      ? { id: clientRecord.siteId, deletedAt: null }
-      : { companyId: clientRecord?.companyId, deletedAt: null },
-    orderBy: { createdAt: 'desc' }
-  })
+  const [assignedSite] = await getClientPortalSites()
+  const site = assignedSite ? await getClientPortalSite(assignedSite.id) : null
 
   if (!site) {
     return (

@@ -1,53 +1,14 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
-
-async function createBoqItem(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
-
-  const companyId = session.user.companyId
-  const siteId = formData.get('siteId') as string
-  const category = formData.get('category') as string
-  const description = formData.get('description') as string
-  const unit = formData.get('unit') as string
-  const quantity = parseFloat(formData.get('quantity') as string) || 0
-  const rate = parseFloat(formData.get('rate') as string) || 0
-  const gstPercent = parseFloat(formData.get('gstPercent') as string) || 0
-
-  if (!description || !siteId || quantity === 0 || rate === 0) return
-
-  const amount = quantity * rate
-  const gstAmount = amount * (gstPercent / 100)
-  const totalWithGst = amount + gstAmount
-
-  await prisma.bOQItem.create({
-    data: {
-      companyId,
-      siteId,
-      category: category || 'General',
-      description,
-      unit,
-      quantity,
-      rate,
-      amount,
-      gstPercent,
-      totalWithGst,
-      clientApproved: false,
-    },
-  })
-
-  redirect('/boq')
-}
+import { createBoqItemAction } from '@/actions/boq'
+import { exitDeniedPage, liveCompanySiteWhere, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export default async function NewBoqItemPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'sites.update', module: 'BOQ' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/boq/new')
 
   const sites = await prisma.site.findMany({
-    where: { companyId: session.user.companyId, status: 'ACTIVE', deletedAt: null },
+    where: { ...liveCompanySiteWhere(gate.access.companyId), status: 'ACTIVE' },
     select: { id: true, name: true }
   })
 
@@ -59,11 +20,11 @@ export default async function NewBoqItemPage() {
       
       <div className="p-6 max-w-2xl">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <form action={createBoqItem}>
+          <form action={createBoqItemAction}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Item Description / Particulars *</label>
-                <textarea name="description" required rows={3} placeholder="Provide details for earthwork, concrete, masonry, etc."
+                <textarea name="description" required maxLength={2000} rows={3} placeholder="Provide details for earthwork, concrete, masonry, etc."
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
@@ -80,31 +41,31 @@ export default async function NewBoqItemPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Category</label>
-                <input name="category" placeholder="e.g. Civil, MEP, Finishes" defaultValue="Civil"
+                <input name="category" maxLength={60} placeholder="e.g. Civil, MEP, Finishes" defaultValue="Civil"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Unit</label>
-                <input name="unit" required placeholder="Cum, Sqm, Rft, Nos" defaultValue="Cum"
+                <input name="unit" required maxLength={20} placeholder="Cum, Sqm, Rft, Nos" defaultValue="Cum"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Quantity *</label>
-                <input name="quantity" type="number" required min="0.01" step="0.01" placeholder="0.00"
+                <input name="quantity" type="number" required min="0.001" max="99999999999.999" step="0.001" placeholder="0.00"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Rate per Unit (₹) *</label>
-                <input name="rate" type="number" required min="1" step="0.01" placeholder="0.00"
+                <input name="rate" type="number" required min="0.01" max="999999999999.99" step="0.01" placeholder="0.00"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">GST %</label>
-                <input name="gstPercent" type="number" min="0" step="1" placeholder="18" defaultValue="18"
+                <input name="gstPercent" type="number" min="0" max="100" step="0.01" placeholder="18" defaultValue="18"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
             </div>

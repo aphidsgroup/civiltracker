@@ -1,37 +1,22 @@
-import { requireUser } from '@/lib/auth/require-user'
 import prisma from '@/lib/prisma'
+import { assignedSiteWhere, exitDeniedPage, readsAssignedSitesOnly, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 import Link from 'next/link'
-import { Building2, MapPin, Calendar, ArrowRight, Layers, AlertTriangle, HardHat } from 'lucide-react'
+import { Building2, MapPin, Calendar, ArrowRight, Layers, HardHat } from 'lucide-react'
 
 export default async function MobileSitesPage() {
-  const user = await requireUser()
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'sites.view', module: 'SITES' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/mobile/sites')
+  const { user, can, moduleEnabled } = gate.access
 
-  if (!user.companyId) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh] p-6 text-center bg-[#f8fafc]">
-        <div className="w-16 h-16 rounded-2xl bg-[#fff7ed] text-[#fc6e20] flex items-center justify-center mb-4 shadow-sm">
-          <AlertTriangle size={32} />
-        </div>
-        <h1 className="text-lg font-extrabold text-[#0f172a]">No Workspace Found</h1>
-        <p className="text-sm text-slate-500 mt-1 max-w-xs">Your account is not currently linked to an active company workspace.</p>
-      </div>
-    )
-  }
+  const isSiteEngineer = readsAssignedSitesOnly(user.role)
+  // Budget and spend are selected and shown by the live permission, never the role name.
+  const showFinance = can('expenses.view') && moduleEnabled('EXPENSES')
 
-  const isSiteEngineer = user.role === 'SITE_ENGINEER' || user.role === 'SUPERVISOR'
-
-  let sites = await prisma.site.findMany({
-    where: { companyId: user.companyId, deletedAt: null },
+  const sites = await prisma.site.findMany({
+    where: await assignedSiteWhere(gate.access),
+    select: { id: true, name: true, status: true, projectType: true, location: true, startDate: true, budget: showFinance, spent: showFinance },
     orderBy: { createdAt: 'desc' }
   })
-
-  if (isSiteEngineer) {
-    const member = await prisma.companyMember.findFirst({
-      where: { userId: user.id, companyId: user.companyId }
-    })
-    const assignedIds = new Set(member?.siteIds || [])
-    sites = sites.filter(s => s.assignedEngineerId === user.id || s.engineerId === user.id || assignedIds.has(s.id))
-  }
 
   function fmtAmt(n: number) {
     if (n >= 10000000) return '₹' + (n / 10000000).toFixed(2) + 'Cr'
@@ -128,7 +113,7 @@ export default async function MobileSitesPage() {
                   </div>
                 </div>
 
-                {!isSiteEngineer ? (
+                {showFinance ? (
                   <div className="mt-4 pt-3 border-t border-slate-100">
                     <div className="flex justify-between items-baseline mb-1.5">
                       <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Budget Spent</div>

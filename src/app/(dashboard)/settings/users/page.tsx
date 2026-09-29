@@ -1,23 +1,23 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
+import { exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export const dynamic = 'force-dynamic'
 
 export default async function UsersSettingsPage() {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'company.manage' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, '/settings/users')
+  const { companyId } = gate.access
 
   const members = await prisma.companyMember.findMany({
-    where: { companyId: session.user.companyId },
+    where: { companyId },
     include: { user: { select: { id: true, name: true, email: true, phone: true } } },
     orderBy: { joinedAt: 'desc' },
   })
 
-  const company = await prisma.company.findUnique({
-    where: { id: session.user.companyId },
+  const company = await prisma.company.findFirst({
+    where: { id: companyId, deletedAt: null },
     select: { userLimit: true },
   })
 

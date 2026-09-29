@@ -1,31 +1,39 @@
-import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { LabourTrade } from '@prisma/client'
 import { updateLabourAction } from '@/actions/labour'
+import { assignedSiteIds, assignedSiteWhere, exitDeniedPage, resolveTenantPageAccess } from '@/lib/pages/tenant-page-access'
 
 export const dynamic = 'force-dynamic'
 
-export default async function EditLabourPage({ params }: { params: { id: string } }) {
-  const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+export default async function EditLabourPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  // Same live permission and module `updateLabourAction` enforces.
+  const gate = await resolveTenantPageAccess({ grants: [{ permission: 'labour.manage', module: 'LABOUR' }] })
+  if (gate.status === 'denied') exitDeniedPage(gate, `/labour/${id}/edit`)
+  const { companyId } = gate.access
 
+  // Exactly this worker of this company on a live site the principal may act on (for a
+  // field role, one it is assigned to); anything else reads nothing more.
+  const siteWhere = await assignedSiteWhere(gate.access)
   const labour = await prisma.labour.findFirst({
-    where: { id: params.id, companyId },
+    where: { id, companyId, site: siteWhere },
   })
 
   if (!labour) redirect('/labour')
 
+  // Only destinations `updateLabourAction` accepts for this principal.
   const sites = await prisma.site.findMany({
-    where: { companyId, deletedAt: null, status: 'ACTIVE' },
+    where: { ...siteWhere, status: 'ACTIVE' },
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   })
 
+  // A field role's summary counts only attendance logged on its assigned sites.
+  const visibleSiteIds = await assignedSiteIds(gate.access)
   const attendances = await prisma.labourAttendance.findMany({
-    where: { labourId: params.id }
+    where: visibleSiteIds ? { labourId: labour.id, siteId: { in: [...visibleSiteIds] } } : { labourId: labour.id }
   })
 
   let totalAdvance = Number(labour.openingAdvance) || 0
@@ -140,12 +148,12 @@ export default async function EditLabourPage({ params }: { params: { id: string 
                 />
               </div>
 
-              {/* Opening Advance */}
+              {/* Opening Advance: a payment balance, shown only; it changes through Mark Paid. */}
               <div className="sm:col-span-2">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Upfront Advance Paid (₹)</label>
                 <input
-                  name="openingAdvance" type="number" step="0.01" defaultValue={Number(labour.openingAdvance) || ''} placeholder="0.00"
-                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]/40 focus:border-[#fc6e20] transition-all"
+                  type="number" readOnly disabled value={Number(labour.openingAdvance) || 0}
+                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm bg-slate-100 text-slate-500"
                 />
               </div>
             </div>

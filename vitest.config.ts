@@ -31,6 +31,19 @@ export default defineConfig({
           },
         },
       },
+      {
+        // Node-side unit tests for server actions / auth helpers (no browser, no DB).
+        resolve: {
+          alias: {
+            '@': path.join(dirname, 'src'),
+          },
+        },
+        test: {
+          name: 'unit',
+          environment: 'node',
+          include: ['tests/unit/**/*.test.ts'],
+        },
+      },
     ],
   },
 });
