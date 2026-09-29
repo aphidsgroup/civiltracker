@@ -323,9 +323,9 @@ describe('referenced resource binding', () => {
     mocks.requireUser.mockResolvedValue(principal('PURCHASE_MANAGER'))
     await purchase.createPurchaseOrderAction(form(PO_FORM))
     expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1)
-    expect(mocks.prisma.purchaseOrder.create.mock.calls[0][0].data).toMatchObject({
-      companyId: 'company_1', vendorId: 'vendor_1', createdById: 'user_purchase_manager', totalAmount: 5000,
-    })
+    const { data } = mocks.prisma.purchaseOrder.create.mock.calls[0][0]
+    expect(data).toMatchObject({ companyId: 'company_1', vendorId: 'vendor_1', createdById: 'user_purchase_manager' })
+    expect(String(data.totalAmount)).toBe('5000')
   })
 
   it.each(['user_foreign', 'user_inactive', 'user_missing'])('a task refuses assignee %s', async (assignedToId) => {

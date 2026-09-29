@@ -2,45 +2,74 @@
 
 import prisma from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import { parseNonNegativeAmount, requiredText, requireSiteMutation } from '@/lib/auth/site-mutation'
+import { auditLogData } from '@/lib/audit-data'
+import { assignedSiteScope, requireTenantMutation } from '@/lib/auth/site-mutation'
+import { parseBoqItemCreateForm } from '@/lib/validation/commercial-records'
 
-function parsePositive(raw: FormDataEntryValue | null, field: string): number {
-  const value = parseNonNegativeAmount(requiredText(raw, field), field, 0)
-  if (value <= 0) throw new Error(`Invalid ${field}`)
-  return value
-}
+const SITE_NOT_FOUND = 'FORBIDDEN: Site not found or access denied'
 
 /*
- * Adds a BOQ line. Live `sites.update` + BOQ is checked before any read, and the site
- * must be a live site of exactly the live company.
+ * Adds a BOQ line. Live `sites.update` + BOQ is checked before any read and the form is
+ * parsed strictly before the transaction; the amount and the total with GST are derived
+ * there in `Decimal`, never taken from the form. The site must be a live site of exactly
+ * the live company in the principal's assigned scope. The site binding, the line and its
+ * immutable audit record share one transaction.
  */
 export async function createBoqItemAction(formData: FormData) {
-  const { user, site } = await requireSiteMutation(String(formData.get('siteId') ?? ''), 'sites.update', 'BOQ')
+  const user = await requireTenantMutation('sites.update', 'BOQ')
+  const companyId = user.companyId
+  const input = parseBoqItemCreateForm(formData)
+  const scope = await assignedSiteScope(user, companyId)
 
-  const description = requiredText(formData.get('description'), 'Description')
-  const unit = requiredText(formData.get('unit'), 'Unit')
-  const category = typeof formData.get('category') === 'string' ? (formData.get('category') as string).trim() : ''
-  const quantity = parsePositive(formData.get('quantity'), 'quantity')
-  const rate = parsePositive(formData.get('rate'), 'rate')
-  const gstPercent = parseNonNegativeAmount(formData.get('gstPercent'), 'GST percent', 0)
+  await prisma.$transaction(async (tx) => {
+    const site = await tx.site.findFirst({ where: { id: input.siteId, ...scope }, select: { id: true, name: true } })
+    if (!site) throw new Error(SITE_NOT_FOUND)
 
-  const amount = quantity * rate
-  const totalWithGst = amount + amount * (gstPercent / 100)
+    const item = await tx.bOQItem.create({
+      data: {
+        companyId,
+        siteId: site.id,
+        category: input.category,
+        description: input.description,
+        unit: input.unit,
+        quantity: input.quantity,
+        rate: input.rate,
+        amount: input.amount,
+        // A Float column; the value is exact percent text of at most two decimals.
+        gstPercent: input.gstPercent.toNumber(),
+        totalWithGst: input.totalWithGst,
+        clientApproved: false,
+      },
+      select: { id: true },
+    })
 
-  await prisma.bOQItem.create({
-    data: {
-      companyId: user.companyId,
-      siteId: site.id,
-      category: category || 'General',
-      description,
-      unit,
-      quantity,
-      rate,
-      amount,
-      gstPercent,
-      totalWithGst,
-      clientApproved: false,
-    },
+    const quantity = input.quantity.toFixed(3)
+    const rate = input.rate.toFixed(2)
+    const totalWithGst = input.totalWithGst.toFixed(2)
+    await tx.auditLog.create({
+      data: auditLogData({
+        userId: user.id,
+        companyId,
+        action: 'CREATE',
+        module: 'BOQ',
+        recordId: item.id,
+        description: `${user.name ?? user.email} added BOQ item to ${site.name}: ${quantity} ${input.unit} × ₹${rate} = ₹${totalWithGst} incl. GST`,
+        after: {
+          boqItemId: item.id,
+          siteId: site.id,
+          siteName: site.name,
+          category: input.category,
+          description: input.description,
+          unit: input.unit,
+          quantity,
+          rate,
+          amount: input.amount.toFixed(2),
+          gstPercent: input.gstPercent.toFixed(2),
+          totalWithGst,
+          clientApproved: false,
+        },
+      }),
+    })
   })
 
   redirect('/boq')

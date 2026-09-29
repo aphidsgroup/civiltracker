@@ -24,19 +24,19 @@ export default async function NewClientPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Client / Developer Name *</label>
-                <input name="name" required placeholder="John Doe"
+                <input name="name" required maxLength={120} placeholder="John Doe"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
               
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Phone Number</label>
-                <input name="phone" type="tel" placeholder="+91 98765 43210"
+                <input name="phone" type="tel" maxLength={32} placeholder="+91 98765 43210"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Email Address</label>
-                <input name="email" type="email" placeholder="client@email.com"
+                <input name="email" type="email" maxLength={254} placeholder="client@email.com"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
@@ -53,7 +53,7 @@ export default async function NewClientPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Total Contract Value (₹)</label>
-                <input name="contractValue" type="number" min="0" step="1000" placeholder="e.g. 5000000"
+                <input name="contractValue" type="number" min="0" max="999999999999.99" step="0.01" placeholder="e.g. 5000000"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
             </div>

@@ -30,13 +30,13 @@ export default async function NewPurchaseOrderPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">PO Number *</label>
-                <input name="poNumber" required defaultValue={randPO}
+                <input name="poNumber" required maxLength={50} defaultValue={randPO}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent font-mono" />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Total Amount (₹) *</label>
-                <input name="totalAmount" type="number" required min="1" step="0.01" placeholder="0.00"
+                <input name="totalAmount" type="number" required min="0.01" max="999999999999.99" step="0.01" placeholder="0.00"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
               
@@ -53,7 +53,7 @@ export default async function NewPurchaseOrderPage() {
 
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Description & Terms</label>
-                <textarea name="notes" rows={3} placeholder="Material details, delivery terms, payment terms..."
+                <textarea name="notes" rows={3} maxLength={2000} placeholder="Material details, delivery terms, payment terms..."
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
             </div>

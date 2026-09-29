@@ -24,7 +24,7 @@ export default async function NewBoqItemPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Item Description / Particulars *</label>
-                <textarea name="description" required rows={3} placeholder="Provide details for earthwork, concrete, masonry, etc."
+                <textarea name="description" required maxLength={2000} rows={3} placeholder="Provide details for earthwork, concrete, masonry, etc."
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
@@ -41,31 +41,31 @@ export default async function NewBoqItemPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Category</label>
-                <input name="category" placeholder="e.g. Civil, MEP, Finishes" defaultValue="Civil"
+                <input name="category" maxLength={60} placeholder="e.g. Civil, MEP, Finishes" defaultValue="Civil"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Unit</label>
-                <input name="unit" required placeholder="Cum, Sqm, Rft, Nos" defaultValue="Cum"
+                <input name="unit" required maxLength={20} placeholder="Cum, Sqm, Rft, Nos" defaultValue="Cum"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Quantity *</label>
-                <input name="quantity" type="number" required min="0.01" step="0.01" placeholder="0.00"
+                <input name="quantity" type="number" required min="0.001" max="99999999999.999" step="0.001" placeholder="0.00"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Rate per Unit (₹) *</label>
-                <input name="rate" type="number" required min="1" step="0.01" placeholder="0.00"
+                <input name="rate" type="number" required min="0.01" max="999999999999.99" step="0.01" placeholder="0.00"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">GST %</label>
-                <input name="gstPercent" type="number" min="0" step="1" placeholder="18" defaultValue="18"
+                <input name="gstPercent" type="number" min="0" max="100" step="0.01" placeholder="18" defaultValue="18"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
             </div>
