@@ -3,6 +3,9 @@
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { requireUser } from '@/lib/auth/require-user'
+import { createSitePhotoEvidence, SitePhotoEvidenceError } from '@/lib/site-photo-evidence'
+import type { DeviceLocationTelemetry } from '@/lib/browser-location'
 
 // Deep clone a master template to a project
 export async function enableChecklistForProject(siteId: string, templateId: string) {
@@ -290,33 +293,30 @@ export async function getPendingChecklistPhotos(siteId?: string) {
   }))
 }
 
-export async function uploadChecklistPhotoAction(taskId: string, siteId: string, imageUrl: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error('Unauthorized')
+export async function uploadChecklistPhotoAction(input: {
+  taskId: string
+  siteId: string
+  publicId: string
+  location: DeviceLocationTelemetry | null
+}) {
+  const user = await requireUser()
 
-  // Resolve companyId — site engineers may not have it in their session token
-  let companyId = session.user.companyId ?? null
-  if (!companyId) {
-    const site = await prisma.site.findUnique({ where: { id: siteId }, select: { companyId: true } })
-    if (!site) throw new Error('Site not found')
-    companyId = site.companyId
+  try {
+    await createSitePhotoEvidence(user, {
+      siteId: input.siteId,
+      publicId: input.publicId,
+      location: input.location,
+      taskId: input.taskId,
+      caption: 'Checklist Task Completed',
+    })
+  } catch (err) {
+    if (err instanceof SitePhotoEvidenceError) return { success: false as const, error: err.message }
+    throw err
   }
 
-  await prisma.sitePhoto.create({
-    data: {
-      companyId,
-      siteId,
-      taskId,
-      secureUrl: imageUrl,
-      cloudinaryPublicId: `checklist_${taskId}_${Date.now()}`,
-      caption: 'Checklist Task Completed',
-      uploadedById: session.user.id
-    }
-  })
-
-  revalidatePath(`/sites/${siteId}/photos`)
+  revalidatePath(`/sites/${input.siteId}/photos`)
   revalidatePath(`/mobile/checklist`)
-  return { success: true }
+  return { success: true as const }
 }
 
 

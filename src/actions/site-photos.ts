@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/auth/require-user'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/audit'
+import { getPhotoDisplayCategory } from '@/lib/site-photo-location-view'
 
 // Delete a site photo — only the uploader or admin can delete
 export async function deleteSitePhotoAction(photoId: string, confirmationText?: string) {
@@ -18,7 +19,7 @@ export async function deleteSitePhotoAction(photoId: string, confirmationText?: 
   // Only allow the uploader or same company admin to delete
   if (photo.companyId !== user.companyId && user.role !== 'SUPER_ADMIN') throw new Error('Unauthorized')
 
-  const expected = (photo.caption || photo.task?.name || photo.category || photo.id).trim()
+  const expected = (photo.caption || photo.task?.name || getPhotoDisplayCategory(photo.category) || photo.id).trim()
   if ((confirmationText ?? '').trim() !== expected) {
     throw new Error('Photo delete confirmation text did not match the photo label')
   }

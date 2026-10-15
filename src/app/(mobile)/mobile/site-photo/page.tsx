@@ -1,6 +1,7 @@
 import { requireUser } from '@/lib/auth/require-user'
 import prisma from '@/lib/prisma'
 import MobilePhotoClient from '@/components/mobile/MobilePhotoClient'
+import { getPhotoDisplayCategory, toSitePhotoLocationView } from '@/lib/site-photo-location-view'
 
 export const metadata = {
   title: 'Site Photos & Geofenced Field Gallery | Civil Tracker Mobile',
@@ -49,9 +50,11 @@ export default async function MobileSitePhotoPage({ searchParams }: { searchPara
     dbId: p.id,
     title: p.caption || 'Site Photo',
     meta: p.createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }),
-    tag: p.category || 'Civil',
+    tag: getPhotoDisplayCategory(p.category) || 'Civil',
     imageUrl: p.secureUrl,
-    siteId: p.siteId ?? undefined
+    siteId: p.siteId ?? undefined,
+    // Status only — exact coordinates are never sent to the field gallery.
+    gpsStatus: toSitePhotoLocationView(p, user).status,
   }))
 
 
