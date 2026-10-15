@@ -3,25 +3,52 @@ import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
+const ALLOWED_PO_ROLES = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'PROJECT_MANAGER', 'PURCHASE_MANAGER']
+
 async function createPO(formData: FormData) {
   'use server'
   const session = await auth()
   if (!session?.user?.companyId) throw new Error('Unauthorized')
+  if (!ALLOWED_PO_ROLES.includes(session.user.role)) throw new Error('Unauthorized')
 
   const companyId = session.user.companyId
   const vendorId = formData.get('vendorId') as string
-  const poNumber = formData.get('poNumber') as string
-  const totalAmount = formData.get('totalAmount') as string
+  const siteId = formData.get('siteId') as string
+  const poNumber = ((formData.get('poNumber') as string) || '').trim()
+  const totalAmountRaw = formData.get('totalAmount') as string
   const notes = formData.get('notes') as string
 
-  if (!poNumber || !totalAmount) return
+  if (!poNumber) throw new Error('PO number is required')
+
+  const totalAmount = Number(totalAmountRaw)
+  if (!totalAmountRaw || !Number.isFinite(totalAmount) || totalAmount <= 0) {
+    throw new Error('A valid total amount is required')
+  }
+
+  if (!siteId) throw new Error('Site is required')
+  const site = await prisma.site.findFirst({
+    where: { id: siteId, companyId, deletedAt: null },
+    select: { id: true }
+  })
+  if (!site) throw new Error('Site not found or access denied')
+
+  let validatedVendorId: string | null = null
+  if (vendorId) {
+    const vendor = await prisma.vendor.findFirst({
+      where: { id: vendorId, companyId },
+      select: { id: true }
+    })
+    if (!vendor) throw new Error('Vendor not found or access denied')
+    validatedVendorId = vendor.id
+  }
 
   await prisma.purchaseOrder.create({
     data: {
       companyId,
-      vendorId: vendorId || null,
+      vendorId: validatedVendorId,
+      siteId: site.id,
       poNumber,
-      totalAmount: parseFloat(totalAmount),
+      totalAmount,
       notes: notes || null,
       status: 'DRAFT',
       createdById: session.user.id,
@@ -34,11 +61,22 @@ async function createPO(formData: FormData) {
 export default async function NewPurchaseOrderPage() {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
+  if (!ALLOWED_PO_ROLES.includes(session.user.role)) redirect('/purchase')
 
-  const vendors = await prisma.vendor.findMany({
-    where: { companyId: session.user.companyId, isActive: true },
-    select: { id: true, name: true, category: true }
-  })
+  const companyId = session.user.companyId
+
+  const [vendors, sites] = await Promise.all([
+    prisma.vendor.findMany({
+      where: { companyId, isActive: true },
+      select: { id: true, name: true, category: true },
+      orderBy: { name: 'asc' }
+    }),
+    prisma.site.findMany({
+      where: { companyId, deletedAt: null },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' }
+    })
+  ])
   const now = new Date()
 
   // Generate a deterministic PO Number default for this render
@@ -49,7 +87,7 @@ export default async function NewPurchaseOrderPage() {
       <div className="flex items-center px-6 py-4 bg-white border-b border-gray-200">
         <h1 className="text-xl font-semibold text-gray-900">Create Purchase Order</h1>
       </div>
-      
+
       <div className="p-6 max-w-2xl">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <form action={createPO}>
@@ -65,7 +103,18 @@ export default async function NewPurchaseOrderPage() {
                 <input name="totalAmount" type="number" required min="1" step="0.01" placeholder="0.00"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent" />
               </div>
-              
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Site *</label>
+                <select name="siteId" required
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#fc6e20] focus:border-transparent">
+                  <option value="">-- Choose Site --</option>
+                  {sites.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Select Vendor</label>
                 <select name="vendorId" required

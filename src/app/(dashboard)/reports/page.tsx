@@ -18,6 +18,7 @@ export default async function ReportsDashboard() {
         </div>
         <div className="flex gap-2">
           <Link href="/reports/export-history" className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors inline-flex items-center justify-center">Export History</Link>
+          <Link href="/reports/daily-labour" className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors inline-flex items-center justify-center border border-gray-200">Daily Labour Report (DLR)</Link>
           <Link href="/reports/site-cost" className="px-4 py-2 text-sm font-medium bg-[#fc6e20] hover:bg-[#e85b0d] text-white rounded-lg shadow-sm transition-colors inline-flex items-center justify-center">Detailed Reports</Link>
         </div>
       </div>

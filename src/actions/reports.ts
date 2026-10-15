@@ -62,7 +62,7 @@ export async function getFounderDashboardStats() {
           vendorPayable = vendorPayable.add(exp.amount)
         }
       }
-      
+
       if (exp.category === 'MATERIAL' && (exp.approvalStatus === 'APPROVED' || exp.approvalStatus === 'PAID')) {
         materialCost = materialCost.add(exp.amount)
       }
@@ -141,9 +141,9 @@ export async function getFounderDashboardStats() {
 export async function getSiteCostReport(filters: any) {
   const user = await requireUser()
   if (!hasPermission(user.role, 'reports.view')) throw new Error('Unauthorized')
-  
+
   const sites = await prisma.site.findMany({
-    where: { 
+    where: {
       companyId: user.companyId!,
       deletedAt: null,
       ...(filters.siteId ? { id: filters.siteId } : {})
@@ -158,11 +158,11 @@ export async function getSiteCostReport(filters: any) {
   return sites.map(s => {
     let spent = new Prisma.Decimal(0)
     let pending = new Prisma.Decimal(0)
-    
+
     s.expenses.forEach(e => {
       if (['APPROVED', 'PAID'].includes(e.approvalStatus)) spent = spent.add(e.amount)
     })
-    
+
     s.labour.forEach(l => {
       l.salaryItems.forEach(si => {
         if (['APPROVED', 'PAID'].includes(si.status)) spent = spent.add(si.netPayable)
@@ -261,4 +261,146 @@ export async function getClientReceivableReport(filters: any) {
     amountPaid: c.amountPaid.toNumber(),
     amountDue: c.amountDue.toNumber()
   }))
+}
+
+function estimateDirectWage(status: string, dailyWage: number, overtimeHours: number, overtimeRate: number) {
+  if (status === 'ABSENT') return 0
+  const base = status === 'HALF_DAY' ? dailyWage / 2 : dailyWage
+  const overtimePay = overtimeHours > 0 ? overtimeHours * overtimeRate : 0
+  return base + overtimePay
+}
+
+export interface DailyLabourReportFilters {
+  date?: string
+  siteId?: string
+}
+
+export async function getDailyLabourReport(filters: DailyLabourReportFilters) {
+  const user = await requireUser()
+  if (!hasPermission(user.role, 'reports.view')) throw new Error('Unauthorized')
+  if (!user.companyId) throw new Error('Unauthorized: No active company context')
+  const companyId = user.companyId
+
+  const dateStr = filters.date ?? new Date().toISOString().split('T')[0]
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    throw new Error('Invalid date: expected YYYY-MM-DD')
+  }
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const targetDate = new Date(Date.UTC(year, month - 1, day))
+  if (
+    targetDate.getUTCFullYear() !== year ||
+    targetDate.getUTCMonth() !== month - 1 ||
+    targetDate.getUTCDate() !== day
+  ) {
+    throw new Error('Invalid date: not a real calendar date')
+  }
+
+  let requestedSite: { id: string; name: string } | null = null
+  if (filters.siteId) {
+    requestedSite = await prisma.site.findFirst({
+      where: { id: filters.siteId, companyId, deletedAt: null },
+      select: { id: true, name: true }
+    })
+    if (!requestedSite) throw new Error('Site not found or access denied')
+  }
+
+  const sites = await prisma.site.findMany({
+    where: {
+      companyId,
+      deletedAt: null,
+      ...(requestedSite ? { id: requestedSite.id } : {})
+    },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' }
+  })
+
+  const siteIds = sites.map(s => s.id)
+
+  const [attendanceRecords, contractorAttendance, dprs] = await Promise.all([
+    prisma.labourAttendance.findMany({
+      where: { date: targetDate, siteId: { in: siteIds } },
+      include: { labour: true }
+    }),
+    prisma.contractorAttendance.findMany({
+      where: { companyId, date: targetDate, siteId: { in: siteIds } },
+      include: { subcontractor: true }
+    }),
+    prisma.dailyProgressReport.findMany({
+      where: { companyId, date: targetDate, siteId: { in: siteIds } }
+    })
+  ])
+
+  // Defensive same-company filter: siteIds are already company-scoped, but the
+  // labour record itself is the source of truth for wage figures.
+  const companyAttendance = attendanceRecords.filter(a => a.labour.companyId === companyId)
+
+  const siteReports = sites.map(site => {
+    const directLabour = companyAttendance
+      .filter(a => a.siteId === site.id)
+      .map(a => {
+        const dailyWage = Number(a.labour.dailyWage)
+        const overtimeRate = Number(a.labour.overtimeRate ?? 0)
+        const overtimeHours = Number(a.overtimeHours)
+        return {
+          id: a.labour.id,
+          name: a.labour.name,
+          trade: a.labour.trade,
+          status: a.status,
+          dailyWage,
+          overtimeHours,
+          overtimeRate,
+          advance: Number(a.advance),
+          wageEstimate: estimateDirectWage(a.status, dailyWage, overtimeHours, overtimeRate)
+        }
+      })
+
+    const contractors = contractorAttendance
+      .filter(c => c.siteId === site.id)
+      .map(c => ({
+        id: c.id,
+        subcontractorName: c.subcontractor.name,
+        trade: c.subcontractor.trade,
+        headcount: c.labourCount,
+        startTime: c.startTime,
+        dailyAdvance: Number(c.dailyAdvance),
+        notes: c.notes
+      }))
+
+    const dprRecord = dprs.find(r => r.siteId === site.id) ?? null
+
+    return {
+      siteId: site.id,
+      siteName: site.name,
+      directLabour,
+      contractors,
+      dpr: dprRecord
+        ? {
+            workDone: dprRecord.workDone,
+            workPlanned: dprRecord.workPlanned,
+            labourCount: dprRecord.labourCount,
+            weather: dprRecord.weather,
+            delayReason: dprRecord.delayReason,
+            qualityIssue: dprRecord.qualityIssue,
+            safetyIssue: dprRecord.safetyIssue
+          }
+        : null,
+      summary: {
+        directWorkerCount: directLabour.length,
+        presentCount: directLabour.filter(r => r.status === 'PRESENT').length,
+        halfDayCount: directLabour.filter(r => r.status === 'HALF_DAY').length,
+        absentCount: directLabour.filter(r => r.status === 'ABSENT').length,
+        contractorHeadcount: contractors.reduce((sum, c) => sum + c.headcount, 0),
+        totalWageEstimate: directLabour.reduce((sum, r) => sum + r.wageEstimate, 0),
+        totalOvertimeHours: directLabour.reduce((sum, r) => sum + r.overtimeHours, 0),
+        totalDirectAdvance: directLabour.reduce((sum, r) => sum + r.advance, 0),
+        totalContractorAdvance: contractors.reduce((sum, c) => sum + c.dailyAdvance, 0)
+      }
+    }
+  })
+
+  return {
+    date: dateStr,
+    siteId: requestedSite?.id ?? null,
+    sites: siteReports
+  }
 }

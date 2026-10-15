@@ -395,6 +395,7 @@ model Site {
   approvals             Approval[]
   vendors               Vendor[]
   subcontractors        Subcontractor[]
+  purchaseOrders        PurchaseOrder[]
 
   @@unique([companyId, slug])
   @@index([companyId])
@@ -858,6 +859,7 @@ model PurchaseOrder {
   id          String   @id @default(cuid())
   companyId   String
   vendorId    String?
+  siteId      String?
   poNumber    String
   totalAmount Decimal  @db.Decimal(14, 2)
   status      String   @default("DRAFT")
@@ -868,8 +870,10 @@ model PurchaseOrder {
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   vendor  Vendor? @relation(fields: [vendorId], references: [id])
+  site    Site?   @relation(fields: [siteId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
+  @@index([siteId])
 }
 
 // ============================================================

@@ -3,7 +3,7 @@
 import { requireUser } from '@/lib/auth/require-user'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { hasPermission } from '@/lib/permissions'
-import { getSiteCostReport, getVendorPayableReport, getClientReceivableReport, logReportExport } from '@/actions/reports'
+import { getSiteCostReport, getVendorPayableReport, getClientReceivableReport, getDailyLabourReport, logReportExport } from '@/actions/reports'
 import { generatePDFBuffer, generateExcelBuffer } from '@/lib/reports/report-export'
 import { prisma } from '@/lib/prisma'
 
@@ -18,6 +18,8 @@ export async function exportReportAction(reportType: string, format: 'PDF' | 'EX
   let headers: string[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let rows: any[][] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let auditFilters: any = filters
 
   switch (reportType) {
     case 'site-cost':
@@ -38,12 +40,52 @@ export async function exportReportAction(reportType: string, format: 'PDF' | 'EX
       data = await getClientReceivableReport(filters)
       rows = data.map(d => [d.name, d.contractValue, d.amountPaid, d.amountDue])
       break
+    case 'daily-labour': {
+      title = 'Daily Labour Report (DLR)'
+      headers = ['Site', 'Category', 'Name', 'Trade / Note', 'Status', 'Daily Wage', 'Overtime Hrs', 'Advance', 'Wage Estimate']
+      const sanitizedFilters = {
+        date: typeof filters?.date === 'string' ? filters.date : undefined,
+        siteId: typeof filters?.siteId === 'string' ? filters.siteId : undefined
+      }
+      auditFilters = sanitizedFilters
+      const report = await getDailyLabourReport(sanitizedFilters)
+      data = report.sites
+      for (const site of report.sites) {
+        for (const worker of site.directLabour) {
+          rows.push([
+            site.siteName,
+            'Direct',
+            worker.name,
+            worker.trade,
+            worker.status,
+            worker.dailyWage,
+            worker.overtimeHours,
+            worker.advance,
+            worker.wageEstimate
+          ])
+        }
+        for (const contractor of site.contractors) {
+          rows.push([
+            site.siteName,
+            'Contractor',
+            contractor.subcontractorName,
+            `Headcount: ${contractor.headcount}`,
+            '-',
+            '-',
+            '-',
+            contractor.dailyAdvance,
+            '-'
+          ])
+        }
+      }
+      break
+    }
     default:
       return { error: 'Unknown report type' }
   }
 
   // Log the export
-  await logReportExport(reportType, format, filters)
+  await logReportExport(reportType, format, auditFilters)
 
   try {
     let buffer: Buffer
