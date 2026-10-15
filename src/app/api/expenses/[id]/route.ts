@@ -79,10 +79,8 @@ export async function DELETE(
   }
 
   const body = await request.json().catch(() => ({}))
-  const dangerConfirmText = typeof body?.dangerConfirmText === 'string' ? body.dangerConfirmText.trim() : ''
-  const expectedConfirmText = (expense.description || expense.paidTo || expense.billNumber || expense.id).trim()
-  if (dangerConfirmText !== expectedConfirmText) {
-    return NextResponse.json({ error: 'Delete confirmation text did not match the expense label' }, { status: 400 })
+  if (body?.confirmed !== true) {
+    return NextResponse.json({ error: 'Delete must be explicitly confirmed' }, { status: 400 })
   }
 
   const deletedAt = new Date()

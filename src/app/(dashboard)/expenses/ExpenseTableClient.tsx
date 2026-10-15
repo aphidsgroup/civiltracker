@@ -5,10 +5,6 @@ import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Pencil, Trash2, X, Check, Loader2 } from 'lucide-react'
 
-function getExpenseDeleteLabel(expense: Expense) {
-  return expense.description || expense.paidTo || expense.billNumber || expense.id
-}
-
 type Expense = {
   id: string
   description: string | null
@@ -121,16 +117,15 @@ export default function ExpenseTableClient({
   }
 
   async function deleteExpense(expense: Expense) {
-    const label = getExpenseDeleteLabel(expense)
-    const typed = window.prompt(`Type "${label}" to delete this expense. This cannot be undone.`)
-    if (typed === null) return
+    const label = expense.description || expense.paidTo || expense.billNumber || expense.id
+    if (!window.confirm(`Delete expense "${label}"? This cannot be undone.`)) return
     setDeleting(expense.id)
     setError(null)
     try {
       const res = await fetch(`/api/expenses/${expense.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dangerConfirmText: typed }),
+        body: JSON.stringify({ confirmed: true }),
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))

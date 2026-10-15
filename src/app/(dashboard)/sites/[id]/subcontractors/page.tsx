@@ -58,15 +58,15 @@ export default async function SiteSubcontractorsPage({ params }: { params: Promi
     const session = await auth()
     if (!session?.user?.companyId) return
     const id = formData.get('id') as string
-    const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
+    const confirmed = formData.get('dangerConfirmed') === 'true'
 
     const sub = await prisma.subcontractor.findUnique({
       where: { id, companyId: session.user.companyId },
       select: { id: true, name: true, trade: true, status: true, isActive: true, raBilled: true, advance: true, retention: true },
     })
     if (!sub) throw new Error('Subcontractor not found.')
-    if (typed !== sub.name.trim()) {
-      throw new Error('Remove confirmation text did not match the subcontractor name.')
+    if (!confirmed) {
+      throw new Error('Deactivation must be explicitly confirmed.')
     }
 
     await prisma.subcontractor.update({ where: { id, companyId: session.user.companyId }, data: { isActive: false } })

@@ -61,15 +61,15 @@ async function deactivateLabour(formData: FormData) {
   const session = await auth()
   if (!session?.user?.companyId) return
   const id = formData.get('id') as string
-  const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
+  const confirmed = formData.get('dangerConfirmed') === 'true'
 
   const worker = await prisma.labour.findUnique({
     where: { id, companyId: session.user.companyId },
     select: { id: true, name: true, trade: true, siteId: true, isActive: true },
   })
   if (!worker) throw new Error('Worker not found.')
-  if (typed !== worker.name.trim()) {
-    throw new Error('Remove confirmation text did not match the worker name.')
+  if (!confirmed) {
+    throw new Error('Deactivation must be explicitly confirmed.')
   }
 
   await prisma.labour.update({

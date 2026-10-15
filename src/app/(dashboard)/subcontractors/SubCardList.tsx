@@ -88,12 +88,11 @@ function SubCard({ sub, updateAction, markPaidAction, deactivateAction }: {
   }
 
   const handleDeactivate = () => {
-    const typed = window.prompt(`Type "${sub.name}" to deactivate this subcontractor. All data is kept.`)
-    if (typed === null) return
+    if (!window.confirm(`Deactivate subcontractor "${sub.name}"? All data is kept.`)) return
     startTransition(async () => {
       const fd = new FormData()
       fd.append('id', sub.id)
-      fd.append('dangerConfirmText', typed)
+      fd.append('dangerConfirmed', 'true')
       await deactivateAction(fd)
     })
   }

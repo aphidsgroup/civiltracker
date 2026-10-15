@@ -9,6 +9,13 @@ interface Props {
   buttonText?: string
   helperText?: string
   variant?: 'inline' | 'card'
+  /**
+   * 'typed' (default) requires the user to type confirmText exactly before the button unlocks —
+   * used for permanent, unrecoverable super-admin deletes.
+   * 'confirm' shows a plain native confirm() dialog and submits a `dangerConfirmed` flag instead —
+   * for reversible/soft dashboard actions where typing friction isn't proportionate.
+   */
+  mode?: 'typed' | 'confirm'
 }
 
 export default function DangerConfirmSubmit({
@@ -17,9 +24,58 @@ export default function DangerConfirmSubmit({
   buttonText = 'Delete',
   helperText,
   variant = 'inline',
+  mode = 'typed',
 }: Props) {
   const [typed, setTyped] = useState('')
   const isMatch = useMemo(() => typed.trim() === confirmText.trim(), [typed, confirmText])
+
+  if (mode === 'confirm') {
+    const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (!window.confirm(`${buttonText} "${entityLabel}"? ${helperText ?? 'This can be reversed by an admin later.'}`)) {
+        e.preventDefault()
+      }
+    }
+
+    if (variant === 'card') {
+      return (
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 sm:p-5 space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-rose-100 flex items-center justify-center flex-shrink-0">
+              <AlertTriangle size={16} className="text-rose-700" />
+            </div>
+            <div>
+              <div className="text-sm font-extrabold text-rose-900">Confirm action</div>
+              <p className="text-xs text-rose-800 mt-1 leading-relaxed">
+                {helperText ?? <>This will affect <span className="font-bold">{entityLabel}</span>.</>}
+              </p>
+            </div>
+          </div>
+
+          <input type="hidden" name="dangerConfirmed" value="true" />
+          <button
+            type="submit"
+            onClick={handleClick}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-xl transition-colors cursor-pointer"
+          >
+            <Trash2 size={14} /> {buttonText}
+          </button>
+        </div>
+      )
+    }
+
+    return (
+      <div className="flex flex-col items-end gap-2 max-w-sm">
+        <input type="hidden" name="dangerConfirmed" value="true" />
+        <button
+          type="submit"
+          onClick={handleClick}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors cursor-pointer"
+        >
+          <Trash2 size={12} /> {buttonText}
+        </button>
+      </div>
+    )
+  }
 
   if (variant === 'card') {
     return (

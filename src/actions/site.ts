@@ -47,7 +47,7 @@ export async function updateSiteDetails(formData: FormData) {
   return { success: true }
 }
 
-export async function softDeleteSite(id: string, dangerConfirmText?: string) {
+export async function softDeleteSite(id: string, confirmed?: boolean) {
   const session = await auth()
   if (!session?.user?.companyId) throw new Error('Unauthorized')
 
@@ -56,8 +56,8 @@ export async function softDeleteSite(id: string, dangerConfirmText?: string) {
     select: { id: true, name: true, location: true, status: true, deletedAt: true, budget: true },
   })
   if (!site) throw new Error('Site not found.')
-  if ((dangerConfirmText ?? '').trim() !== site.name.trim()) {
-    throw new Error('Delete confirmation text did not match the site name.')
+  if (confirmed !== true) {
+    throw new Error('Site deletion must be explicitly confirmed.')
   }
 
   const deletedAt = new Date()

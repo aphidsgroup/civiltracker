@@ -10,12 +10,11 @@ export function SiteCardActions({ siteId, siteName, isDeleted }: { siteId: strin
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    const typed = window.prompt(`Type "${siteName}" to schedule this site for deletion. It will be permanently removed in 15 days.`)
-    if (typed === null) return
-    
+    if (!window.confirm(`Schedule "${siteName}" for deletion? It will be permanently removed in 15 days.`)) return
+
     setLoading(true)
     try {
-      await softDeleteSite(siteId, typed)
+      await softDeleteSite(siteId, true)
     } finally {
       setLoading(false)
     }

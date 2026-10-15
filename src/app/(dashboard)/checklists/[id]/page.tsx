@@ -7,10 +7,15 @@ import { TemplateBuilderClient } from './TemplateBuilderClient'
 
 export default async function EditTemplatePage({ params }: { params: { id: string } }) {
   const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  if (!session?.user) redirect('/login')
+
+  const isSuperAdmin = session.user.role === 'SUPER_ADMIN'
+  if (!isSuperAdmin && !session.user.companyId) redirect('/login')
 
   const template = await prisma.checklistTemplate.findUnique({
-    where: { id: params.id, companyId: session.user.companyId },
+    where: isSuperAdmin
+      ? { id: params.id, isGlobal: true }
+      : { id: params.id, companyId: session.user.companyId, isGlobal: false },
     include: {
       stages: {
         orderBy: { order: 'asc' },
@@ -37,8 +42,19 @@ export default async function EditTemplatePage({ params }: { params: { id: strin
           <ChevronLeft size={20} />
         </Link>
         <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight">Edit Template: {template.name}</h1>
-          <p className="text-sm text-slate-500 font-medium mt-1">Customize stages, categories, and tasks for this checklist.</p>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+            Edit Template: {template.name}
+            {template.isGlobal && (
+              <span className="bg-amber-500 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full">
+                Global Master
+              </span>
+            )}
+          </h1>
+          <p className="text-sm text-slate-500 font-medium mt-1">
+            {template.isGlobal
+              ? 'Changes here apply to every company using this master template.'
+              : 'Customize stages, categories, and tasks for this checklist.'}
+          </p>
         </div>
       </div>
 
