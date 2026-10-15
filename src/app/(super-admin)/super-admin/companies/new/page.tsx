@@ -103,21 +103,21 @@ export default function NewCompanyPage() {
 
     const fd = new FormData(e.currentTarget)
     const data = {
-      name: fd.get('name') as string,
+      name: (fd.get('name') as string)?.trim(),
       logo: logoPreview || null,
-      email: fd.get('email') as string || null,
-      phone: fd.get('phone') as string || null,
-      gst: fd.get('gst') as string || null,
-      city: fd.get('city') as string || null,
-      state: fd.get('state') as string || null,
+      email: (fd.get('email') as string)?.trim() || null,
+      phone: (fd.get('phone') as string)?.trim() || null,
+      gst: (fd.get('gst') as string)?.trim() || null,
+      city: (fd.get('city') as string)?.trim() || null,
+      state: (fd.get('state') as string)?.trim() || null,
       plan: (fd.get('plan') as string) || 'STARTER',
       status: 'ACTIVE',
       userLimit: Number(fd.get('userLimit')) || 30,
       siteLimit: Number(fd.get('siteLimit')) || 75,
       storageLimitMb: Number(fd.get('storageLimitMb')) || 5120,
-      ownerName: fd.get('ownerName') as string,
-      ownerEmail: fd.get('ownerEmail') as string,
-      ownerPassword: fd.get('ownerPassword') as string,
+      ownerName: (fd.get('ownerName') as string)?.trim(),
+      ownerEmail: (fd.get('ownerEmail') as string)?.trim().toLowerCase(),
+      ownerPassword: (fd.get('ownerPassword') as string)?.trim(),
     }
 
     try {

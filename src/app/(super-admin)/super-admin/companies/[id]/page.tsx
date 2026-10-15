@@ -2,7 +2,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { deleteCompany } from '@/actions/super-admin'
+import { deleteCompany, resetCompanyAdminPassword } from '@/actions/super-admin'
 import DangerConfirmSubmit from '@/components/ui/DangerConfirmSubmit'
 
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,6 +27,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
 
   const companyName = company.name
   const activeMembers = company.members.filter(m => m.isActive).length
+  const adminMember = company.members.find(m => m.role === 'COMPANY_ADMIN')
 
   const statusColor: Record<string, string> = {
     ACTIVE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -53,6 +54,15 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
       throw new Error('Delete confirmation text did not match the company name.')
     }
     await deleteCompany(id)
+  }
+
+  async function handleResetPassword(formData: FormData) {
+    'use server'
+    const newPassword = (formData.get('newPassword') as string | null)?.trim()
+    if (!newPassword || newPassword.length < 6) {
+      throw new Error('Password must be at least 6 characters long')
+    }
+    await resetCompanyAdminPassword(id, newPassword)
   }
 
   return (
@@ -121,6 +131,52 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
                 ))}
               </div>
             </div>
+
+            {/* Company Admin Credentials & Password Reset */}
+            {adminMember && (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-bold text-gray-900">Admin Login Credentials</h2>
+                  <span className="text-[10px] font-bold bg-[#fff7ed] text-[#e85b0d] border border-orange-200 px-2 py-0.5 rounded-full">
+                    Company Admin
+                  </span>
+                </div>
+                <div className="space-y-2 mb-4">
+                  <div className="text-xs text-gray-500 font-medium">
+                    Login Email:
+                    <div className="text-sm font-bold text-gray-900 font-mono mt-0.5 select-all">{adminMember.user.email}</div>
+                  </div>
+                  {company.email && company.email.toLowerCase() !== adminMember.user.email.toLowerCase() && (
+                    <div className="text-xs text-gray-500 font-medium">
+                      Company Contact Email:
+                      <div className="text-sm font-semibold text-gray-600 font-mono mt-0.5 select-all">{company.email}</div>
+                    </div>
+                  )}
+                </div>
+
+                <form action={handleResetPassword} className="space-y-2.5 pt-3 border-t border-gray-100">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Reset Admin Password
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      name="newPassword"
+                      type="password"
+                      required
+                      minLength={6}
+                      placeholder="New password (min 6 chars)"
+                      className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#fc6e20]"
+                    />
+                    <button
+                      type="submit"
+                      className="px-3 py-1.5 bg-[#fc6e20] hover:bg-[#e85b0d] text-white text-xs font-bold rounded-lg transition-colors shrink-0 shadow-sm"
+                    >
+                      Update
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
 
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
               <h2 className="text-sm font-bold text-gray-900 mb-3.5">Sites ({company.sites.length})</h2>

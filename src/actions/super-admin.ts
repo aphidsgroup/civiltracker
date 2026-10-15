@@ -128,3 +128,40 @@ export async function deleteUser(userId: string) {
   revalidatePath('/super-admin/users')
   redirect('/super-admin/users')
 }
+
+export async function resetCompanyAdminPassword(companyId: string, newPassword: string) {
+  const session = await auth()
+  if (session?.user?.role !== 'SUPER_ADMIN') throw new Error('Unauthorized')
+
+  const cleanPassword = newPassword?.trim()
+  if (!cleanPassword || cleanPassword.length < 6) {
+    throw new Error('Password must be at least 6 characters long')
+  }
+
+  const member = await prisma.companyMember.findFirst({
+    where: { companyId, role: 'COMPANY_ADMIN', isActive: true },
+    include: { user: true },
+  })
+
+  if (!member || !member.user) {
+    throw new Error('No active Company Admin found for this company')
+  }
+
+  const hashedPassword = await bcrypt.hash(cleanPassword, 10)
+  await prisma.user.update({
+    where: { id: member.userId },
+    data: { passwordHash: hashedPassword },
+  })
+
+  await logActivity({
+    userId: session.user.id,
+    companyId,
+    action: 'UPDATE',
+    module: 'PASSWORD_RESET',
+    recordId: member.userId,
+    description: `${session.user.name ?? session.user.email} reset password for Company Admin (${member.user.email})`,
+  })
+
+  revalidatePath(`/super-admin/companies/${companyId}`)
+  return { success: true, email: member.user.email }
+}

@@ -59,11 +59,13 @@ export async function createCompany(data: CreateCompanyInput) {
   })
 
   if (data.ownerEmail && data.ownerName && data.ownerPassword) {
-    const hash = await bcrypt.hash(data.ownerPassword, 10)
+    const cleanEmail = data.ownerEmail.trim().toLowerCase()
+    const cleanPassword = data.ownerPassword.trim()
+    const hash = await bcrypt.hash(cleanPassword, 10)
     const newOwner = await prisma.user.create({
       data: {
-        name: data.ownerName,
-        email: data.ownerEmail,
+        name: data.ownerName.trim(),
+        email: cleanEmail,
         passwordHash: hash,
         role: Role.COMPANY_ADMIN,
       }

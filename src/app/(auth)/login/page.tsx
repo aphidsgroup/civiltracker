@@ -24,7 +24,7 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
     try {
-      const result = await signIn('credentials', { email, password, redirect: false })
+      const result = await signIn('credentials', { email: email.trim(), password, redirect: false })
       if (result?.error) {
         setError('Invalid email or password. Please try again.')
         setLoading(false)

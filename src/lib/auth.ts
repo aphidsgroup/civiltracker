@@ -29,8 +29,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new Error('Email and password required')
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+        const inputEmail = (credentials.email as string).trim()
+        const inputPassword = credentials.password as string
+
+        // 1. Try finding user directly by user email (case-insensitive)
+        let user = await prisma.user.findFirst({
+          where: {
+            email: { equals: inputEmail, mode: 'insensitive' },
+          },
           include: {
             companyMembers: {
               where: { isActive: true },
@@ -40,14 +46,46 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           },
         })
 
+        // 2. If not found by user email, check if inputEmail is the Company's contact email
+        // (Allows logging in using the company email address entered during company creation)
+        if (!user) {
+          const company = await prisma.company.findFirst({
+            where: {
+              email: { equals: inputEmail, mode: 'insensitive' },
+              deletedAt: null,
+            },
+            include: {
+              members: {
+                where: { role: 'COMPANY_ADMIN', isActive: true },
+                include: { user: true },
+                take: 1,
+              },
+            },
+          })
+
+          if (company && company.members[0]?.user) {
+            user = await prisma.user.findUnique({
+              where: { id: company.members[0].user.id },
+              include: {
+                companyMembers: {
+                  where: { isActive: true },
+                  include: { company: true },
+                  take: 1,
+                },
+              },
+            })
+          }
+        }
+
         if (!user || !user.isActive) {
           throw new Error('Invalid credentials')
         }
 
-        const isValid = await bcrypt.compare(
-          credentials.password as string,
-          user.passwordHash
-        )
+        // Compare password (also try trimmed if raw fails, to handle mobile autocomplete spaces)
+        let isValid = await bcrypt.compare(inputPassword, user.passwordHash)
+        if (!isValid && inputPassword.trim() !== inputPassword) {
+          isValid = await bcrypt.compare(inputPassword.trim(), user.passwordHash)
+        }
 
         if (!isValid) {
           throw new Error('Invalid credentials')
