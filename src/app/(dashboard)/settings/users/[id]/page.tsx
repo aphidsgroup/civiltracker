@@ -4,76 +4,11 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { UserMinus, Eye } from 'lucide-react'
-import { resetUserPassword } from '@/actions/users'
+import { removeEmployeeFromCompany, resetUserPassword, updateEmployee } from '@/actions/users'
 import DangerConfirmSubmit from '@/components/ui/DangerConfirmSubmit'
 import ModuleAccessSelector from '@/components/ui/ModuleAccessSelector'
-import { logActivity } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
-
-async function updateUser(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) return
-
-  const memberId = formData.get('memberId') as string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const role = formData.get('role') as any
-  const isActive = formData.get('isActive') === 'true'
-  const siteIds = formData.getAll('siteIds') as string[]
-  const moduleControlsStr = formData.get('moduleControls') as string | null
-  let moduleControls = undefined
-  if (moduleControlsStr) {
-    try { moduleControls = JSON.parse(moduleControlsStr) } catch {}
-  }
-
-  await prisma.companyMember.update({
-    where: { id: memberId, companyId: session.user.companyId },
-    data: { role, isActive, siteIds, ...(moduleControls !== undefined && { moduleControls }) },
-  })
-
-  revalidatePath('/settings/users')
-  redirect('/settings/users')
-}
-
-// Soft-remove: deactivates CompanyMember only — User account + ALL data (expenses, DPRs, etc.) is KEPT
-async function removeFromCompany(formData: FormData) {
-  'use server'
-  const session = await auth()
-  if (!session?.user?.companyId) return
-  const memberId = formData.get('memberId') as string
-  const typed = (formData.get('dangerConfirmText') as string | null)?.trim()
-
-  const member = await prisma.companyMember.findUnique({
-    where: { id: memberId, companyId: session.user.companyId },
-    include: { user: { select: { id: true, name: true, email: true } } },
-  })
-  if (!member) throw new Error('Team member not found.')
-
-  const expected = (member.user.name ?? member.user.email).trim()
-  if (typed !== expected) {
-    throw new Error('Remove confirmation text did not match the team member name/email.')
-  }
-
-  await prisma.companyMember.update({
-    where: { id: memberId, companyId: session.user.companyId },
-    data: { isActive: false },
-  })
-
-  await logActivity({
-    userId: session.user.id,
-    companyId: session.user.companyId,
-    action: 'UPDATE',
-    module: 'USER',
-    recordId: member.userId,
-    description: `${session.user.name ?? session.user.email} removed "${member.user.name ?? member.user.email}" from the company login roster`,
-    before: { isActive: member.isActive, role: member.role, name: member.user.name, email: member.user.email },
-    after: { isActive: false, role: member.role, name: member.user.name, email: member.user.email },
-  })
-
-  revalidatePath('/settings/users')
-  redirect('/settings/users')
-}
 
 async function handlePasswordReset(formData: FormData) {
   'use server'
@@ -117,7 +52,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
         {/* Role & Status Form */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <h2 className="text-sm font-bold text-slate-700 mb-4">Profile & Access</h2>
-          <form action={updateUser}>
+          <form action={updateEmployee}>
             <input type="hidden" name="memberId" value={member.id} />
 
             <div className="space-y-6">
@@ -141,7 +76,6 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
                     <option value="SUPERVISOR">Supervisor</option>
                     <option value="ACCOUNTANT">Accountant</option>
                     <option value="PURCHASE_MANAGER">Purchase Manager</option>
-                    <option value="CLIENT">Client</option>
                   </select>
                 </div>
 
@@ -268,7 +202,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
               <div className="text-xs text-rose-600/80 mt-0.5 leading-relaxed">
                 Deactivates this member&apos;s access. Their account and <strong>all data they entered</strong> (expenses, DPRs, attendance) is permanently kept.
               </div>
-              <form action={removeFromCompany} className="mt-4">
+              <form action={removeEmployeeFromCompany} className="mt-4">
                 <input type="hidden" name="memberId" value={member.id} />
                 <DangerConfirmSubmit
                   entityLabel={member.user.name ?? member.user.email}

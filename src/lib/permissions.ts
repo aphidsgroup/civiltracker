@@ -13,6 +13,47 @@ export const ROLE_HIERARCHY: Record<Role, number> = {
   SUBCONTRACTOR: 10,
 }
 
+/**
+ * Roles that may be handed out through the employee invitation path.
+ * Deliberately excludes SUPER_ADMIN (platform level) and the external
+ * portal roles CLIENT / VENDOR / SUBCONTRACTOR, which have their own flows.
+ */
+export const INVITABLE_EMPLOYEE_ROLES = [
+  'COMPANY_ADMIN',
+  'PROJECT_MANAGER',
+  'ACCOUNTANT',
+  'PURCHASE_MANAGER',
+  'SUPERVISOR',
+  'SITE_ENGINEER',
+] as const satisfies readonly Role[]
+
+export type InvitableEmployeeRole = (typeof INVITABLE_EMPLOYEE_ROLES)[number]
+
+export function isInvitableEmployeeRole(role: string): role is InvitableEmployeeRole {
+  return (INVITABLE_EMPLOYEE_ROLES as readonly string[]).includes(role)
+}
+
+/**
+ * Strict role hierarchy check for granting a role.
+ * - Only a SUPER_ADMIN may assign SUPER_ADMIN.
+ * - Otherwise the actor must rank strictly above the role being assigned,
+ *   so nobody can create or promote a peer or a superior.
+ */
+export function canAssignRole(actorRole: Role, targetRole: Role): boolean {
+  if (targetRole === Role.SUPER_ADMIN) return actorRole === Role.SUPER_ADMIN
+  if (actorRole === Role.SUPER_ADMIN) return true
+  return ROLE_HIERARCHY[actorRole] > ROLE_HIERARCHY[targetRole]
+}
+
+/**
+ * Strict role hierarchy check for acting on an existing member.
+ * An actor may never modify somebody of equal or higher rank (including themselves).
+ */
+export function canManageMemberWithRole(actorRole: Role, memberRole: Role): boolean {
+  if (actorRole === Role.SUPER_ADMIN) return true
+  return ROLE_HIERARCHY[actorRole] > ROLE_HIERARCHY[memberRole]
+}
+
 export type Permission =
   | 'company.manage'
   | 'company.view'
