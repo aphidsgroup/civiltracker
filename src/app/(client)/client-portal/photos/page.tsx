@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { Camera, CheckCircle2 } from 'lucide-react'
 import { ClientPhotoApproveCard } from '@/components/client/ClientPhotoApproveCard'
+import { getClientPortalApprovedPhotos } from '@/lib/site-photo-gallery'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,16 +33,8 @@ export default async function ClientPhotosPage() {
     )
   }
 
-  // Only approved photos are visible to client
-  const approvedPhotos = await prisma.sitePhoto.findMany({
-    where: { siteId: site.id, approvedForClient: true },
-    include: {
-      task: {
-        include: { category: { include: { stage: true } } }
-      }
-    },
-    orderBy: { approvedAt: 'desc' }
-  })
+  // Only approved photos are visible to client — as DTOs without any location data
+  const approvedPhotos = await getClientPortalApprovedPhotos(site.id)
 
   const clientConfirmedCount = approvedPhotos.filter(p => p.task?.isClientDone).length
   const pendingClientApproval = approvedPhotos.filter(p => p.task && !p.task.isClientDone)

@@ -1,35 +1,25 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@prisma/client'
-import { redirect } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { Camera, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { PhotoApprovalCard } from '@/components/admin/PhotoApprovalCard'
+import { getAdminSitePhotoGallery } from '@/lib/site-photo-gallery'
 
 export const dynamic = 'force-dynamic'
-
-type PhotoApprovalItem = Prisma.SitePhotoGetPayload<{
-  include: {
-    task: {
-      include: {
-        category: {
-          include: {
-            stage: true
-          }
-        }
-      }
-    }
-  }
-}>
 
 export default async function SitePhotosPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session?.user?.companyId) redirect('/login')
   const { id: siteId } = await params
 
+  // Tenant-scoped DTOs; exact GPS is only included for this company's admin.
+  const gallery = await getAdminSitePhotoGallery(siteId, session.user)
+  if (!gallery) notFound()
+
   // Tasks that have been completed but have NO photo yet
   const missingPhotoTasks = await prisma.projectChecklistTask.findMany({
     where: {
-      category: { stage: { checklist: { siteId } } },
+      category: { stage: { checklist: { siteId, companyId: session.user.companyId } } },
       status: 'COMPLETED',
       sitePhotos: { none: {} }
     },
@@ -37,19 +27,8 @@ export default async function SitePhotosPage({ params }: { params: Promise<{ id:
     orderBy: { updatedAt: 'desc' }
   })
 
-  // All photos for this site — pending admin approval
-  const pendingApprovalPhotos: PhotoApprovalItem[] = await prisma.sitePhoto.findMany({
-    where: { siteId, approvedForClient: false },
-    include: { task: { include: { category: { include: { stage: true } } } } },
-    orderBy: { createdAt: 'desc' }
-  })
-
-  // Admin-approved photos
-  const approvedPhotos: PhotoApprovalItem[] = await prisma.sitePhoto.findMany({
-    where: { siteId, approvedForClient: true },
-    include: { task: { include: { category: { include: { stage: true } } } } },
-    orderBy: { approvedAt: 'desc' }
-  })
+  const pendingApprovalPhotos = gallery.pending
+  const approvedPhotos = gallery.approved
 
   const totalPhotos = pendingApprovalPhotos.length + approvedPhotos.length
 

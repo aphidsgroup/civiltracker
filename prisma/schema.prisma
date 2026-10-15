@@ -27,6 +27,11 @@ enum Role {
   SUBCONTRACTOR
 }
 
+enum SitePhotoLocationStatus {
+  DEVICE_REPORTED
+  UNAVAILABLE
+}
+
 enum CompanyStatus {
   ACTIVE
   TRIAL
@@ -474,9 +479,10 @@ model MediaAsset {
   uploadedById       String
   createdAt          DateTime @default(now())
 
-  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site       Site?   @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  uploadedBy User    @relation("MediaUploadedBy", fields: [uploadedById], references: [id])
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site       Site?      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  uploadedBy User       @relation("MediaUploadedBy", fields: [uploadedById], references: [id])
+  sitePhoto  SitePhoto?
 
   @@index([companyId])
   @@index([siteId])
@@ -758,9 +764,21 @@ model SitePhoto {
   uploadedById       String?
   createdAt          DateTime  @default(now())
 
-  dpr  DailyProgressReport?  @relation(fields: [dprId], references: [id])
-  site Site                  @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  task ProjectChecklistTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  // Server-verified upload this photo claimed (null for legacy rows).
+  mediaAssetId String? @unique
+
+  // Device-reported capture location (not cryptographic proof). Legacy rows
+  // stay UNAVAILABLE with null coordinates; exact values are company-admin only.
+  locationStatus         SitePhotoLocationStatus @default(UNAVAILABLE)
+  latitude               Float?
+  longitude              Float?
+  locationAccuracyMeters Float?
+  locationCapturedAt     DateTime?
+
+  dpr        DailyProgressReport?  @relation(fields: [dprId], references: [id])
+  site       Site                  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  task       ProjectChecklistTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  mediaAsset MediaAsset?           @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   @@index([siteId])

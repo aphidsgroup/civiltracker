@@ -5,24 +5,8 @@ import Image from 'next/image'
 import { CheckCircle2, XCircle, Loader2, Check, Clock, Trash2 } from 'lucide-react'
 import { approvePhotoAction, rejectPhotoAction } from '@/actions/checklists'
 import { deleteSitePhotoAction } from '@/actions/site-photos'
-
-interface Photo {
-  id: string
-  secureUrl: string
-  caption: string | null
-  category: string | null
-  createdAt: Date
-  approvedForClient: boolean
-  approvedAt: Date | null
-  task?: {
-    id: string
-    name: string
-    category?: {
-      name: string
-      stage?: { name: string }
-    }
-  } | null
-}
+import { SitePhotoLocationBadge } from '@/components/site-photos/SitePhotoLocation'
+import type { AdminSitePhoto as Photo } from '@/lib/site-photo-gallery'
 
 interface Props {
   photo: Photo
@@ -111,6 +95,7 @@ export function PhotoApprovalCard({ photo, mode }: Props) {
         <div className="text-[10px] text-slate-400">
           {new Date(photo.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
         </div>
+        <SitePhotoLocationBadge location={photo.location} />
 
         {/* Action buttons — only for pending mode */}
         {mode === 'pending' && !done && (

@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getPendingChecklistPhotos, uploadChecklistPhotoAction } from '@/actions/checklists'
 import { compressImage } from '@/lib/compress-image'
+import { submitSitePhotoEvidence, unwrapEvidenceResult } from '@/lib/site-photo-upload-client'
+import { LocationCollectionNotice } from '@/components/site-photos/SitePhotoLocation'
+import { DeviceLocationStatus, useDeviceLocation } from '@/components/site-photos/DeviceLocationCapture'
 import { Camera, AlertTriangle, Loader2, X, Upload, CheckCircle2 } from 'lucide-react'
 
 type PendingChecklistPhotoTask = {
@@ -22,6 +25,7 @@ export function ChecklistPhotoNag() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [status, setStatus] = useState<'idle' | 'uploading' | 'success'>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const gps = useDeviceLocation()
 
   const fetchPending = useCallback(async () => {
     try {
@@ -67,6 +71,7 @@ export function ChecklistPhotoNag() {
     setSelectedFile(null)
     setStatus('idle')
     setErrorMsg(null)
+    gps.reset()
   }
 
   const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,6 +81,8 @@ export function ChecklistPhotoNag() {
     setPreviewUrl(URL.createObjectURL(file))
     setStatus('idle')
     setErrorMsg(null)
+    // Fresh device fix for this explicit capture; no fallback coordinate.
+    void gps.acquire()
   }
 
   const handleUpload = async () => {
@@ -85,28 +92,21 @@ export function ChecklistPhotoNag() {
     setErrorMsg(null)
 
     try {
-      // Step 0: Compress image client-side before upload
-      const compressed = await compressImage(selectedFile)
-
-      // Step 1: Upload compressed file to Cloudinary via /api/upload
-      const fd = new FormData()
-      fd.append('file', compressed)
-      fd.append('module', 'SITE_PHOTO')
-      fd.append('siteId', task.siteId)
-
-      const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err?.error || 'Upload failed')
-      }
-      const { url: cloudinaryUrl } = await res.json()
-
-      // Step 2: Save the real Cloudinary URL to the database
-      await uploadChecklistPhotoAction(task.taskId, task.siteId, cloudinaryUrl)
+      // Location is validated before upload; the server re-validates and
+      // claims the recorded upload by public id (never a client URL).
+      await submitSitePhotoEvidence({
+        file: selectedFile,
+        siteId: task.siteId,
+        location: gps.location,
+        compress: compressImage,
+        claim: async (publicId, location) =>
+          unwrapEvidenceResult(await uploadChecklistPhotoAction({ taskId: task.taskId, siteId: task.siteId, publicId, location })),
+      })
 
       setStatus('success')
       setPreviewUrl(null)
       setSelectedFile(null)
+      gps.reset()
 
       // Refresh pending list after a short delay
       setTimeout(() => {
@@ -178,12 +178,18 @@ export function ChecklistPhotoNag() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
               </div>
+              <DeviceLocationStatus
+                location={gps.location}
+                error={gps.error}
+                loading={gps.loading}
+                onRetry={() => void gps.acquire()}
+              />
               {errorMsg && (
                 <div className="text-xs text-red-600 font-semibold bg-red-50 border border-red-100 rounded-xl p-2 text-center">{errorMsg}</div>
               )}
               <div className="flex gap-2">
                 <button
-                  onClick={() => { setPreviewUrl(null); setSelectedFile(null); setErrorMsg(null) }}
+                  onClick={() => { setPreviewUrl(null); setSelectedFile(null); setErrorMsg(null); gps.reset() }}
                   disabled={status === 'uploading'}
                   className="flex-1 border border-slate-200 text-slate-600 font-bold text-sm py-3 rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50"
                 >
@@ -191,7 +197,7 @@ export function ChecklistPhotoNag() {
                 </button>
                 <button
                   onClick={handleUpload}
-                  disabled={status === 'uploading'}
+                  disabled={status === 'uploading' || !gps.location || gps.loading}
                   className="flex-1 bg-[#fc6e20] hover:bg-[#e85b0d] text-white font-black text-sm py-3 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-70"
                 >
                   {status === 'uploading'
@@ -205,22 +211,25 @@ export function ChecklistPhotoNag() {
 
           {/* Photo picker */}
           {status !== 'success' && !previewUrl && (
-            <label className="flex flex-col items-center justify-center gap-3 p-6 border-2 border-dashed border-[#fc6e20]/40 rounded-xl bg-orange-50/50 cursor-pointer active:bg-orange-50 transition-colors w-full">
-              <div className="w-14 h-14 bg-[#fc6e20] text-white rounded-full flex items-center justify-center shadow-md">
-                <Camera className="w-7 h-7" />
-              </div>
-              <div className="text-center">
-                <span className="text-sm font-black text-slate-700 block">Tap to Take / Upload Photo</span>
-                <span className="text-xs text-slate-500 mt-0.5 block">Use camera or select from gallery</span>
-              </div>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={handleCapture}
-              />
-            </label>
+            <div className="space-y-3">
+              <LocationCollectionNotice />
+              <label className="flex flex-col items-center justify-center gap-3 p-6 border-2 border-dashed border-[#fc6e20]/40 rounded-xl bg-orange-50/50 cursor-pointer active:bg-orange-50 transition-colors w-full">
+                <div className="w-14 h-14 bg-[#fc6e20] text-white rounded-full flex items-center justify-center shadow-md">
+                  <Camera className="w-7 h-7" />
+                </div>
+                <div className="text-center">
+                  <span className="text-sm font-black text-slate-700 block">Tap to Take / Upload Photo</span>
+                  <span className="text-xs text-slate-500 mt-0.5 block">Take it on site — device location is captured with it</span>
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handleCapture}
+                />
+              </label>
+            </div>
           )}
         </div>
       </div>

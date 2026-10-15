@@ -1,10 +1,15 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { uploadMobileSitePhotoAction } from '@/actions/mobile-photo'
 import { deleteSitePhotoAction } from '@/actions/site-photos'
 import { compressImage } from '@/lib/compress-image'
-import { Camera, MapPin, ArrowLeft, Loader2, X, Send, Trash2, RefreshCw } from 'lucide-react'
+import { captureDeviceLocation } from '@/lib/browser-location'
+import { submitSitePhotoEvidence, unwrapEvidenceResult } from '@/lib/site-photo-upload-client'
+import type { SitePhotoLocationStatusView } from '@/lib/site-photo-location-view'
+import { LocationCollectionNotice, SitePhotoLocationBadge } from '@/components/site-photos/SitePhotoLocation'
+import { DeviceLocationStatus, useDeviceLocation } from '@/components/site-photos/DeviceLocationCapture'
+import { Camera, ArrowLeft, Loader2, X, Send, Trash2, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 
 type PhotoCard = {
@@ -15,6 +20,7 @@ type PhotoCard = {
   imageUrl?: string
   dbId?: string  // real DB id for delete/retake
   siteId?: string
+  gpsStatus?: SitePhotoLocationStatusView
 }
 
 type SiteOption = {
@@ -42,9 +48,8 @@ export default function MobilePhotoClient({
   const [showModal, setShowModal] = useState(false)
 
   const [photos, setPhotos] = useState<PhotoCard[]>(initialPhotos)
-  const retakeInputRef = useRef<HTMLInputElement>(null)
-  const [retakeTargetId, setRetakeTargetId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [cardError, setCardError] = useState<{ id: string; message: string } | null>(null)
 
   // Capture Modal State
   const [siteId, setSiteId] = useState(initialSiteId)
@@ -52,8 +57,7 @@ export default function MobilePhotoClient({
   const [captureTag, setCaptureTag] = useState('Civil')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [gpsCoords, setGpsCoords] = useState<string | null>(null)
-  const [gpsLoading, setGpsLoading] = useState(false)
+  const gps = useDeviceLocation()
   const [saving, setSaving] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
@@ -65,71 +69,50 @@ export default function MobilePhotoClient({
       setSelectedFile(file)
       setPreviewUrl(URL.createObjectURL(file))
       setUploadError(null)
-      triggerGpsLock()
+      // Fresh device fix for this explicit capture; no fallback coordinate.
+      void gps.acquire()
     }
   }
 
-  const triggerGpsLock = () => {
-    setGpsLoading(true)
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setGpsCoords(`${pos.coords.latitude.toFixed(4)}° N, ${pos.coords.longitude.toFixed(4)}° E`)
-          setGpsLoading(false)
-        },
-        () => {
-          setGpsCoords('28.5355° N, 77.3910° E')
-          setGpsLoading(false)
-        },
-        { timeout: 5000 }
-      )
-    } else {
-      setGpsCoords('28.5355° N, 77.3910° E')
-      setGpsLoading(false)
-    }
+  const closeModal = () => {
+    setShowModal(false)
+    setPreviewUrl(null)
+    setSelectedFile(null)
+    gps.reset()
   }
-
-  // Simulate removed
 
   const handleSaveCapture = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedFile || !previewUrl) return
+    if (!siteId) {
+      setUploadError('Select a site before saving the photo.')
+      return
+    }
     setSaving(true)
     setUploadError(null)
-    const finalGps = gpsCoords || '28.5355° N, 77.3910° E'
     try {
-      // Compress image before upload
-      const compressed = await compressImage(selectedFile)
-      const fd = new FormData()
-      fd.append('file', compressed)
-      fd.append('module', 'SITE_PHOTO')
-      if (siteId) fd.append('siteId', siteId)
-      const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        throw new Error(errData?.error || 'Upload failed')
-      }
-      const { url: cloudinaryUrl } = await res.json()
-
-      if (siteId) {
-        await uploadMobileSitePhotoAction({
-          siteId,
-          imageUrl: cloudinaryUrl,
-          caption: caption || `${captureTag} progress photo`,
-          gps: finalGps
-        })
-      }
+      const tag = captureTag
+      const finalCaption = caption || `${captureTag} progress photo`
+      const { photo } = await submitSitePhotoEvidence({
+        file: selectedFile,
+        siteId,
+        location: gps.location,
+        compress: compressImage,
+        claim: async (publicId, location) =>
+          unwrapEvidenceResult(await uploadMobileSitePhotoAction({ siteId, publicId, caption: finalCaption, tag, location })),
+      })
       const newCard: PhotoCard = {
-        id: Date.now().toString(),
-        title: caption || `${captureTag} telemetry entry`,
+        id: photo.id,
+        dbId: photo.id,
+        siteId,
+        title: finalCaption,
         meta: `You - ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-        tag: captureTag,
-        imageUrl: cloudinaryUrl
+        tag,
+        imageUrl: photo.imageUrl,
+        gpsStatus: 'DEVICE_REPORTED',
       }
       setPhotos(prev => [newCard, ...prev])
-      setShowModal(false)
-      setPreviewUrl(null)
-      setSelectedFile(null)
+      closeModal()
       setCaption('')
     } catch (err: unknown) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed. Try again.')
@@ -162,36 +145,37 @@ export default function MobilePhotoClient({
 
   const handleRetakeFile = async (e: React.ChangeEvent<HTMLInputElement>, photo: PhotoCard) => {
     const file = e.target.files?.[0]
-    if (!file || !photo.siteId) return
+    e.target.value = ''
+    if (!file || !photo.siteId || !photo.dbId) return
+    const siteIdForPhoto = photo.siteId
+    const replacesPhotoId = photo.dbId
     setDeletingId(photo.id)
+    setCardError(null)
     try {
-      // Compress image before upload
-      const compressed = await compressImage(file)
-      const fd = new FormData()
-      fd.append('file', compressed)
-      fd.append('module', 'SITE_PHOTO')
-      fd.append('siteId', photo.siteId)
-      const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        throw new Error(errData?.error || 'Upload failed')
-      }
-      const { url: cloudinaryUrl } = await res.json()
-
-      // delete old, create new
-      if (photo.dbId) await deleteSitePhotoAction(photo.dbId, getPhotoDeleteLabel(photo))
-      await uploadMobileSitePhotoAction({
-        siteId: photo.siteId,
-        imageUrl: cloudinaryUrl,
-        caption: photo.title,
-        gps: ''
+      // A retake is new evidence: it needs its own fresh device location.
+      const location = await captureDeviceLocation()
+      const { photo: replacement } = await submitSitePhotoEvidence({
+        file,
+        siteId: siteIdForPhoto,
+        location,
+        compress: compressImage,
+        claim: async (publicId, loc) =>
+          unwrapEvidenceResult(await uploadMobileSitePhotoAction({
+            siteId: siteIdForPhoto,
+            publicId,
+            caption: photo.title,
+            tag: photo.tag,
+            location: loc,
+            replacesPhotoId,
+          })),
       })
-      setPhotos(prev => prev.map(p => p.id === photo.id ? { ...p, imageUrl: cloudinaryUrl } : p))
-    } catch {
-      // ignore
+      setPhotos(prev => prev.map(p => p.id === photo.id
+        ? { ...p, id: replacement.id, dbId: replacement.id, imageUrl: replacement.imageUrl, gpsStatus: 'DEVICE_REPORTED' }
+        : p))
+    } catch (err: unknown) {
+      setCardError({ id: photo.id, message: err instanceof Error ? err.message : 'Retake failed. Try again.' })
     } finally {
       setDeletingId(null)
-      setRetakeTargetId(null)
     }
   }
 
@@ -213,6 +197,10 @@ export default function MobilePhotoClient({
             {matchedSite?.name || 'All Sites'} &middot; photo diary
           </p>
         </div>
+      </div>
+
+      <div className="mb-5">
+        <LocationCollectionNotice />
       </div>
 
       {/* Category Filter Pills Chips Grid */}
@@ -293,9 +281,17 @@ export default function MobilePhotoClient({
                 <div className="text-xs font-black text-slate-900 leading-snug mb-1 truncate">
                   {item.title}
                 </div>
-                <div className="text-[10.5px] font-bold text-slate-400 truncate mb-2">
+                <div className="text-[10.5px] font-bold text-slate-400 truncate mb-1">
                   {item.meta}
                 </div>
+                <div className="mb-2">
+                  <SitePhotoLocationBadge location={{ status: item.gpsStatus ?? 'UNAVAILABLE', exact: null }} />
+                </div>
+                {cardError?.id === item.id && (
+                  <div role="alert" className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg p-1.5 mb-2">
+                    {cardError.message}
+                  </div>
+                )}
                 {/* Retake + Delete actions */}
                 <div className="flex gap-1.5">
                   {/* Retake: hidden file input */}
@@ -333,7 +329,7 @@ export default function MobilePhotoClient({
               <h2 className="text-lg font-black text-slate-900 m-0">Capture Field Telemetry</h2>
               <button
                 type="button"
-                onClick={() => setShowModal(false)}
+                onClick={closeModal}
                 className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center border-none cursor-pointer p-0"
               >
                 <X size={18} />
@@ -343,23 +339,26 @@ export default function MobilePhotoClient({
             <form onSubmit={handleSaveCapture} className="space-y-4">
               <div className="border-2 border-dashed border-slate-300 rounded-2xl p-4 text-center bg-slate-50 relative overflow-hidden">
                 {!previewUrl ? (
-                  <>
+                  <div className="space-y-3">
+                    <LocationCollectionNotice />
                     <label className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#1e40af] text-white font-black text-xs cursor-pointer shadow-md shadow-blue-900/20 active:scale-95 transition-all">
                       <input type="file" accept="image/*" capture="environment" onChange={handleSnapPhoto} className="hidden" />
                       <Camera size={16} strokeWidth={2.5} />
                       <span>Launch Camera</span>
                     </label>
-                  </>
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     <div className="aspect-video rounded-xl overflow-hidden border border-slate-200 relative">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
                     </div>
-                    <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-black">
-                      {gpsLoading ? <Loader2 size={11} className="animate-spin" /> : <MapPin size={11} className="text-emerald-600" />}
-                      <span>{gpsLoading ? 'Locking GPS...' : `GPS Tagged: ${gpsCoords || '28.5355° N, 77.3910° E'} ✓`}</span>
-                    </div>
+                    <DeviceLocationStatus
+                      location={gps.location}
+                      error={gps.error}
+                      loading={gps.loading}
+                      onRetry={() => void gps.acquire()}
+                    />
                   </div>
                 )}
               </div>
@@ -383,7 +382,7 @@ export default function MobilePhotoClient({
               </div>
 
               <div>
-                <label className="text-xs font-black text-slate-600 block mb-1.5">Caption &amp; Location</label>
+                <label className="text-xs font-black text-slate-600 block mb-1.5">Caption</label>
                 <input
                   type="text"
                   placeholder="e.g., Column reinforcement checked at Block B"
@@ -398,7 +397,7 @@ export default function MobilePhotoClient({
               )}
               <button
                 type="submit"
-                disabled={!previewUrl || !selectedFile || saving}
+                disabled={!previewUrl || !selectedFile || !gps.location || gps.loading || saving}
                 className="w-full py-3 bg-[#1e40af] hover:bg-[#1d4ed8] disabled:opacity-50 text-white rounded-xl font-black text-xs flex items-center justify-center gap-1.5 border-none cursor-pointer shadow-md"
               >
                 {saving ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}

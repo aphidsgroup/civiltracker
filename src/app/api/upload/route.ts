@@ -3,6 +3,7 @@ import cloudinary from '@/lib/cloudinary'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getCloudinaryFolder } from '@/lib/cloudinary'
+import { parseLocationFormFields, validateSitePhotoLocation } from '@/lib/site-photo-location'
 
 const VALID_MODULES = ['BILL', 'SITE_PHOTO', 'DOCUMENT', 'SALARY_PROOF', 'DELIVERY_CHALLAN', 'QUALITY_PHOTO', 'SAFETY_PHOTO', 'PAYMENT_PROOF', 'GENERAL', 'LOGO']
 
@@ -23,6 +24,14 @@ export async function POST(request: Request) {
   }
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+
+  // Field evidence must be GPS-tagged: reject before anything reaches Cloudinary.
+  const isSitePhoto = moduleName === 'SITE_PHOTO'
+  if (isSitePhoto) {
+    if (!siteId) return NextResponse.json({ error: 'Site is required for site photo evidence' }, { status: 400 })
+    const location = validateSitePhotoLocation(parseLocationFormFields(formData))
+    if (!location.ok) return NextResponse.json({ error: location.message }, { status: 422 })
+  }
 
   // Resolve companyId — prefer session, fall back to site lookup, then CompanyMember
   let companyId = session.user.companyId ?? null
@@ -49,6 +58,10 @@ export async function POST(request: Request) {
     if (!site) {
       return NextResponse.json({ error: `Forbidden: Site access denied for company ${companyId}` }, { status: 403 })
     }
+  }
+
+  if (isSitePhoto && !companyId) {
+    return NextResponse.json({ error: 'Forbidden: Site photo evidence requires a company context' }, { status: 403 })
   }
 
   const bytes = await file.arrayBuffer()
@@ -105,6 +118,11 @@ export async function POST(request: Request) {
   } catch (dbErr: unknown) {
     const message = dbErr instanceof Error ? dbErr.message : dbErr
     console.error('[Upload] DB mediaAsset error:', message)
+    // Site photos can only be claimed via their MediaAsset — don't leave an orphan.
+    if (isSitePhoto) {
+      await cloudinary.uploader.destroy(result.public_id).catch((err: unknown) => console.error('[Upload] Cloudinary cleanup error:', err))
+      return NextResponse.json({ error: 'Upload failed. Please try again.' }, { status: 500 })
+    }
     // Don't fail — image already uploaded to Cloudinary
   }
 
