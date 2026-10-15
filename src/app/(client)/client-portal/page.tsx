@@ -10,17 +10,28 @@ export default async function ClientPortal() {
   const session = await auth()
   if (session?.user?.role !== 'CLIENT') redirect('/dashboard')
 
-  // Find client record by email
+  const companyId = session?.user?.companyId
+  if (!companyId) redirect('/login')
+
+  // Find client record by email strictly within the user's company
   const clientRecord = await prisma.client.findFirst({
-    where: { email: session?.user?.email },
+    where: { email: session?.user?.email, companyId },
     include: { invoices: { orderBy: { createdAt: 'desc' } } }
   })
 
-  // Find the client's assigned site — prefer siteId if set, else fall back to companyId
+  // Find assigned site IDs from company member if any
+  const member = await prisma.companyMember.findFirst({
+    where: { userId: session.user.id, companyId, isActive: true },
+  })
+  const assignedSiteId = clientRecord?.siteId || (member?.siteIds && member.siteIds.length > 0 ? member.siteIds[0] : undefined)
+
+  // Find the client's assigned site — strictly scoped to this company
   const site = await prisma.site.findFirst({
-    where: clientRecord?.siteId
-      ? { id: clientRecord.siteId, deletedAt: null }
-      : { companyId: clientRecord?.companyId, deletedAt: null },
+    where: {
+      companyId,
+      deletedAt: null,
+      ...(assignedSiteId ? { id: assignedSiteId } : {}),
+    },
     orderBy: { createdAt: 'desc' },
     include: {
       company: true,
@@ -118,9 +129,18 @@ export default async function ClientPortal() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center relative z-10">
           <div className="md:col-span-2 space-y-4">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-amber-300 text-xs font-semibold backdrop-blur-md border border-white/10">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Your project</span>
+            <div className="flex items-center gap-3">
+              {site.company?.logo ? (
+                <img
+                  src={site.company.logo}
+                  alt={site.company.name}
+                  className="w-11 h-11 rounded-xl object-contain bg-white p-1 border border-white/20 shadow-md shrink-0"
+                />
+              ) : null}
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-amber-300 text-xs font-semibold backdrop-blur-md border border-white/10">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Your project</span>
+              </div>
             </div>
             <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight text-white">{site.name}</h1>
             <div className="flex items-center gap-2 text-slate-300 text-xs md:text-sm">

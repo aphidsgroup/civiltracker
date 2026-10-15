@@ -8,6 +8,7 @@ type Site = {
   id: string
   name: string
   companyName: string
+  companyLogo?: string | null
 }
 
 export default function SiteSelectorClient({
@@ -31,9 +32,17 @@ export default function SiteSelectorClient({
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2.5 bg-white px-3 py-2 rounded-[14px] border border-slate-200/60 shadow-sm max-w-[220px] active:scale-[0.98] transition-transform text-left"
       >
-        <div className="w-7 h-7 rounded-[8px] bg-[#fc6e20] flex items-center justify-center flex-shrink-0 text-white">
-          <Building2 size={14} />
-        </div>
+        {activeSite?.companyLogo ? (
+          <img
+            src={activeSite.companyLogo}
+            alt={activeSite.companyName}
+            className="w-7 h-7 rounded-[8px] object-contain bg-white border border-slate-200 p-0.5 flex-shrink-0 shadow-xs"
+          />
+        ) : (
+          <div className="w-7 h-7 rounded-[8px] bg-[#fc6e20] flex items-center justify-center flex-shrink-0 text-white">
+            <Building2 size={14} />
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-bold text-slate-900 truncate">{activeSite?.name ?? 'Select Site'}</div>
           <div className="text-[10px] text-slate-500 font-medium truncate">{activeSite?.companyName ?? 'Company'}</div>
@@ -58,11 +67,20 @@ export default function SiteSelectorClient({
                     onClick={() => handleSelect(site.id)}
                     className="w-full text-left px-4 py-3 flex items-center justify-between hover:bg-slate-50 active:bg-slate-100 transition-colors"
                   >
-                    <div className="min-w-0 flex-1">
-                      <div className={`text-sm font-bold truncate ${site.id === activeSite?.id ? 'text-[#fc6e20]' : 'text-slate-800'}`}>
-                        {site.name}
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      {site.companyLogo && (
+                        <img
+                          src={site.companyLogo}
+                          alt={site.companyName}
+                          className="w-6 h-6 rounded object-contain bg-white border border-slate-200 p-0.5 flex-shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className={`text-sm font-bold truncate ${site.id === activeSite?.id ? 'text-[#fc6e20]' : 'text-slate-800'}`}>
+                          {site.name}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-medium truncate">{site.companyName}</div>
                       </div>
-                      <div className="text-[10px] text-slate-500 font-medium truncate">{site.companyName}</div>
                     </div>
                     {site.id === activeSite?.id && <Check size={16} className="text-[#fc6e20] flex-shrink-0 ml-2" />}
                   </button>

@@ -48,14 +48,17 @@ export default function DashboardSidebar({
   companyName,
   companyPlan,
   companyCity,
+  companyLogo,
 }: {
   user: SessionUser
   pendingApprovalsCount?: number
   companyName?: string
   companyPlan?: string
   companyCity?: string
+  companyLogo?: string | null
 }) {
   const pathname = usePathname()
+  const activeLogo = companyLogo ?? user.companyLogo
 
   return (
     <div className="w-[250px] flex-shrink-0 flex flex-col h-full bg-gradient-to-b from-[#0c2640] to-[#0a2138] text-[#cdd9e6]">
@@ -75,9 +78,17 @@ export default function DashboardSidebar({
       {/* Company pill */}
       {companyName && (
         <div className="flex items-center gap-2.5 mx-3.5 mt-5 mb-2 px-2.5 py-2 bg-white/[0.07] border border-white/[0.09] rounded-[12px]">
-          <div className="w-[30px] h-[30px] rounded-[8px] bg-[#f3b43a] text-[#3a2a05] font-extrabold text-[11px] flex items-center justify-center flex-shrink-0">
-            {companyName.substring(0, 2).toUpperCase()}
-          </div>
+          {activeLogo ? (
+            <img
+              src={activeLogo}
+              alt={companyName}
+              className="w-[32px] h-[32px] rounded-[8px] object-contain bg-white p-0.5 flex-shrink-0 shadow-sm border border-white/20"
+            />
+          ) : (
+            <div className="w-[30px] h-[30px] rounded-[8px] bg-[#f3b43a] text-[#3a2a05] font-extrabold text-[11px] flex items-center justify-center flex-shrink-0">
+              {companyName.substring(0, 2).toUpperCase()}
+            </div>
+          )}
           <div className="min-w-0">
             <div className="text-[13px] font-bold text-white truncate">{companyName}</div>
             <div className="text-[10.5px] text-white/55 mt-0.5">

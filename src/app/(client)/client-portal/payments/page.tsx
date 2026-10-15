@@ -15,10 +15,8 @@ export default async function ClientPortalPaymentsPage() {
 
   const clientRecord = await prisma.client.findFirst({
     where: {
-      OR: [
-        { email: session.user.email },
-        { companyId: session.user.companyId }
-      ]
+      email: session.user.email,
+      ...(session.user.companyId ? { companyId: session.user.companyId } : {})
     }
   });
 

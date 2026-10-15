@@ -10,12 +10,15 @@ export default function DashboardTopbar({
   user,
   pendingApprovalsCount = 0,
   companyName,
+  companyLogo,
 }: {
   user: SessionUser
   pendingApprovalsCount?: number
   companyName?: string
+  companyLogo?: string | null
 }) {
   const pathname = usePathname()
+  const activeLogo = companyLogo ?? user.companyLogo
 
   const getPageInfo = () => {
     if (pathname.includes('/sites/new')) return { title: 'New Site', crumb: 'Add a construction site' }
@@ -51,12 +54,21 @@ export default function DashboardTopbar({
         <Menu size={18} />
       </button>
 
-      <div className="flex-1 min-w-0">
-        <div className="text-[17px] md:text-[19px] font-extrabold text-[#16273a] tracking-[-0.02em] truncate">{title}</div>
-        <div className="text-[11px] md:text-[12px] text-[#647387] font-semibold mt-0.5 truncate">
-          {showClock ? (
-            <><span>{companyName ?? 'Company'} · </span><LiveClock showTime={true} showDate={true} /></>
-          ) : crumb}
+      <div className="flex-1 min-w-0 flex items-center gap-3">
+        {activeLogo && (
+          <img
+            src={activeLogo}
+            alt={companyName ?? 'Company Logo'}
+            className="w-9 h-9 rounded-lg object-contain bg-white border border-[#e4eaf0] p-1 shadow-xs hidden sm:block shrink-0"
+          />
+        )}
+        <div className="min-w-0">
+          <div className="text-[17px] md:text-[19px] font-extrabold text-[#16273a] tracking-[-0.02em] truncate">{title}</div>
+          <div className="text-[11px] md:text-[12px] text-[#647387] font-semibold mt-0.5 truncate">
+            {showClock ? (
+              <><span>{companyName ?? 'Company'} · </span><LiveClock showTime={true} showDate={true} /></>
+            ) : crumb}
+          </div>
         </div>
       </div>
 

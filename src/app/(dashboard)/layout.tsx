@@ -18,7 +18,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }),
     companyId ? prisma.company.findUnique({
       where: { id: companyId },
-      select: { name: true, plan: true, city: true },
+      select: { name: true, plan: true, city: true, logo: true },
     }) : Promise.resolve(null),
   ])
 
@@ -32,6 +32,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           companyName={company?.name}
           companyPlan={company?.plan}
           companyCity={company?.city ?? undefined}
+          companyLogo={company?.logo}
         />
       }
       topbar={
@@ -39,6 +40,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           user={session.user}
           pendingApprovalsCount={pendingApprovalsCount}
           companyName={company?.name}
+          companyLogo={company?.logo}
         />
       }
     >

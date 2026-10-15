@@ -105,9 +105,17 @@ export default async function CompaniesPage({
                       <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-900 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
-                              {getInitials(c.name)}
-                            </div>
+                            {c.logo ? (
+                              <img
+                                src={c.logo}
+                                alt={c.name}
+                                className="w-10 h-10 rounded-xl object-contain bg-white border border-gray-200 p-0.5 flex-shrink-0 shadow-xs"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-900 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                                {getInitials(c.name)}
+                              </div>
+                            )}
                             <div>
                               <div className="font-bold text-sm text-gray-900">{c.name}</div>
                               <div className="text-xs text-gray-500 mt-0.5">
@@ -192,7 +200,13 @@ export default async function CompaniesPage({
                         {c.status}
                       </span>
                     ),
-                    avatar: (
+                    avatar: c.logo ? (
+                      <img
+                        src={c.logo}
+                        alt={c.name}
+                        className="w-10 h-10 rounded-xl object-contain bg-white border border-gray-200 p-0.5 flex-shrink-0 shadow-xs"
+                      />
+                    ) : (
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-900 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
                         {getInitials(c.name)}
                       </div>

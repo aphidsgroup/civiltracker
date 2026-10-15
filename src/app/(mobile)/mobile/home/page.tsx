@@ -48,7 +48,8 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
   const allSites = allSitesRecords.map(s => ({
     id: s.id,
     name: s.name,
-    companyName: s.company.name
+    companyName: s.company.name,
+    companyLogo: s.company.logo,
   }))
 
   const activeSiteRecord = requestedSiteId 
@@ -58,7 +59,8 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
   const activeSite = activeSiteRecord ? {
     id: activeSiteRecord.id,
     name: activeSiteRecord.name,
-    companyName: activeSiteRecord.company.name
+    companyName: activeSiteRecord.company.name,
+    companyLogo: activeSiteRecord.company.logo,
   } : null
 
   const siteId = activeSite?.id

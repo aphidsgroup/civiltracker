@@ -41,7 +41,23 @@ export default async function SettingsPage() {
 
       {/* Company info */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <h2 className="text-base font-bold text-gray-900 mb-4">Company</h2>
+        <div className="flex items-center gap-4 mb-6 pb-4 border-b border-gray-100">
+          {company.logo ? (
+            <img
+              src={company.logo}
+              alt={company.name}
+              className="w-16 h-16 rounded-xl object-contain bg-white border border-gray-200 p-1 shadow-sm"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-blue-600 to-blue-900 text-white font-black text-xl flex items-center justify-center shadow-sm">
+              {company.name.slice(0, 2).toUpperCase()}
+            </div>
+          )}
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">{company.name}</h2>
+            <p className="text-xs text-gray-500 font-medium">{company.city ?? 'India'} · {company.plan ?? 'Active Plan'}</p>
+          </div>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[
             { label: 'Company Name', value: company.name },

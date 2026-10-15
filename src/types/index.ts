@@ -10,6 +10,7 @@ export interface SessionUser {
   companyId?: string
   companySlug?: string
   companyName?: string
+  companyLogo?: string | null
   moduleControls?: Prisma.JsonValue | null
 }
 

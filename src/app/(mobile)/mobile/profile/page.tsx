@@ -10,7 +10,7 @@ export default async function MobileProfilePage() {
   const company = user.companyId
     ? await prisma.company.findUnique({
         where: { id: user.companyId },
-        select: { name: true },
+        select: { name: true, logo: true },
       })
     : null
 
@@ -70,9 +70,17 @@ export default async function MobileProfilePage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-white/10 text-[#38bdf8]">
-              <Building2 size={16} />
-            </div>
+            {company?.logo ? (
+              <img
+                src={company.logo}
+                alt={companyName}
+                className="w-7 h-7 rounded-lg object-contain bg-white p-0.5 border border-white/20 shadow-xs shrink-0"
+              />
+            ) : (
+              <div className="p-1.5 rounded-lg bg-white/10 text-[#38bdf8]">
+                <Building2 size={16} />
+              </div>
+            )}
             <div>
               <div className="text-[10px] font-bold uppercase tracking-wider text-white/60">COMPANY</div>
               <div className="text-xs font-black tracking-wide max-w-[140px] truncate">{companyName}</div>

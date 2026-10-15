@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs'
 
 type CreateCompanyInput = {
   name: string
+  logo?: string | null
   email?: string | null
   phone?: string | null
   gst?: string | null
@@ -39,6 +40,7 @@ export async function createCompany(data: CreateCompanyInput) {
     data: {
       name: data.name,
       slug,
+      logo: data.logo || null,
       email: data.email,
       phone: data.phone,
       gst: data.gst,
@@ -115,6 +117,15 @@ export async function updateCompanyPlan(
       ...(siteLimit !== undefined && { siteLimit }),
       ...(storageLimitMb !== undefined && { storageLimitMb }),
     }
+  })
+  return { success: true }
+}
+
+export async function updateCompanyLogo(companyId: string, logo: string | null) {
+  await requireRole([Role.SUPER_ADMIN, Role.COMPANY_ADMIN])
+  await prisma.company.update({
+    where: { id: companyId },
+    data: { logo }
   })
   return { success: true }
 }

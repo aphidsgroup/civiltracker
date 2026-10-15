@@ -60,6 +60,17 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
       <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
         <div className="flex items-center gap-3">
           <Link href="/super-admin/companies" className="text-sm text-gray-500 hover:text-gray-900 font-medium">← Back</Link>
+          {company.logo ? (
+            <img
+              src={company.logo}
+              alt={company.name}
+              className="w-10 h-10 rounded-xl object-contain bg-white border border-gray-200 p-0.5 shadow-sm"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-900 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+              {getInitials(company.name)}
+            </div>
+          )}
           <h1 className="text-xl font-semibold text-gray-900">{company.name}</h1>
           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusColor[company.status] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}>
             {company.status}

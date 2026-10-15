@@ -12,6 +12,7 @@ type AuthUserPayload = {
   companyId?: string | null
   companySlug?: string | null
   companyName?: string | null
+  companyLogo?: string | null
   moduleControls?: ModuleControlsValue
 }
 
@@ -68,6 +69,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           companyId: member?.companyId ?? null,
           companySlug: member?.company?.slug ?? null,
           companyName: member?.company?.name ?? null,
+          companyLogo: member?.company?.logo ?? null,
           moduleControls: member?.moduleControls ?? null,
           image: user.avatar,
         }
@@ -83,6 +85,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.companyId = (user as AuthUserPayload).companyId ?? undefined
         token.companySlug = (user as AuthUserPayload).companySlug ?? undefined
         token.companyName = (user as AuthUserPayload).companyName ?? undefined
+        token.companyLogo = (user as AuthUserPayload).companyLogo ?? undefined
         token.moduleControls = (user as AuthUserPayload).moduleControls ?? undefined
       }
       return token
@@ -94,6 +97,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.companyId = token.companyId as string | undefined
         session.user.companySlug = token.companySlug as string | undefined
         session.user.companyName = token.companyName as string | undefined
+        session.user.companyLogo = token.companyLogo as string | undefined
         session.user.moduleControls = token.moduleControls as ModuleControlsValue | undefined
       }
       return session
@@ -112,6 +116,7 @@ declare module 'next-auth' {
     companyId?: string | null
     companySlug?: string | null
     companyName?: string | null
+    companyLogo?: string | null
     moduleControls?: ModuleControlsValue
   }
   interface Session {
@@ -123,6 +128,7 @@ declare module 'next-auth' {
       companyId?: string
       companySlug?: string
       companyName?: string
+      companyLogo?: string | null
       moduleControls?: ModuleControlsValue
       image?: string | null
     }
@@ -133,6 +139,7 @@ declare module 'next-auth' {
     companyId?: string
     companySlug?: string
     companyName?: string
+    companyLogo?: string | null
     moduleControls?: ModuleControlsValue
   }
 }
