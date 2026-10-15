@@ -11,31 +11,78 @@ export async function GET(request: Request) {
   }
 
   const doDelete = searchParams.get('delete') === 'true'
-  let deletedResult = null
+  const log: string[] = []
 
   if (doDelete) {
-    // 1. Delete users
-    const deletedUsers = await prisma.user.deleteMany({
-      where: {
-        OR: [
-          { email: { contains: 'madrascrafters.in' } },
-          { email: { contains: 'madras-crafters.in' } },
-          { email: 'client@annanagar.in' }
-        ]
-      }
-    })
+    try {
+      const targetCompanies = await prisma.company.findMany({
+        where: {
+          OR: [
+            { slug: { contains: 'madras' } },
+            { name: { contains: 'Madras', mode: 'insensitive' } }
+          ]
+        },
+        select: { id: true, name: true }
+      })
+      const targetCompanyIds = targetCompanies.map(c => c.id)
 
-    // 2. Delete test companies
-    const deletedCompanies = await prisma.company.deleteMany({
-      where: {
-        OR: [
-          { slug: { contains: 'madras' } },
-          { name: { contains: 'Madras', mode: 'insensitive' } }
-        ]
-      }
-    })
+      const targetUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { email: { contains: 'madrascrafters.in' } },
+            { email: { contains: 'madras-crafters.in' } },
+            { email: 'client@annanagar.in' }
+          ]
+        },
+        select: { id: true, email: true }
+      })
+      const targetUserIds = targetUsers.map(u => u.id)
 
-    deletedResult = { deletedUsers, deletedCompanies }
+      log.push(`Found ${targetCompanies.length} companies, ${targetUsers.length} users to delete`)
+
+      // Clean up standalone references
+      await prisma.activityLog.deleteMany({
+        where: { OR: [{ userId: { in: targetUserIds } }, { companyId: { in: targetCompanyIds } }] }
+      }).catch(e => log.push('activityLog err: ' + String(e)))
+
+      await prisma.auditLog.deleteMany({
+        where: { OR: [{ userId: { in: targetUserIds } }, { companyId: { in: targetCompanyIds } }] }
+      }).catch(e => log.push('auditLog err: ' + String(e)))
+
+      await prisma.notification.deleteMany({
+        where: { OR: [{ userId: { in: targetUserIds } }, { companyId: { in: targetCompanyIds } }] }
+      }).catch(e => log.push('notification err: ' + String(e)))
+
+      await prisma.reportExport.deleteMany({
+        where: { OR: [{ generatedById: { in: targetUserIds } }, { companyId: { in: targetCompanyIds } }] }
+      }).catch(e => log.push('reportExport err: ' + String(e)))
+
+      await prisma.companyMember.deleteMany({
+        where: { OR: [{ userId: { in: targetUserIds } }, { companyId: { in: targetCompanyIds } }] }
+      }).catch(e => log.push('companyMember err: ' + String(e)))
+
+      // Delete companies
+      for (const c of targetCompanies) {
+        try {
+          await prisma.company.delete({ where: { id: c.id } })
+          log.push(`Deleted company: ${c.name} (${c.id})`)
+        } catch (e) {
+          log.push(`Failed to delete company ${c.name}: ${String(e)}`)
+        }
+      }
+
+      // Delete users
+      for (const u of targetUsers) {
+        try {
+          await prisma.user.delete({ where: { id: u.id } })
+          log.push(`Deleted user: ${u.email} (${u.id})`)
+        } catch (e) {
+          log.push(`Failed to delete user ${u.email}: ${String(e)}`)
+        }
+      }
+    } catch (err) {
+      log.push('General error: ' + String(err))
+    }
   }
 
   // Fetch remaining state
@@ -48,7 +95,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     dbHost: process.env.DATABASE_URL ? process.env.DATABASE_URL.split('@')[1]?.split('/')[0] : 'unknown',
-    deletedResult,
+    log,
     remainingUsers,
     remainingCompanies
   })
