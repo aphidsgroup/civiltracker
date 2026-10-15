@@ -14,10 +14,6 @@ import { useState, useEffect } from 'react'
 
 const IST = 'Asia/Kolkata'
 
-function getNow() {
-  return new Date()
-}
-
 export default function LiveClock({
   showTime = true,
   showDate = true,
@@ -29,12 +25,19 @@ export default function LiveClock({
   compact?: boolean
   className?: string
 }) {
-  const [now, setNow] = useState<Date>(() => getNow())
+  const [mounted, setMounted] = useState(false)
+  const [now, setNow] = useState<Date | null>(null)
 
   useEffect(() => {
-    const id = setInterval(() => setNow(getNow()), 1000)
+    setNow(new Date())
+    setMounted(true)
+    const id = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(id)
   }, [])
+
+  if (!mounted || !now) {
+    return <span className={className} suppressHydrationWarning />
+  }
 
   const dateStr = now.toLocaleDateString('en-IN', {
     timeZone: IST,
