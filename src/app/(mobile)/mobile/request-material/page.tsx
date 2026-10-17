@@ -27,13 +27,37 @@ export default async function RequestMaterialPage({
       })
     : []
 
+  const customCatalogueItems = user.companyId
+    ? await prisma.companyCatalogueItem.findMany({
+        where: {
+          companyId: user.companyId,
+          isActive: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    : []
+
   const matchedSite = sites.find((s) => s.id === siteId) || sites[0]
 
   return (
     <MobileRequestMaterialClient
       sites={sites}
+      customCatalogueItems={customCatalogueItems.map((item) => ({
+        id: item.id,
+        category: item.category,
+        materialName: item.materialName,
+        variantId: item.variantId || item.id,
+        specification: item.specification,
+        brand: item.brand,
+        defaultUnit: item.defaultUnit,
+        allowedUnits: item.allowedUnits ? item.allowedUnits.split(',').map((u) => u.trim()) : [item.defaultUnit],
+        isDecimalAllowed: item.isDecimalAllowed,
+        packSize: item.packSize || undefined,
+        conversionNote: item.notes || undefined,
+      }))}
       defaultSiteId={matchedSite?.id}
       defaultSiteName={matchedSite?.name || 'Active Site'}
     />
   )
 }
+

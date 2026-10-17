@@ -6,7 +6,7 @@ import { getApprovalByIdAction } from '@/actions/approvals'
 import ApprovalDetailActions from '@/components/approvals/ApprovalDetailActions'
 import { hasPermission } from '@/lib/permissions'
 import type { Role } from '@prisma/client'
-import { ArrowLeft, Paperclip, MessageSquare, History } from 'lucide-react'
+import { ArrowLeft, Paperclip, MessageSquare, History, MapPin, Package } from 'lucide-react'
 
 export default async function ApprovalDetailPage({
   params,
@@ -107,6 +107,62 @@ export default async function ApprovalDetailPage({
                 </a>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Display Material Requisition Breakdown */}
+        {approval.entityType === 'MATERIAL_REQUEST' && (
+          <div className="mt-5 border-t border-slate-200 pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-extrabold m-0 uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <Package className="w-3.5 h-3.5 text-[#fc6e20]" /> Material Indent Specifications
+              </h4>
+              {approval.metadataJson && typeof approval.metadataJson === 'object' && 'workLocation' in approval.metadataJson && (approval.metadataJson as { workLocation?: string }).workLocation && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold">
+                  <MapPin className="w-3 h-3" /> {(approval.metadataJson as { workLocation?: string }).workLocation}
+                </span>
+              )}
+            </div>
+
+            {/* Check for items list in metadata */}
+            {approval.metadataJson && typeof approval.metadataJson === 'object' && 'items' in approval.metadataJson && Array.isArray((approval.metadataJson as { items?: unknown[] }).items) ? (
+              <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                      <th className="py-2.5 px-3">Item / Material</th>
+                      <th className="py-2.5 px-3">Specification / Grade</th>
+                      <th className="py-2.5 px-3">Brand</th>
+                      <th className="py-2.5 px-3 text-right">Indent Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {((approval.metadataJson as { items: Array<{ materialName: string; specification?: string; brand?: string; quantity: number; unit: string }> }).items).map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50">
+                        <td className="py-2.5 px-3 font-bold text-slate-900">{item.materialName}</td>
+                        <td className="py-2.5 px-3 font-medium text-slate-700">{item.specification || 'Standard'}</td>
+                        <td className="py-2.5 px-3 font-semibold text-sky-600">{item.brand || 'Any Approved'}</td>
+                        <td className="py-2.5 px-3 text-right font-extrabold text-[#ea580c]">{item.quantity} {item.unit}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              entityData && 'description' in entityData && (
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex justify-between items-center text-xs">
+                  <div>
+                    <div className="font-bold text-slate-900">{String(entityData.description)}</div>
+                    {'workLocation' in entityData && entityData.workLocation && (
+                      <div className="text-slate-500 mt-0.5">Location: {String(entityData.workLocation)}</div>
+                    )}
+                  </div>
+                  <div className="font-extrabold text-[#ea580c] text-sm">
+                    {'quantity' in entityData && String(entityData.quantity)} {'unit' in entityData && String(entityData.unit || 'Units')}
+                  </div>
+                </div>
+              )
+            )}
           </div>
         )}
       </div>

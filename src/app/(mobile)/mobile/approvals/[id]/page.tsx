@@ -6,7 +6,7 @@ import { getApprovalByIdAction } from '@/actions/approvals'
 import ApprovalDetailActions from '@/components/approvals/ApprovalDetailActions'
 import { hasPermission } from '@/lib/permissions'
 import type { Role } from '@prisma/client'
-import { ArrowLeft, Paperclip, MessageSquare, XCircle } from 'lucide-react'
+import { ArrowLeft, Paperclip, MessageSquare, XCircle, Package, MapPin, Tag } from 'lucide-react'
 
 export default async function MobileApprovalDetailPage({
   params,
@@ -112,6 +112,60 @@ export default async function MobileApprovalDetailPage({
                 </a>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Display Material Requisition Breakdown */}
+        {approval.entityType === 'MATERIAL_REQUEST' && (
+          <div className="mt-4 border-t border-gray-100 pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold tracking-wider uppercase text-gray-400 flex items-center gap-1.5">
+                <Package className="w-3.5 h-3.5 text-[#fc6e20]" />
+                Material Items
+              </span>
+              {approval.metadataJson && typeof approval.metadataJson === 'object' && 'workLocation' in approval.metadataJson && (approval.metadataJson as { workLocation?: string }).workLocation && (
+                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  {(approval.metadataJson as { workLocation?: string }).workLocation}
+                </span>
+              )}
+            </div>
+
+            {/* Check for items list in metadata */}
+            {approval.metadataJson && typeof approval.metadataJson === 'object' && 'items' in approval.metadataJson && Array.isArray((approval.metadataJson as { items?: unknown[] }).items) ? (
+              <div className="space-y-2">
+                {((approval.metadataJson as { items: Array<{ materialName: string; specification?: string; brand?: string; quantity: number; unit: string }> }).items).map((item, idx) => (
+                  <div key={idx} className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-black text-gray-900 truncate">{item.materialName}</div>
+                      {item.specification && (
+                        <div className="text-[11px] font-medium text-gray-500 truncate">{item.specification}</div>
+                      )}
+                      {item.brand && (
+                        <div className="text-[10.5px] font-bold text-sky-600 flex items-center gap-1 mt-0.5">
+                          <Tag className="w-2.5 h-2.5" />
+                          <span>Brand: {item.brand}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-xs font-black text-[#ea580c]">
+                        {item.quantity} {item.unit}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              entityData && 'description' in entityData && (
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
+                  <div className="text-xs font-bold text-gray-900">{String(entityData.description)}</div>
+                  <div className="text-xs font-black text-[#ea580c]">
+                    {'quantity' in entityData && String(entityData.quantity)} {'unit' in entityData && String(entityData.unit || 'Units')}
+                  </div>
+                </div>
+              )
+            )}
           </div>
         )}
       </div>

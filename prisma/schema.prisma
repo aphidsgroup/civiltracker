@@ -286,6 +286,7 @@ model Company {
   tasks                 Task[]
   boqitems              BOQItem[]
   reportExports         ReportExport[]
+  catalogueItems        CompanyCatalogueItem[]
 
   @@index([status])
 }
@@ -837,6 +838,17 @@ model PurchaseRequest {
   unit          String?
   status        PurchaseRequestStatus @default(PENDING)
   urgency       String                @default("Normal")
+  workLocation  String?
+  variantId     String?
+  brand         String?
+  specsJson     Json?
+  neededBy      DateTime?
+  approvedQty   Decimal?              @db.Decimal(14, 3)
+  orderedQty    Decimal?              @db.Decimal(14, 3)
+  receivedQty   Decimal?              @db.Decimal(14, 3)
+  issuedQty     Decimal?              @db.Decimal(14, 3)
+  batchId       String?
+  itemsJson     Json?
   notes         String?
   requestedById String?
   approvedById  String?
@@ -852,6 +864,35 @@ model PurchaseRequest {
   @@index([companyId])
   @@index([siteId])
   @@index([status])
+  @@index([variantId])
+  @@index([batchId])
+}
+
+model CompanyCatalogueItem {
+  id               String   @id @default(cuid())
+  companyId        String
+  category         String
+  materialName     String
+  variantId        String
+  specification    String
+  brand            String?
+  defaultUnit      String
+  allowedUnits     String?
+  isDecimalAllowed Boolean  @default(false)
+  packSize         String?
+  baseUnit         String?
+  conversionFactor Decimal? @db.Decimal(10, 4)
+  aliases          String?
+  notes            String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([category])
+  @@index([variantId])
 }
 
 model PurchaseOrder {

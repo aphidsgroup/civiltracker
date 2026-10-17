@@ -26,16 +26,24 @@ export default async function MaterialsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">Materials</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {materials.length} items · {lowStock > 0 ? <span className="text-amber-600 dark:text-amber-400 font-semibold">⚠️ {lowStock} low stock</span> : 'All stocked'}
           </p>
         </div>
-        <a href="/materials/new" className="bg-[#fc6e20] text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-[#e85b0d] transition-colors">
-          + Add Material
-        </a>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/materials/catalogue" className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg px-3.5 py-2 text-xs font-bold no-underline hover:bg-slate-200 transition-colors">
+            📖 Specification Catalogue
+          </Link>
+          <Link href="/materials/requests" className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg px-3.5 py-2 text-xs font-bold no-underline hover:bg-slate-200 transition-colors">
+            📋 Purchase Requests
+          </Link>
+          <a href="/materials/new" className="bg-[#fc6e20] text-white rounded-lg px-4 py-2 text-xs font-bold no-underline hover:bg-[#e85b0d] transition-colors">
+            + Add Stock Item
+          </a>
+        </div>
       </div>
 
       {/* Stats */}
