@@ -56,7 +56,7 @@ export default function MobileTabbar() {
     { label: 'Daily Report', href: '/mobile/dpr', bg: 'bg-[#e0e7ff]', text: 'text-[#4338ca]' },
     { label: 'Site Checklist', href: '/mobile/checklists', bg: 'bg-sky-50', text: 'text-sky-600' },
     { label: 'Material In', href: '/mobile/upload-bill?type=MATERIAL', bg: 'bg-[#d1fae5]', text: 'text-[#047857]' },
-    { label: 'Client Advance', href: '/mobile/add-client-advance', bg: 'bg-[#fef3c7]', text: 'text-[#b45309]' },
+    { label: 'Activity Log', href: '/mobile/activity', bg: 'bg-[#f1f5f9]', text: 'text-slate-700' },
     { label: 'Raise Issue', href: '/mobile/notifications', bg: 'bg-[#ffe4e6]', text: 'text-[#be123c]' },
   ]
 
