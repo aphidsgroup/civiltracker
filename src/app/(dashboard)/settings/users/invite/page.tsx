@@ -10,16 +10,31 @@ import ModuleAccessSelector from '@/components/ui/ModuleAccessSelector'
 async function createUser(formData: FormData) {
   'use server'
   const session = await auth()
-  if (!session?.user?.companyId) throw new Error('Unauthorized')
+  if (!session?.user) throw new Error('Unauthorized')
 
-  const companyId = session.user.companyId
-  const name = formData.get('name') as string
-  const email = formData.get('email') as string
-  const phone = formData.get('phone') as string
-  const password = formData.get('password') as string
+  let companyId = session.user.companyId
+  if (!companyId && session.user.role !== 'SUPER_ADMIN') {
+    const member = await prisma.companyMember.findFirst({
+      where: { userId: session.user.id, isActive: true },
+      select: { companyId: true },
+    })
+    companyId = member?.companyId
+  }
+  if (!companyId) throw new Error('Unauthorized: Company not found')
+
+  const rawName = (formData.get('name') as string) || ''
+  const rawEmail = (formData.get('email') as string) || ''
+  const rawPhone = (formData.get('phone') as string) || ''
+  const rawPassword = (formData.get('password') as string) || ''
   const role = formData.get('role') as Role
   const siteIds = formData.getAll('siteIds') as string[]
   const moduleControlsStr = formData.get('moduleControls') as string | null
+
+  const name = rawName.trim()
+  const email = rawEmail.trim().toLowerCase()
+  const phone = rawPhone.trim() || null
+  const password = rawPassword.trim()
+
   let moduleControls = null
   if (moduleControlsStr) {
     try { moduleControls = JSON.parse(moduleControlsStr) } catch {}
@@ -38,8 +53,10 @@ async function createUser(formData: FormData) {
     throw new Error('User limit reached. Please upgrade your plan.')
   }
 
-  // Check if email exists
-  const existing = await prisma.user.findUnique({ where: { email } })
+  // Check if email exists (case-insensitive)
+  const existing = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+  })
   if (existing) throw new Error('Email already in use')
 
   const passwordHash = await bcrypt.hash(password, 12)
@@ -105,8 +122,17 @@ const roleDescriptions: Record<string, { label: string; desc: string; access: st
 
 export default async function InviteUserPage() {
   const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  if (!session?.user) redirect('/login')
+
+  let companyId = session.user.companyId
+  if (!companyId && session.user.role !== 'SUPER_ADMIN') {
+    const member = await prisma.companyMember.findFirst({
+      where: { userId: session.user.id, isActive: true },
+      select: { companyId: true },
+    })
+    companyId = member?.companyId
+  }
+  if (!companyId) redirect('/login')
 
   const sites = await prisma.site.findMany({
     where: { companyId, deletedAt: null, status: 'ACTIVE' },

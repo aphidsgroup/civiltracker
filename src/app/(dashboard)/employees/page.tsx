@@ -27,8 +27,17 @@ const roleColors: Record<string, string> = {
 
 export default async function EmployeesPage() {
   const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
-  const { companyId } = session.user
+  if (!session?.user) redirect('/login')
+
+  let companyId = session.user.companyId
+  if (!companyId && session.user.role !== 'SUPER_ADMIN') {
+    const member = await prisma.companyMember.findFirst({
+      where: { userId: session.user.id, isActive: true },
+      select: { companyId: true },
+    })
+    companyId = member?.companyId
+  }
+  if (!companyId) redirect('/login')
 
   // Only show employee roles (not CLIENT)
   const employeeRoles = ['COMPANY_ADMIN', 'PROJECT_MANAGER', 'SITE_ENGINEER', 'SUPERVISOR', 'ACCOUNTANT', 'PURCHASE_MANAGER']

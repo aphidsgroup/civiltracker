@@ -9,8 +9,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const session = await auth()
   if (!session?.user) redirect('/login')
 
-  const companyId = session.user.companyId
-  const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : { companyId }
+  let companyId = session.user.companyId
+  if (!companyId && session.user.role !== 'SUPER_ADMIN') {
+    const member = await prisma.companyMember.findFirst({
+      where: { userId: session.user.id, isActive: true },
+      select: { companyId: true },
+    })
+    companyId = member?.companyId
+  }
+
+  const companyFilter = session.user.role === 'SUPER_ADMIN' ? {} : (companyId ? { companyId } : {})
 
   const [pendingApprovalsCount, company] = await Promise.all([
     prisma.approval.count({
@@ -22,6 +30,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }) : Promise.resolve(null),
   ])
 
+  const resolvedCompanyName = company?.name ?? session.user.companyName
+  const resolvedCompanyLogo = company?.logo ?? session.user.companyLogo
+
   return (
     <ResponsiveShell
       layoutClass="admin-layout"
@@ -29,18 +40,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <DashboardSidebar
           user={session.user}
           pendingApprovalsCount={pendingApprovalsCount}
-          companyName={company?.name}
+          companyName={resolvedCompanyName}
           companyPlan={company?.plan}
           companyCity={company?.city ?? undefined}
-          companyLogo={company?.logo}
+          companyLogo={resolvedCompanyLogo}
         />
       }
       topbar={
         <DashboardTopbar
           user={session.user}
           pendingApprovalsCount={pendingApprovalsCount}
-          companyName={company?.name}
-          companyLogo={company?.logo}
+          companyName={resolvedCompanyName}
+          companyLogo={resolvedCompanyLogo}
         />
       }
     >

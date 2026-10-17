@@ -24,7 +24,15 @@ const EMPLOYEE_ROLES: Role[] = [
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function createUser(data: any) {
   const currentUser = await requirePermission('company.manage')
-  const companyId = currentUser.companyId
+  let companyId = currentUser.companyId
+
+  if (!companyId && currentUser.role !== Role.SUPER_ADMIN) {
+    const member = await prisma.companyMember.findFirst({
+      where: { userId: currentUser.id, isActive: true },
+      select: { companyId: true },
+    })
+    companyId = member?.companyId
+  }
 
   if (!companyId) {
     throw new Error('User does not belong to a company')
@@ -64,18 +72,25 @@ export async function createUser(data: any) {
     }
   }
 
-  const existing = await prisma.user.findUnique({ where: { email: data.email } })
+  const cleanEmail = (data.email || '').trim().toLowerCase()
+  const cleanName = (data.name || '').trim()
+  const cleanPhone = (data.phone || '').trim() || null
+  const cleanPassword = (data.password || '').trim()
+
+  const existing = await prisma.user.findFirst({
+    where: { email: { equals: cleanEmail, mode: 'insensitive' } },
+  })
   if (existing) {
     throw new Error('A user with this email already exists.')
   }
 
-  const hash = await bcrypt.hash(data.password, 10)
+  const hash = await bcrypt.hash(cleanPassword, 10)
 
   const newUser = await prisma.user.create({
     data: {
-      email: data.email,
-      name: data.name,
-      phone: data.phone,
+      email: cleanEmail,
+      name: cleanName,
+      phone: cleanPhone,
       passwordHash: hash,
       role: data.role,
     },

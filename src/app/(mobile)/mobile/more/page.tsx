@@ -1,43 +1,89 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronRight, Grid, ShieldAlert } from 'lucide-react'
+import { ChevronRight, Grid } from 'lucide-react'
+import { prisma } from '@/lib/prisma'
 
 export default async function MobileMorePage() {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
+  let companyName = session.user.companyName
+  let companyLogo = session.user.companyLogo
+
+  let companyId = session.user.companyId
+  if ((!companyName || !companyLogo) && !companyId && session.user.role !== 'SUPER_ADMIN') {
+    const member = await prisma.companyMember.findFirst({
+      where: { userId: session.user.id, isActive: true },
+      select: { companyId: true, company: { select: { name: true, logo: true } } }
+    })
+    companyId = member?.companyId
+    companyName = member?.company?.name ?? companyName
+    companyLogo = member?.company?.logo ?? companyLogo
+  } else if ((!companyName || !companyLogo) && companyId) {
+    const comp = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { name: true, logo: true }
+    })
+    companyName = comp?.name ?? companyName
+    companyLogo = comp?.logo ?? companyLogo
+  }
+
   const isSiteEngineer = session.user.role === 'SITE_ENGINEER' || session.user.role === 'SUPERVISOR'
 
   const sections = [
     { title: 'Field Input & Finance', items: [
-      { href: '/mobile/approvals', label: 'Bill Approvals & Vouchers', icon: '\u{1F9FE}', hideForEng: true },
-      { href: '/mobile/add-expense', label: 'Site Expenses & Petty Cash', icon: '\u{1F4B3}' },
-      { href: '/mobile/upload-bill', label: 'Upload Challan / Invoice', icon: '\u{1F4C4}' },
+      { href: '/mobile/approvals', label: 'Bill Approvals & Vouchers', icon: '🧾', hideForEng: true },
+      { href: '/mobile/add-expense', label: 'Site Expenses & Petty Cash', icon: '💳' },
+      { href: '/mobile/upload-bill', label: 'Upload Challan / Invoice', icon: '📄' },
     ]},
     { title: 'Site Operations', items: [
-      { href: '/mobile/sites', label: isSiteEngineer ? 'My Assigned Projects' : 'All Project Sites', icon: '\u{1F3D7}\uFE0F' },
-      { href: '/mobile/attendance', label: 'Labour Muster Roll & Advances', icon: '\u{1F477}' },
-      { href: '/mobile/dpr', label: 'Daily Progress Reports (DPR)', icon: '\u{1F4DD}' },
-      { href: '/mobile/site-photo', label: 'Site Camera Gallery', icon: '\u{1F4F8}' },
+      { href: '/mobile/sites', label: isSiteEngineer ? 'My Assigned Projects' : 'All Project Sites', icon: '🏗️' },
+      { href: '/mobile/attendance', label: 'Labour Muster Roll & Advances', icon: '👷' },
+      { href: '/mobile/dpr', label: 'Daily Progress Reports (DPR)', icon: '📝' },
+      { href: '/mobile/site-photo', label: 'Site Camera Gallery', icon: '📸' },
     ]},
     { title: 'System & Preferences', items: [
-      { href: '/dashboard', label: 'Launch Desktop Dashboard', icon: '\u{1F4BB}' },
-      { href: '/mobile/profile', label: 'My ID & Shift Profile', icon: '\u{1F464}' },
+      { href: '/dashboard', label: 'Launch Desktop Dashboard', icon: '💻' },
+      { href: '/mobile/profile', label: 'My ID & Shift Profile', icon: '👤' },
     ]},
   ]
 
   return (
     <div className="p-4 pb-28 max-w-lg mx-auto bg-slate-50 min-h-screen select-none">
-      <div className="flex items-center justify-between mb-5 pt-2">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2.5 bg-[#fc6e20] text-white rounded-2xl shadow-md shadow-blue-600/20">
-            <Grid className="w-5 h-5" />
+      {/* Company Identity Card */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm mb-5 flex items-center gap-3.5">
+        {companyLogo ? (
+          <img
+            src={companyLogo}
+            alt={companyName ?? 'Company'}
+            className="w-12 h-12 rounded-xl object-contain bg-slate-50 p-1 border border-slate-200 shrink-0"
+          />
+        ) : (
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-[#fc6e20] to-amber-500 text-white font-black text-base flex items-center justify-center shadow-sm shrink-0">
+            {(companyName ?? session.user.name ?? 'CT').substring(0, 2).toUpperCase()}
           </div>
-          <div>
-            <h1 className="text-xl font-black text-slate-900 m-0">Operations Menu</h1>
-            <p className="text-xs text-slate-400 font-medium m-0">{session.user.role || 'Field Portal'}</p>
+        )}
+        <div className="min-w-0 flex-1">
+          <h2 className="text-base font-extrabold text-slate-900 truncate m-0">
+            {companyName ?? 'Civil Tracker'}
+          </h2>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-xs text-[#fc6e20] font-bold uppercase tracking-wider">
+              {session.user.role?.replace(/_/g, ' ')}
+            </span>
+            <span className="text-slate-300">·</span>
+            <span className="text-xs text-slate-500 font-medium truncate">
+              {session.user.name ?? session.user.email}
+            </span>
           </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 text-slate-600">
+          <Grid className="w-4 h-4 text-[#fc6e20]" />
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Operations Menu</span>
         </div>
       </div>
 

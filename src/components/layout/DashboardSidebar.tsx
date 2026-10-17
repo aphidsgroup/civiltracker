@@ -59,42 +59,61 @@ export default function DashboardSidebar({
 }) {
   const pathname = usePathname()
   const activeLogo = companyLogo ?? user.companyLogo
+  const activeCompanyName = companyName ?? user.companyName
 
   return (
     <div className="w-[250px] flex-shrink-0 flex flex-col h-full bg-gradient-to-b from-[#0c2640] to-[#0a2138] text-[#cdd9e6]">
-      {/* Brand */}
-      <div className="flex h-[72px] shrink-0 items-center gap-3 px-6 border-b border-white/[0.08]">
-        <div className="w-10 h-10 rounded-full overflow-hidden shadow-md shadow-[#fc6e20]/30 shrink-0">
-          <img src="/icons/icon-192.png" alt="Buildogram Logo" className="w-full h-full object-cover" />
-        </div>
-        <div className="flex flex-col justify-center">
-          <span className="font-black text-[18px] text-white tracking-tighter uppercase leading-none">Civil Tracker</span>
-          <div className="flex justify-end w-full">
-            <span className="font-bold text-[8.5px] text-[#fc6e20] uppercase tracking-widest leading-none mt-0.5">by Buildogram</span>
-          </div>
-        </div>
+      {/* Brand Header */}
+      <div className="flex h-[72px] shrink-0 items-center gap-3 px-4 border-b border-white/[0.08]">
+        {activeCompanyName ? (
+          <>
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md shrink-0 flex items-center justify-center bg-white border border-white/20">
+              {activeLogo ? (
+                <img
+                  src={activeLogo}
+                  alt={activeCompanyName}
+                  className="w-full h-full object-contain p-1"
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-tr from-[#fc6e20] to-amber-500 text-white font-black text-sm flex items-center justify-center">
+                  {activeCompanyName.substring(0, 2).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col justify-center min-w-0 flex-1">
+              <span className="font-extrabold text-[15px] text-white tracking-tight truncate leading-tight" title={activeCompanyName}>
+                {activeCompanyName}
+              </span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="font-bold text-[9px] text-[#fc6e20] uppercase tracking-wider leading-none">
+                  Civil Tracker
+                </span>
+                {companyCity && (
+                  <span className="text-[9.5px] text-white/50 truncate">· {companyCity}</span>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="w-10 h-10 rounded-full overflow-hidden shadow-md shadow-[#fc6e20]/30 shrink-0">
+              <img src="/icons/icon-192.png" alt="Civil Tracker Logo" className="w-full h-full object-cover" />
+            </div>
+            <div className="flex flex-col justify-center">
+              <span className="font-black text-[18px] text-white tracking-tighter uppercase leading-none">Civil Tracker</span>
+              <div className="flex justify-end w-full">
+                <span className="font-bold text-[8.5px] text-[#fc6e20] uppercase tracking-widest leading-none mt-0.5">by Buildogram</span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Company pill */}
-      {companyName && (
-        <div className="flex items-center gap-2.5 mx-3.5 mt-5 mb-2 px-2.5 py-2 bg-white/[0.07] border border-white/[0.09] rounded-[12px]">
-          {activeLogo ? (
-            <img
-              src={activeLogo}
-              alt={companyName}
-              className="w-[32px] h-[32px] rounded-[8px] object-contain bg-white p-0.5 flex-shrink-0 shadow-sm border border-white/20"
-            />
-          ) : (
-            <div className="w-[30px] h-[30px] rounded-[8px] bg-[#f3b43a] text-[#3a2a05] font-extrabold text-[11px] flex items-center justify-center flex-shrink-0">
-              {companyName.substring(0, 2).toUpperCase()}
-            </div>
-          )}
-          <div className="min-w-0">
-            <div className="text-[13px] font-bold text-white truncate">{companyName}</div>
-            <div className="text-[10.5px] text-white/55 mt-0.5">
-              {companyPlan?.replace(/_/g, ' ')}{companyCity ? ` · ${companyCity}` : ''}
-            </div>
-          </div>
+      {/* Workspace Plan Strip */}
+      {activeCompanyName && companyPlan && (
+        <div className="mx-3.5 mt-3 mb-1 px-3 py-1.5 bg-white/[0.05] border border-white/[0.08] rounded-[10px] flex items-center justify-between">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-white/60">WORKSPACE</span>
+          <span className="text-[10.5px] font-bold text-[#fc6e20] tracking-wide">{companyPlan.replace(/_/g, ' ')}</span>
         </div>
       )}
 

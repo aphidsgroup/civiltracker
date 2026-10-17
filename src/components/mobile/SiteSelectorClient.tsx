@@ -13,10 +13,14 @@ type Site = {
 
 export default function SiteSelectorClient({
   activeSite,
-  allSites
+  allSites,
+  companyName,
+  companyLogo,
 }: {
   activeSite: Site | null
   allSites: Site[]
+  companyName?: string | null
+  companyLogo?: string | null
 }) {
   const [open, setOpen] = useState(false)
   const router = useRouter()
@@ -26,26 +30,31 @@ export default function SiteSelectorClient({
     router.push(`/mobile/home?siteId=${siteId}`)
   }
 
+  const displayLogo = activeSite?.companyLogo || companyLogo
+  const displayCompanyName = activeSite?.companyName || companyName || 'Company'
+
   return (
     <div className="relative">
       <button 
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2.5 bg-white px-3 py-2 rounded-[14px] border border-slate-200/60 shadow-sm max-w-[220px] active:scale-[0.98] transition-transform text-left"
       >
-        {activeSite?.companyLogo ? (
+        {displayLogo ? (
           <img
-            src={activeSite.companyLogo}
-            alt={activeSite.companyName}
+            src={displayLogo}
+            alt={displayCompanyName}
             className="w-7 h-7 rounded-[8px] object-contain bg-white border border-slate-200 p-0.5 flex-shrink-0 shadow-xs"
           />
         ) : (
-          <div className="w-7 h-7 rounded-[8px] bg-[#fc6e20] flex items-center justify-center flex-shrink-0 text-white">
-            <Building2 size={14} />
+          <div className="w-7 h-7 rounded-[8px] bg-[#fc6e20] flex items-center justify-center flex-shrink-0 text-white font-bold text-xs">
+            {displayCompanyName.substring(0, 2).toUpperCase()}
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-bold text-slate-900 truncate">{activeSite?.name ?? 'Select Site'}</div>
-          <div className="text-[10px] text-slate-500 font-medium truncate">{activeSite?.companyName ?? 'Company'}</div>
+          <div className="text-[13px] font-bold text-slate-900 truncate">
+            {activeSite?.name ?? (allSites.length === 0 ? 'No Active Sites' : 'Select Project')}
+          </div>
+          <div className="text-[10px] text-slate-500 font-semibold truncate">{displayCompanyName}</div>
         </div>
         <ChevronDown size={14} className="text-slate-400 flex-shrink-0" />
       </button>
@@ -55,7 +64,7 @@ export default function SiteSelectorClient({
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute top-full left-0 mt-2 w-[240px] bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden py-1 animate-in slide-in-from-top-2 duration-200">
             <div className="px-3 py-2 border-b border-slate-100 bg-slate-50">
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Switch Project</div>
+              <div className="text-xs font-bold text-slate-600 uppercase tracking-wider">{displayCompanyName} Projects</div>
             </div>
             <div className="max-h-[300px] overflow-y-auto">
               {allSites.length === 0 ? (

@@ -7,14 +7,23 @@ import { User, Mail, Shield, Building2, Clock, HelpCircle, LogOut, ChevronRight,
 export default async function MobileProfilePage() {
   const user = await requireUser()
 
-  const company = user.companyId
+  let company = user.companyId
     ? await prisma.company.findUnique({
         where: { id: user.companyId },
         select: { name: true, logo: true },
       })
     : null
 
+  if (!company && user.role !== 'SUPER_ADMIN') {
+    const member = await prisma.companyMember.findFirst({
+      where: { userId: user.id, isActive: true },
+      include: { company: { select: { name: true, logo: true } } },
+    })
+    company = member?.company ?? null
+  }
+
   const companyName = company?.name || user.companyName || 'Independent Workspace'
+  const companyLogo = company?.logo || user.companyLogo
 
   async function handleSignOut() {
     'use server'
@@ -70,9 +79,9 @@ export default async function MobileProfilePage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {company?.logo ? (
+            {companyLogo ? (
               <img
-                src={company.logo}
+                src={companyLogo}
                 alt={companyName}
                 className="w-7 h-7 rounded-lg object-contain bg-white p-0.5 border border-white/20 shadow-xs shrink-0"
               />

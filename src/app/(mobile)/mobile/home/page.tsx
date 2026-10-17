@@ -33,8 +33,15 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
   todayEnd.setHours(23, 59, 59, 999)
 
   const member = await prisma.companyMember.findFirst({
-    where: { userId, companyId },
+    where: { userId, ...(companyId ? { companyId } : {}) },
+    include: { company: true },
   })
+  const effectiveCompany = member?.company || (companyId ? await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { name: true, logo: true, city: true }
+  }) : null)
+  const companyName = effectiveCompany?.name || session?.user?.companyName || 'Civil Tracker'
+  const companyLogo = effectiveCompany?.logo || session?.user?.companyLogo || null
   const siteIds = member?.siteIds ?? []
 
   const resolvedParams = await searchParams
@@ -144,7 +151,12 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
     <div className="space-y-6 p-4 sm:p-6 select-none bg-[#f8fafc] min-h-screen">
       {/* Top Sticky Appbar */}
       <div className="flex items-center justify-between sticky top-0 z-30 bg-[#f8fafc]/95 backdrop-blur-md py-2 -mx-4 px-4 sm:-mx-6 sm:px-6">
-        <SiteSelectorClient activeSite={activeSite} allSites={allSites} />
+        <SiteSelectorClient
+          activeSite={activeSite}
+          allSites={allSites}
+          companyName={companyName}
+          companyLogo={companyLogo}
+        />
 
         <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 text-[11px] font-bold px-3 py-1.5 rounded-full border border-emerald-100">
@@ -172,8 +184,16 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
           <h1 className="text-[22px] font-extrabold text-slate-900 tracking-tight m-0">
             {getGreeting()}, {firstName}
           </h1>
-          <p className="text-[12px] font-medium text-slate-500 m-0">
-            {roleTitle} {activeSite?.name ? `· ${activeSite.name}` : ''}
+          <p className="text-[12px] font-semibold text-slate-600 m-0 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[#fc6e20] font-extrabold">{companyName}</span>
+            <span className="text-slate-300">·</span>
+            <span className="text-slate-700">{roleTitle}</span>
+            {activeSite?.name && (
+              <>
+                <span className="text-slate-300">·</span>
+                <span className="text-slate-500 font-medium">{activeSite.name}</span>
+              </>
+            )}
           </p>
         </div>
         <div className="text-right text-[11px] font-bold text-slate-400 whitespace-nowrap leading-tight">

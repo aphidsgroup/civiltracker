@@ -19,6 +19,7 @@ export default function DashboardTopbar({
 }) {
   const pathname = usePathname()
   const activeLogo = companyLogo ?? user.companyLogo
+  const activeCompanyName = companyName ?? user.companyName
 
   const getPageInfo = () => {
     if (pathname.includes('/sites/new')) return { title: 'New Site', crumb: 'Add a construction site' }
@@ -55,19 +56,25 @@ export default function DashboardTopbar({
       </button>
 
       <div className="flex-1 min-w-0 flex items-center gap-3">
-        {activeLogo && (
+        {activeLogo ? (
           <img
             src={activeLogo}
-            alt={companyName ?? 'Company Logo'}
-            className="w-9 h-9 rounded-lg object-contain bg-white border border-[#e4eaf0] p-1 shadow-xs hidden sm:block shrink-0"
+            alt={activeCompanyName ?? 'Company Logo'}
+            className="w-9 h-9 rounded-lg object-contain bg-white border border-[#e4eaf0] p-1 shadow-xs shrink-0"
           />
-        )}
+        ) : activeCompanyName ? (
+          <div className="w-9 h-9 rounded-lg bg-[#fc6e20]/10 text-[#fc6e20] font-black text-xs flex items-center justify-center border border-[#fc6e20]/20 shrink-0">
+            {activeCompanyName.substring(0, 2).toUpperCase()}
+          </div>
+        ) : null}
         <div className="min-w-0">
           <div className="text-[17px] md:text-[19px] font-extrabold text-[#16273a] tracking-[-0.02em] truncate">{title}</div>
           <div className="text-[11px] md:text-[12px] text-[#647387] font-semibold mt-0.5 truncate">
             {showClock ? (
-              <><span>{companyName ?? 'Company'} · </span><LiveClock showTime={true} showDate={true} /></>
-            ) : crumb}
+              <><span>{activeCompanyName ?? 'Company'} · </span><LiveClock showTime={true} showDate={true} /></>
+            ) : (
+              <span>{activeCompanyName ? `${activeCompanyName} · ` : ''}{crumb}</span>
+            )}
           </div>
         </div>
       </div>
