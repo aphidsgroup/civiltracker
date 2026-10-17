@@ -5,7 +5,7 @@ import { hasPermission } from '@/lib/permissions'
 import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { logActivity } from '@/lib/audit'
-import type { ApprovalEntityType, ApprovalPriority, ApprovalStatus } from '@prisma/client'
+import type { ApprovalEntityType, ApprovalPriority, ApprovalStatus, PurchaseRequestStatus } from '@prisma/client'
 
 export async function createApprovalAction(data: {
   siteId?: string | null
@@ -144,9 +144,13 @@ export async function getApprovalByIdAction(id: string) {
       where: { id: approval.entityId },
     })
   } else if (approval.entityType === 'MATERIAL_REQUEST') {
-    entityData = await prisma.material.findUnique({
+    const pr = await prisma.purchaseRequest.findUnique({
       where: { id: approval.entityId },
+      include: { material: true, site: true },
     })
+    entityData = pr || (await prisma.material.findUnique({
+      where: { id: approval.entityId },
+    }))
   } else if (approval.entityType === 'SALARY_RUN') {
     entityData = await prisma.salaryRun.findUnique({
       where: { id: approval.entityId },
@@ -245,6 +249,11 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
         await syncSiteBudget(exp.siteId)
       }
     }
+  } else if (approval.entityType === 'MATERIAL_REQUEST') {
+    await prisma.purchaseRequest.updateMany({
+      where: { id: approval.entityId },
+      data: { status: 'PM_APPROVED', approvedById: user.id, approvedAt: new Date() },
+    })
   } else if (approval.entityType === 'SALARY_RUN') {
     await prisma.salaryRun.updateMany({
       where: { id: approval.entityId },
@@ -256,6 +265,8 @@ export async function approveApprovalAction(id: string, note?: string, confirmat
   revalidatePath(`/approvals/${id}`)
   revalidatePath('/mobile/approvals')
   revalidatePath(`/mobile/approvals/${id}`)
+  revalidatePath('/mobile/home')
+  revalidatePath('/dashboard')
   return updated
 }
 
@@ -311,12 +322,19 @@ export async function rejectApprovalAction(id: string, reason: string) {
       where: { id: approval.entityId },
       data: { approvalStatus: 'REJECTED', rejectedById: user.id, rejectedAt: new Date(), rejectionNote: reason },
     })
+  } else if (approval.entityType === 'MATERIAL_REQUEST') {
+    await prisma.purchaseRequest.updateMany({
+      where: { id: approval.entityId },
+      data: { status: 'CANCELLED', notes: reason },
+    })
   }
 
   revalidatePath('/approvals')
   revalidatePath(`/approvals/${id}`)
   revalidatePath('/mobile/approvals')
   revalidatePath(`/mobile/approvals/${id}`)
+  revalidatePath('/mobile/home')
+  revalidatePath('/dashboard')
   return updated
 }
 
@@ -370,6 +388,11 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
       where: { id: approval.entityId },
       data: { approvalStatus: 'PAID' },
     })
+  } else if (approval.entityType === 'MATERIAL_REQUEST') {
+    await prisma.purchaseRequest.updateMany({
+      where: { id: approval.entityId },
+      data: { status: 'PO_CREATED' },
+    })
   } else if (approval.entityType === 'SALARY_RUN') {
     await prisma.salaryRun.updateMany({
       where: { id: approval.entityId },
@@ -381,6 +404,8 @@ export async function markApprovalPaidAction(id: string, paymentData?: { mode?: 
   revalidatePath(`/approvals/${id}`)
   revalidatePath('/mobile/approvals')
   revalidatePath(`/mobile/approvals/${id}`)
+  revalidatePath('/mobile/home')
+  revalidatePath('/dashboard')
   return updated
 }
 
@@ -436,3 +461,128 @@ export async function getApprovalStatsAction() {
     pendingAmount: pendingAmountAgg._sum.amount ? Number(pendingAmountAgg._sum.amount) : 0,
   }
 }
+
+export async function updateApprovalStatusAction(
+  id: string,
+  newStatus: ApprovalStatus,
+  note?: string,
+  paymentData?: { mode?: string; ref?: string; note?: string }
+) {
+  const user = await requireUser()
+  const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
+  const approval = await prisma.approval.findFirst({ where: { id, ...companyFilter } })
+  if (!approval) throw new Error('Approval not found or access denied')
+
+  if (!verifyCanApproveEntity(user.role, approval.entityType)) {
+    throw new Error(`Forbidden: Role ${user.role} is not authorized to update status of ${approval.entityType}`)
+  }
+
+  const updateData: Record<string, unknown> = {
+    currentStatus: newStatus,
+  }
+
+  if (newStatus === 'APPROVED') {
+    updateData.approvedById = user.id
+    updateData.approvedAt = new Date()
+    updateData.rejectedById = null
+    updateData.rejectedAt = null
+    updateData.rejectionReason = null
+  } else if (newStatus === 'REJECTED') {
+    updateData.rejectedById = user.id
+    updateData.rejectedAt = new Date()
+    updateData.rejectionReason = note || 'Rejected by administrator'
+  } else if (newStatus === 'PAID') {
+    updateData.closedAt = new Date()
+  } else if (newStatus === 'PENDING') {
+    updateData.approvedById = null
+    updateData.approvedAt = null
+    updateData.rejectedById = null
+    updateData.rejectedAt = null
+    updateData.rejectionReason = null
+    updateData.closedAt = null
+  }
+
+  const updated = await prisma.approval.update({
+    where: { id },
+    data: updateData,
+  })
+
+  await prisma.approvalTimeline.create({
+    data: {
+      companyId: approval.companyId,
+      approvalId: id,
+      actorUserId: user.id,
+      action: newStatus,
+      fromStatus: approval.currentStatus,
+      toStatus: newStatus,
+      note: note || `Status changed to ${newStatus} by ${user.name || user.email}`,
+      metadataJson: paymentData || {},
+    },
+  })
+
+  await logActivity({
+    userId: user.id,
+    companyId: approval.companyId,
+    action: newStatus,
+    module: approval.entityType,
+    recordId: approval.entityId,
+    description: `${user.name ?? user.email} updated ${approval.entityType.toLowerCase().replace(/_/g, ' ')} status to ${newStatus}`,
+    before: { status: approval.currentStatus },
+    after: { status: newStatus, note },
+  })
+
+  // Sync underlying models
+  if (approval.entityType === 'EXPENSE' || approval.entityType === 'BILL') {
+    const expenseStatusMap: Record<string, 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAID'> = {
+      PENDING: 'PENDING',
+      APPROVED: 'APPROVED',
+      REJECTED: 'REJECTED',
+      PAID: 'PAID',
+    }
+    const targetStatus = expenseStatusMap[newStatus] || 'PENDING'
+    await prisma.expense.updateMany({
+      where: { id: approval.entityId },
+      data: {
+        approvalStatus: targetStatus,
+        ...(newStatus === 'APPROVED' ? { approvedById: user.id, approvedAt: new Date() } : {}),
+        ...(newStatus === 'REJECTED' ? { rejectedById: user.id, rejectedAt: new Date(), rejectionNote: note || 'Rejected' } : {}),
+      },
+    })
+    if (newStatus === 'APPROVED' || newStatus === 'PAID') {
+      const exp = await prisma.expense.findUnique({ where: { id: approval.entityId }, select: { siteId: true } })
+      if (exp?.siteId) {
+        const { syncSiteBudget } = await import('@/lib/budget')
+        await syncSiteBudget(exp.siteId)
+      }
+    }
+  } else if (approval.entityType === 'MATERIAL_REQUEST') {
+    let prStatus: PurchaseRequestStatus = 'PENDING'
+    if (newStatus === 'APPROVED') prStatus = 'PM_APPROVED'
+    else if (newStatus === 'REJECTED') prStatus = 'CANCELLED'
+    else if (newStatus === 'PAID') prStatus = 'PO_CREATED'
+    else if (newStatus === 'PENDING') prStatus = 'PENDING'
+
+    await prisma.purchaseRequest.updateMany({
+      where: { id: approval.entityId },
+      data: {
+        status: prStatus,
+        ...(newStatus === 'APPROVED' ? { approvedById: user.id, approvedAt: new Date() } : {}),
+        ...(newStatus === 'REJECTED' && note ? { notes: note } : {}),
+      },
+    })
+  } else if (approval.entityType === 'SALARY_RUN') {
+    await prisma.salaryRun.updateMany({
+      where: { id: approval.entityId },
+      data: { status: newStatus === 'PAID' ? 'PAID' : newStatus === 'APPROVED' ? 'APPROVED' : 'SUBMITTED' },
+    })
+  }
+
+  revalidatePath('/approvals')
+  revalidatePath(`/approvals/${id}`)
+  revalidatePath('/mobile/approvals')
+  revalidatePath(`/mobile/approvals/${id}`)
+  revalidatePath('/mobile/home')
+  revalidatePath('/dashboard')
+  return updated
+}
+

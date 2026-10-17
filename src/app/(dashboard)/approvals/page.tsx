@@ -197,9 +197,12 @@ export default async function ApprovalsPage({
                     </div>
                   ),
                   statusNode: (
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${statusColors[app.currentStatus] ?? 'bg-slate-100 text-slate-700'}`}>
-                      {app.currentStatus}
-                    </span>
+                    <ApprovalInlineActions
+                      approvalId={app.id}
+                      status={app.currentStatus}
+                      canApprove={canApprove}
+                      canPay={canPay}
+                    />
                   ),
                 }))}
               />

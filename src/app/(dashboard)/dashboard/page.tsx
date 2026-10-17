@@ -6,6 +6,7 @@ import {
   Building2, DollarSign, Clock, Users, Wallet, CreditCard,
   Plus, Upload, Receipt, CheckSquare, FileText, BarChart3, TrendingUp, AlertCircle, Truck, Package
 } from 'lucide-react'
+import ApprovalStatusDropdown from '@/components/approvals/ApprovalStatusDropdown'
 
 function formatTimeAgo(d: Date, now: Date) {
   const diff = now.getTime() - new Date(d).getTime()
@@ -34,10 +35,15 @@ async function getCachedDashboardData(companyId: string) {
     prisma.site.count({ where: { companyId, deletedAt: null, status: 'ACTIVE' } }),
     // Expense queries scoped to non-deleted sites via siteId filter
     prisma.expense.aggregate({ where: { companyId, deletedAt: null, siteId: { in: siteIds }, createdAt: { gte: today, lte: todayEnd } }, _sum: { amount: true } }),
-    prisma.expense.aggregate({ where: { companyId, deletedAt: null, siteId: { in: siteIds }, approvalStatus: 'PENDING' }, _sum: { amount: true }, _count: true }),
+    prisma.approval.aggregate({ where: { companyId, deletedAt: null, currentStatus: { in: ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'] } }, _sum: { amount: true }, _count: true }),
     prisma.labour.count({ where: { companyId, isActive: true, siteId: { in: siteIds } } }),
     prisma.labourAttendance.count({ where: { siteId: { in: siteIds }, date: { gte: today, lte: todayEnd }, status: 'PRESENT' } }),
-    prisma.expense.findMany({ where: { companyId, deletedAt: null, siteId: { in: siteIds }, approvalStatus: 'PENDING' }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, category: true, site: { select: { name: true } }, createdAt: true } }),
+    prisma.approval.findMany({
+      where: { companyId, deletedAt: null, currentStatus: { in: ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'] } },
+      orderBy: { submittedAt: 'desc' },
+      take: 5,
+      include: { site: { select: { name: true } }, requestedBy: { select: { name: true } } },
+    }),
     prisma.expense.findMany({ where: { companyId, deletedAt: null, siteId: { in: siteIds } }, orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, description: true, amount: true, paidTo: true, approvalStatus: true, category: true, createdAt: true, site: { select: { name: true } } } }),
     prisma.site.findMany({ where: { companyId, deletedAt: null, status: 'ACTIVE' }, orderBy: { spent: 'desc' }, take: 5 }),
     prisma.salaryRun.aggregate({ where: { companyId, status: 'APPROVED', OR: [{ siteId: null }, { siteId: { in: siteIds } }] }, _sum: { totalNet: true } }),
@@ -60,7 +66,7 @@ export default async function CompanyDashboard() {
 
   const [
     activeSitesCount, todayExpenseAgg, pendingExpenses,
-    totalLabour, todayAttendance, recentPendingExpenses, recentExpenses, sites,
+    totalLabour, todayAttendance, recentPendingApprovals, recentExpenses, sites,
     salaryDueAgg, invoicesDueAgg, vendorCount, subCount, materialCount, allAttendance,
     vendorAgg, subAgg
   ] = await getCachedDashboardData(companyId)
@@ -248,18 +254,35 @@ export default async function CompanyDashboard() {
               <Link href="/approvals" className="text-[12.5px] font-bold text-[#fc6e20] no-underline">Open</Link>
             </div>
             <div>
-              {recentPendingExpenses.length === 0 ? (
+              {recentPendingApprovals.length === 0 ? (
                 <div className="py-6 text-center text-[#647387] text-[13px]">No pending items</div>
-              ) : recentPendingExpenses.map(e => (
-                <div key={e.id} className="flex items-center gap-3 px-4 py-3 border-b border-[#e4eaf0] last:border-0">
-                  <div className="w-9 h-9 rounded-[10px] bg-[#fff3e0] text-[#e07a1f] text-[11px] font-extrabold flex items-center justify-center flex-shrink-0">
-                    {(e.category ?? 'EX').substring(0, 2)}
+              ) : recentPendingApprovals.map(e => (
+                <div key={e.id} className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[#e4eaf0] last:border-0 hover:bg-slate-50/50 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-9 h-9 rounded-[10px] text-[11px] font-extrabold flex items-center justify-center flex-shrink-0 ${
+                      e.entityType === 'MATERIAL_REQUEST' ? 'bg-[#e0f2fe] text-[#0284c7]' : 'bg-[#fff3e0] text-[#e07a1f]'
+                    }`}>
+                      {e.entityType === 'MATERIAL_REQUEST' ? 'MR' : 'PC'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-bold text-[#16273a] truncate">{e.title}</div>
+                      <div className="text-[11px] text-[#647387] font-semibold mt-0.5 truncate">
+                        {e.requestedBy?.name || 'Engineer'} · {e.site?.name || 'Site'}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-bold text-[#16273a] truncate">{e.description}</div>
-                    <div className="text-[11px] text-[#647387] font-semibold mt-0.5 truncate">{e.paidTo ?? e.site?.name ?? '—'} · {e.site?.name}</div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {e.amount && (
+                      <div className="text-[12.5px] font-bold text-[#16273a] tabular hidden sm:inline">
+                        {fmtAmt(Number(e.amount))}
+                      </div>
+                    )}
+                    <ApprovalStatusDropdown
+                      approvalId={e.id}
+                      currentStatus={e.currentStatus}
+                      size="sm"
+                    />
                   </div>
-                  <div className="text-[13px] font-bold text-[#16273a] tabular flex-shrink-0">{fmtAmt(Number(e.amount))}</div>
                 </div>
               ))}
             </div>

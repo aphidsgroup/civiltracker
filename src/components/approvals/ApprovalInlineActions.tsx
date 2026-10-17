@@ -1,11 +1,7 @@
 'use client'
 
-import React, { useTransition } from 'react'
-import { approveApprovalAction, rejectApprovalAction, markApprovalPaidAction } from '@/actions/approvals'
-import { CheckCircle2, XCircle, Banknote } from 'lucide-react'
-
-const APPROVE_CONFIRM_TEXT = 'APPROVE'
-const PAID_CONFIRM_TEXT = 'PAID'
+import React from 'react'
+import ApprovalStatusDropdown from './ApprovalStatusDropdown'
 
 export default function ApprovalInlineActions({
   approvalId,
@@ -18,84 +14,19 @@ export default function ApprovalInlineActions({
   canApprove: boolean
   canPay: boolean
 }) {
-  const [isPending, startTransition] = useTransition()
+  const isAuthorized = canApprove || canPay
 
-  const isAwaitingApproval = ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'].includes(status)
-  const isApproved = status === 'APPROVED'
-
-  const handleApprove = () => {
-    const typed = window.prompt(`Type "${APPROVE_CONFIRM_TEXT}" to approve this request.`)
-    if (typed === null) return
-    startTransition(async () => {
-      try {
-        await approveApprovalAction(approvalId, undefined, typed)
-      } catch (err: unknown) {
-        alert((err as Error)?.message || 'Failed to approve')
-      }
-    })
-  }
-
-  const handleReject = () => {
-    const reason = prompt('Please enter a mandatory reason for rejecting this request:')
-    if (reason === null) return // cancelled
-    if (reason.trim().length < 3) {
-      alert('A valid reason (min 3 chars) is required to reject.')
-      return
-    }
-    startTransition(async () => {
-      try {
-        await rejectApprovalAction(approvalId, reason.trim())
-      } catch (err: unknown) {
-        alert((err as Error)?.message || 'Failed to reject')
-      }
-    })
-  }
-
-  const handleMarkPaid = () => {
-    const typed = window.prompt(`Type "${PAID_CONFIRM_TEXT}" to confirm disbursement of funds.`)
-    if (typed === null) return
-    startTransition(async () => {
-      try {
-        await markApprovalPaidAction(approvalId, undefined, typed)
-      } catch (err: unknown) {
-        alert((err as Error)?.message || 'Failed to mark paid')
-      }
-    })
+  if (!isAuthorized) {
+    return null
   }
 
   return (
-    <div className="flex items-center gap-1.5 opacity-90 hover:opacity-100 transition-opacity">
-      {isAwaitingApproval && canApprove && (
-        <>
-          <button
-            onClick={handleApprove}
-            disabled={isPending}
-            title="Approve"
-            className="flex items-center justify-center p-1.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors disabled:opacity-50"
-          >
-            <CheckCircle2 className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleReject}
-            disabled={isPending}
-            title="Reject"
-            className="flex items-center justify-center p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-md transition-colors disabled:opacity-50"
-          >
-            <XCircle className="w-4 h-4" />
-          </button>
-        </>
-      )}
-
-      {isApproved && canPay && (
-        <button
-          onClick={handleMarkPaid}
-          disabled={isPending}
-          title="Mark as Paid"
-          className="flex items-center justify-center p-1.5 text-[#fc6e20] bg-[#fff7ed] hover:bg-[#fff7ed] rounded-md transition-colors disabled:opacity-50"
-        >
-          <Banknote className="w-4 h-4" />
-        </button>
-      )}
+    <div className="flex items-center gap-1.5">
+      <ApprovalStatusDropdown
+        approvalId={approvalId}
+        currentStatus={status}
+        size="sm"
+      />
     </div>
   )
 }

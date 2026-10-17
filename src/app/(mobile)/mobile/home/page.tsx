@@ -3,7 +3,8 @@ import prisma from '@/lib/prisma'
 import Link from 'next/link'
 import {
   Building2, ChevronDown, Bell, ArrowRight, Wallet,
-  FileText, Camera, ListTodo, ClipboardList, CheckCircle2, Search, IndianRupee
+  FileText, Camera, ListTodo, ClipboardList, CheckCircle2, Search, IndianRupee,
+  Package, Clock
 } from 'lucide-react'
 import PWAInstallBanner from '@/components/mobile/PWAInstallBanner'
 import SiteSelectorClient from '@/components/mobile/SiteSelectorClient'
@@ -82,6 +83,9 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
     recentExpenses,
     clientAdvancesAgg,
     todayDpr,
+    myRecentRequests,
+    pendingMaterialRequestsCount,
+    pendingPettyCashRequestsCount,
   ] = await Promise.all([
     siteId ? prisma.expense.aggregate({
       where: { siteId, createdAt: { gte: today, lte: todayEnd } },
@@ -124,6 +128,47 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
     siteId ? prisma.dailyProgressReport.findFirst({
       where: { siteId, date: { gte: today, lte: todayEnd } }
     }) : Promise.resolve(null),
+
+    // Query requests submitted by this user or on this site
+    prisma.approval.findMany({
+      where: {
+        companyId: companyId || undefined,
+        deletedAt: null,
+        ...(siteId ? { siteId } : {}),
+        entityType: { in: ['MATERIAL_REQUEST', 'EXPENSE'] },
+        ...(session?.user?.role === 'SUPER_ADMIN' || session?.user?.role === 'COMPANY_ADMIN'
+          ? {}
+          : { OR: [{ requestedById: userId }, ...(siteId ? [{ siteId }] : [])] }),
+      },
+      include: {
+        site: { select: { name: true } },
+        requestedBy: { select: { name: true } },
+      },
+      orderBy: { submittedAt: 'desc' },
+      take: 6,
+    }),
+
+    // Count pending material requests
+    prisma.approval.count({
+      where: {
+        companyId: companyId || undefined,
+        deletedAt: null,
+        ...(siteId ? { siteId } : {}),
+        entityType: 'MATERIAL_REQUEST',
+        currentStatus: { in: ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'] },
+      },
+    }),
+
+    // Count pending petty cash requests
+    prisma.approval.count({
+      where: {
+        companyId: companyId || undefined,
+        deletedAt: null,
+        ...(siteId ? { siteId } : {}),
+        entityType: 'EXPENSE',
+        currentStatus: { in: ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'] },
+      },
+    }),
   ])
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
@@ -276,6 +321,44 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
         </div>
 
         <div className="grid grid-cols-2 gap-3.5">
+          {/* Request Materials */}
+          <Link
+            href={siteId ? `/mobile/request-material?siteId=${siteId}` : "/mobile/request-material"}
+            className="p-4 rounded-[20px] bg-white border border-slate-100 shadow-sm active:scale-95 transition-all no-underline relative"
+          >
+            {pendingMaterialRequestsCount > 0 && (
+              <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-sky-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white shadow-sm z-10">
+                {pendingMaterialRequestsCount}
+              </span>
+            )}
+            <div className="w-10 h-10 rounded-[12px] bg-[#e0f2fe] text-[#0284c7] flex items-center justify-center mb-3">
+              <Package size={20} strokeWidth={2.2} />
+            </div>
+            <div className="text-[14px] font-extrabold text-slate-900 leading-tight mb-1">Request Materials</div>
+            <div className="text-[11.5px] font-medium text-slate-500">
+              {pendingMaterialRequestsCount > 0 ? `${pendingMaterialRequestsCount} pending approval` : 'Order site materials'}
+            </div>
+          </Link>
+
+          {/* Request Petty Cash */}
+          <Link
+            href={siteId ? `/mobile/request-petty-cash?siteId=${siteId}` : "/mobile/request-petty-cash"}
+            className="p-4 rounded-[20px] bg-white border border-slate-100 shadow-sm active:scale-95 transition-all no-underline relative"
+          >
+            {pendingPettyCashRequestsCount > 0 && (
+              <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white shadow-sm z-10">
+                {pendingPettyCashRequestsCount}
+              </span>
+            )}
+            <div className="w-10 h-10 rounded-[12px] bg-[#fef3c7] text-[#d97706] flex items-center justify-center mb-3">
+              <IndianRupee size={20} strokeWidth={2.2} />
+            </div>
+            <div className="text-[14px] font-extrabold text-slate-900 leading-tight mb-1">Request Petty Cash</div>
+            <div className="text-[11.5px] font-medium text-slate-500">
+              {pendingPettyCashRequestsCount > 0 ? `${pendingPettyCashRequestsCount} pending approval` : 'Site cash requisition'}
+            </div>
+          </Link>
+
           <Link
             href={siteId ? `/mobile/upload-bill?siteId=${siteId}` : "/mobile/upload-bill"}
             className="p-4 rounded-[20px] bg-white border border-slate-100 shadow-sm active:scale-95 transition-all no-underline relative"
@@ -472,6 +555,99 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
                 </div>
               </div>
             ))
+          )}
+        </div>
+      </div>
+
+      {/* My Requests & Live Status Feed */}
+      <div className="space-y-3 pt-3">
+        <div className="flex justify-between items-center px-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[15px] font-extrabold text-slate-900 m-0">My Requests & Status</h2>
+            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10.5px] font-bold">
+              {myRecentRequests.length}
+            </span>
+          </div>
+          <Link href="/mobile/approvals" className="text-[12px] font-bold text-[#fc6e20] no-underline">
+            View all
+          </Link>
+        </div>
+
+        <div className="bg-[#f8fafc] space-y-2.5">
+          {myRecentRequests.length === 0 ? (
+            <div className="p-5 bg-white rounded-[20px] border border-slate-100 shadow-sm text-center space-y-2">
+              <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                <Clock size={20} />
+              </div>
+              <div className="text-[13px] font-bold text-slate-700">No requests submitted yet</div>
+              <p className="text-[11.5px] text-slate-400 m-0">
+                Use the Quick Actions above to request materials or petty cash from Company Admin.
+              </p>
+            </div>
+          ) : (
+            myRecentRequests.map((req) => {
+              const isMaterial = req.entityType === 'MATERIAL_REQUEST'
+              const status = req.currentStatus
+
+              const statusBadgeConfig: Record<string, { label: string; bg: string; text: string; dot: string }> = {
+                PENDING: { label: 'Pending Approval', bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
+                SUBMITTED: { label: 'Pending Approval', bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
+                PENDING_REVIEW: { label: 'Under Review', bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
+                APPROVED: { label: 'Approved', bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+                PAID: { label: 'Disbursed / Paid', bg: 'bg-orange-50', text: 'text-[#e85b0d]', dot: 'bg-[#fc6e20]' },
+                REJECTED: { label: 'Rejected', bg: 'bg-rose-50', text: 'text-rose-700', dot: 'bg-rose-500' },
+                CLOSED: { label: 'Closed', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' },
+                CANCELLED: { label: 'Cancelled', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' },
+                DRAFT: { label: 'Draft', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' },
+              }
+              const currentBadge = statusBadgeConfig[status] || { label: status, bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' }
+
+              return (
+                <Link
+                  key={req.id}
+                  href={`/mobile/approvals/${req.id}`}
+                  className="p-3.5 bg-white rounded-[18px] border border-slate-100 shadow-sm flex flex-col gap-2 hover:border-slate-200 transition-all no-underline block text-inherit"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-10 h-10 rounded-[12px] flex items-center justify-center flex-shrink-0 ${
+                        isMaterial ? 'bg-[#e0f2fe] text-[#0284c7]' : 'bg-[#fef3c7] text-[#d97706]'
+                      }`}>
+                        {isMaterial ? <Package size={20} /> : <IndianRupee size={20} />}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[13.5px] font-extrabold text-slate-900 truncate">
+                          {req.title}
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-semibold truncate mt-0.5">
+                          {req.site?.name || 'Site'} · {new Date(req.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right flex-shrink-0">
+                      {req.amount && (
+                        <div className="text-[13.5px] font-black text-slate-900 mb-1">
+                          ₹{Number(req.amount).toLocaleString('en-IN')}
+                        </div>
+                      )}
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${currentBadge.bg} ${currentBadge.text}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${currentBadge.dot}`} />
+                        {currentBadge.label}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Rejection Note if Rejected */}
+                  {req.rejectionReason && (
+                    <div className="text-[11px] font-semibold text-rose-700 bg-rose-50/70 p-2 rounded-xl border border-rose-100 flex items-start gap-1.5">
+                      <span className="font-bold">Admin note:</span>
+                      <span className="truncate">{req.rejectionReason}</span>
+                    </div>
+                  )}
+                </Link>
+              )
+            })
           )}
         </div>
       </div>

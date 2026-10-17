@@ -2,6 +2,7 @@
 
 import React, { useState, useTransition } from 'react'
 import { approveApprovalAction, rejectApprovalAction, markApprovalPaidAction, addApprovalCommentAction } from '@/actions/approvals'
+import ApprovalStatusDropdown from './ApprovalStatusDropdown'
 
 const APPROVE_CONFIRM_TEXT = 'APPROVE'
 const PAID_CONFIRM_TEXT = 'PAID'
@@ -92,7 +93,17 @@ export default function ApprovalDetailActions({
       )}
 
       {/* Action Buttons Bar */}
-      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+        {(canApprove || canPay) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '6px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--sub)' }}>Status:</span>
+            <ApprovalStatusDropdown
+              approvalId={approvalId}
+              currentStatus={status}
+              size="md"
+            />
+          </div>
+        )}
         {isAwaitingApproval && canApprove && (
           <>
             <button

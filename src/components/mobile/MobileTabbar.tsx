@@ -17,7 +17,9 @@ export default function MobileTabbar() {
     '/dpr',
     '/add',
     '/approvals',
-    '/notifications'
+    '/notifications',
+    '/request-material',
+    '/request-petty-cash',
   ]
 
   if (hideTabbarRoutes.some(route => pathname.includes(route))) {
@@ -44,6 +46,8 @@ export default function MobileTabbar() {
   }
 
   const quickOptions = [
+    { label: 'Request Materials', href: '/mobile/request-material', bg: 'bg-[#e0f2fe]', text: 'text-[#0284c7]' },
+    { label: 'Request Petty Cash', href: '/mobile/request-petty-cash', bg: 'bg-[#fef3c7]', text: 'text-[#d97706]' },
     { label: 'Add Expense', href: '/mobile/add-expense', bg: 'bg-[#e6f4ea]', text: 'text-[#137333]' },
     { label: 'Upload Bill', href: '/mobile/upload-bill', bg: 'bg-[#e8f0fe]', text: 'text-[#1a73e8]' },
     { label: 'Mark Attendance', href: '/mobile/attendance', bg: 'bg-[#fef7e0]', text: 'text-[#b06000]' },
