@@ -13,6 +13,7 @@ const MODULES = [
   { href: '/employees', label: 'Employees', group: 'Workforce' },
   { href: '/client-accounts', label: 'Client Accounts', group: 'Workforce' },
   { href: '/materials', label: 'Materials & Stock', group: 'Procurement' },
+  { href: '/inventory', label: 'Company Inventory / Tools', group: 'Procurement' },
   { href: '/vendors', label: 'Vendors', group: 'Procurement' },
   { href: '/subcontractors', label: 'Subcontractors', group: 'Procurement' },
   { href: '/purchase', label: 'Purchase Orders', group: 'Procurement' },

@@ -164,6 +164,15 @@ enum PurchaseRequestStatus {
   CANCELLED
 }
 
+enum AssetStatus {
+  OPERATIONAL
+  IN_USE
+  UNDER_MAINTENANCE
+  STANDBY
+  DAMAGED
+  DECOMMISSIONED
+}
+
 enum DocumentCategory {
   AGREEMENT
   BOQ
@@ -287,6 +296,7 @@ model Company {
   boqitems              BOQItem[]
   reportExports         ReportExport[]
   catalogueItems        CompanyCatalogueItem[]
+  assets                CompanyAsset[]
 
   @@index([status])
 }
@@ -396,6 +406,7 @@ model Site {
   approvals             Approval[]
   vendors               Vendor[]
   subcontractors        Subcontractor[]
+  assets                CompanyAsset[]
 
   @@unique([companyId, slug])
   @@index([companyId])
@@ -893,6 +904,40 @@ model CompanyCatalogueItem {
   @@index([companyId])
   @@index([category])
   @@index([variantId])
+}
+
+model CompanyAsset {
+  id             String      @id @default(cuid())
+  companyId      String
+  siteId         String?
+  name           String
+  assetCode      String?
+  category       String
+  brand          String?
+  modelNumber    String?
+  serialNumber   String?
+  quantity       Int         @default(1)
+  unit           String      @default("Nos")
+  status         AssetStatus @default(OPERATIONAL)
+  conditionNotes String?
+  purchaseDate   DateTime?
+  purchaseCost   Decimal?    @db.Decimal(14, 2)
+  currentValue   Decimal?    @db.Decimal(14, 2)
+  assignedTo     String?
+  locationName   String?
+  notes          String?
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site?   @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([siteId])
+  @@index([category])
+  @@index([status])
 }
 
 model PurchaseOrder {

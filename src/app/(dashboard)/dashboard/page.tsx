@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import {
   Building2, DollarSign, Clock, Users, Wallet, CreditCard,
-  Plus, Upload, Receipt, CheckSquare, FileText, BarChart3, TrendingUp, AlertCircle, Truck, Package
+  Plus, Upload, Receipt, CheckSquare, FileText, BarChart3, TrendingUp, AlertCircle, Truck, Package, Wrench
 } from 'lucide-react'
 import ApprovalStatusDropdown from '@/components/approvals/ApprovalStatusDropdown'
 
@@ -53,7 +53,8 @@ async function getCachedDashboardData(companyId: string) {
     prisma.material.count({ where: { companyId, isActive: true, siteId: { in: siteIds } } }),
     prisma.labourAttendance.findMany({ where: { siteId: { in: siteIds } }, select: { advance: true, status: true, overtimeHours: true, labour: { select: { dailyWage: true } } } }),
     prisma.vendor.aggregate({ where: { companyId, isActive: true, OR: [{ siteId: null }, { site: { deletedAt: null } }] }, _sum: { amountPayable: true } }),
-    prisma.subcontractor.aggregate({ where: { companyId, isActive: true, OR: [{ siteId: null }, { site: { deletedAt: null } }] }, _sum: { raBilled: true, advance: true, retention: true } })
+    prisma.subcontractor.aggregate({ where: { companyId, isActive: true, OR: [{ siteId: null }, { site: { deletedAt: null } }] }, _sum: { raBilled: true, advance: true, retention: true } }),
+    prisma.companyAsset.count({ where: { companyId, deletedAt: null, isActive: true } }),
   ])
 }
 
@@ -68,7 +69,7 @@ export default async function CompanyDashboard() {
     activeSitesCount, todayExpenseAgg, pendingExpenses,
     totalLabour, todayAttendance, recentPendingApprovals, recentExpenses, sites,
     salaryDueAgg, invoicesDueAgg, vendorCount, subCount, materialCount, allAttendance,
-    vendorAgg, subAgg
+    vendorAgg, subAgg, equipmentCount
   ] = await getCachedDashboardData(companyId)
   const now = new Date()
 
@@ -107,6 +108,7 @@ export default async function CompanyDashboard() {
 
   const quickActions = [
     { href: '/sites/new', Icon: Plus, label: 'Add Site', color: 'text-[#fc6e20]', bg: 'bg-[#e7f0fb]' },
+    { href: '/inventory', Icon: Wrench, label: 'Company Inventory', color: 'text-[#059669]', bg: 'bg-[#ecfdf5]' },
     { href: '/bills/upload', Icon: Upload, label: 'Upload Bill', color: 'text-[#0f7a45]', bg: 'bg-[#e2f3ea]' },
     { href: '/expenses/new', Icon: Receipt, label: 'Add Expense', color: 'text-[#b6740a]', bg: 'bg-[#fcefd4]' },
     { href: '/labour', Icon: CheckSquare, label: 'Mark Attendance', color: 'text-[#5b47b8]', bg: 'bg-[#ece8fa]' },
@@ -128,6 +130,7 @@ export default async function CompanyDashboard() {
     { label: "Today's Expense", value: fmtAmt(todaySpend), sub: 'Across all sites today', trend: 'up', Icon: DollarSign, featured: true },
     { label: 'Bills Pending', value: pendingCount, sub: `${fmtAmt(pendingTotal)} to approve`, trend: 'warn', Icon: Clock },
     { label: 'Labour Present', value: `${todayAttendance}/${totalLabour || '—'}`, sub: `${totalLabour > 0 ? Math.round((todayAttendance / totalLabour) * 100) : 0}% attendance`, trend: 'up', Icon: Users },
+    { label: 'Company Equipment', value: equipmentCount, sub: 'Tools & machinery owned', trend: 'up', Icon: Wrench },
     { label: 'Labour Pending', value: fmtAmt(labourPendingSalaries), sub: 'Unpaid earned wages', trend: labourPendingSalaries > 0 ? 'warn' : 'flat', Icon: Wallet },
     { label: 'Labour Advances', value: fmtAmt(totalAdvances), sub: 'Total upfront paid', trend: 'up', Icon: CreditCard },
     { label: 'Vendor Pending', value: fmtAmt(vendorPending), sub: 'Payable to active vendors', trend: vendorPending > 0 ? 'warn' : 'flat', Icon: Truck },

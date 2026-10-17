@@ -9,7 +9,7 @@ import {
   LayoutDashboard, FileText, Receipt, CheckCircle2, Users, Package,
   ShoppingCart, DollarSign, BarChart3, Settings, Layers, Building2,
   Truck, ClipboardList, FolderOpen, UserCircle, CalendarCheck, LogOut,
-  HardHat, UserCog, Contact2, Clock
+  HardHat, UserCog, Contact2, Clock, Wrench
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -28,6 +28,7 @@ const NAV_ITEMS = [
   { href: '/client-accounts', label: 'Client Accounts', icon: Contact2 },
   { type: 'group', label: 'Procurement' },
   { href: '/materials', label: 'Materials & Stock', icon: Package },
+  { href: '/inventory', label: 'Company Inventory', icon: Wrench },
   { href: '/vendors', label: 'Vendors', icon: Truck },
   { href: '/subcontractors', label: 'Subcontractors', icon: Users },
   { href: '/purchase', label: 'Purchase Orders', icon: ShoppingCart },

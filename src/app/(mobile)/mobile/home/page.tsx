@@ -4,7 +4,7 @@ import Link from 'next/link'
 import {
   Building2, ChevronDown, Bell, ArrowRight, Wallet,
   FileText, Camera, ListTodo, ClipboardList, CheckCircle2, Search, IndianRupee,
-  Package, Clock
+  Package, Clock, Wrench
 } from 'lucide-react'
 import PWAInstallBanner from '@/components/mobile/PWAInstallBanner'
 import SiteSelectorClient from '@/components/mobile/SiteSelectorClient'
@@ -86,6 +86,8 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
     myRecentRequests,
     pendingMaterialRequestsCount,
     pendingPettyCashRequestsCount,
+    siteEquipmentCount,
+    siteTools,
   ] = await Promise.all([
     siteId ? prisma.expense.aggregate({
       where: { siteId, createdAt: { gte: today, lte: todayEnd } },
@@ -169,6 +171,19 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
         currentStatus: { in: ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'] },
       },
     }),
+
+    // Count tools and equipment on site
+    siteId ? prisma.companyAsset.count({
+      where: { siteId, deletedAt: null, isActive: true },
+    }) : Promise.resolve(0),
+
+    // Recent site tools
+    siteId ? prisma.companyAsset.findMany({
+      where: { siteId, deletedAt: null, isActive: true },
+      take: 4,
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, name: true, brand: true, quantity: true, unit: true, status: true, assignedTo: true }
+    }) : Promise.resolve([]),
   ])
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)
@@ -356,6 +371,25 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
             <div className="text-[14px] font-extrabold text-slate-900 leading-tight mb-1">Request Petty Cash</div>
             <div className="text-[11.5px] font-medium text-slate-500">
               {pendingPettyCashRequestsCount > 0 ? `${pendingPettyCashRequestsCount} pending approval` : 'Site cash requisition'}
+            </div>
+          </Link>
+
+          {/* Company Inventory / Tools & Equipment */}
+          <Link
+            href={siteId ? `/mobile/inventory?siteId=${siteId}` : "/mobile/inventory"}
+            className="p-4 rounded-[20px] bg-white border border-slate-100 shadow-sm active:scale-95 transition-all no-underline relative"
+          >
+            {siteEquipmentCount > 0 && (
+              <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white shadow-sm z-10">
+                {siteEquipmentCount} on site
+              </span>
+            )}
+            <div className="w-10 h-10 rounded-[12px] bg-[#ecfdf5] text-[#059669] flex items-center justify-center mb-3">
+              <Wrench size={20} strokeWidth={2.2} />
+            </div>
+            <div className="text-[14px] font-extrabold text-slate-900 leading-tight mb-1">Tools & Equipment</div>
+            <div className="text-[11.5px] font-medium text-slate-500">
+              {siteEquipmentCount > 0 ? `${siteEquipmentCount} tools on this site` : 'Company tools & yard'}
             </div>
           </Link>
 
@@ -650,6 +684,64 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
             })
           )}
         </div>
+      </div>
+
+      {/* Site Tools & Equipment */}
+      <div className="space-y-3 pt-3">
+        <div className="flex justify-between items-center px-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[15px] font-extrabold text-slate-900 m-0">Tools & Equipment on Site</h2>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10.5px] font-bold border border-emerald-200">
+              {siteEquipmentCount} Active
+            </span>
+          </div>
+          <Link href={siteId ? `/mobile/inventory?siteId=${siteId}` : "/mobile/inventory"} className="text-[12px] font-bold text-[#fc6e20] no-underline">
+            Manage
+          </Link>
+        </div>
+
+        {siteTools.length === 0 ? (
+          <Link
+            href={siteId ? `/mobile/inventory?siteId=${siteId}` : "/mobile/inventory"}
+            className="p-4 bg-white rounded-[20px] border border-slate-100 shadow-sm flex items-center justify-between text-inherit no-underline"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-[12px] bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                <Wrench size={20} />
+              </div>
+              <div>
+                <div className="text-[13px] font-bold text-slate-800">No tools deployed here yet</div>
+                <div className="text-[11px] text-slate-500 font-medium">Tap to deploy machinery from yard or add tool</div>
+              </div>
+            </div>
+            <ArrowRight size={16} className="text-slate-400" />
+          </Link>
+        ) : (
+          <div className="space-y-2">
+            {siteTools.map((tool) => (
+              <Link
+                key={tool.id}
+                href={siteId ? `/mobile/inventory?siteId=${siteId}` : "/mobile/inventory"}
+                className="p-3.5 bg-white rounded-[16px] border border-slate-100 shadow-sm flex items-center justify-between no-underline text-inherit hover:border-slate-200 transition-all block"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-[10px] bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                    <Wrench size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-extrabold text-slate-900 truncate">{tool.name}</div>
+                    <div className="text-[11px] text-slate-500 font-semibold truncate mt-0.5">
+                      {tool.quantity} {tool.unit} {tool.brand ? `· ${tool.brand}` : ''} {tool.assignedTo ? `· In-Charge: ${tool.assignedTo}` : ''}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0 ml-2">
+                  {tool.status === 'IN_USE' ? 'In Use' : tool.status.replace(/_/g, ' ')}
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

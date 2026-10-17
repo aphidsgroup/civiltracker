@@ -48,12 +48,15 @@ export default function MobileTabbar() {
   const quickOptions = [
     { label: 'Request Materials', href: '/mobile/request-material', bg: 'bg-[#e0f2fe]', text: 'text-[#0284c7]' },
     { label: 'Request Petty Cash', href: '/mobile/request-petty-cash', bg: 'bg-[#fef3c7]', text: 'text-[#d97706]' },
+    { label: 'Company Tools', href: '/mobile/inventory', bg: 'bg-[#ecfdf5]', text: 'text-[#059669]' },
     { label: 'Add Expense', href: '/mobile/add-expense', bg: 'bg-[#e6f4ea]', text: 'text-[#137333]' },
     { label: 'Upload Bill', href: '/mobile/upload-bill', bg: 'bg-[#e8f0fe]', text: 'text-[#1a73e8]' },
     { label: 'Mark Attendance', href: '/mobile/attendance', bg: 'bg-[#fef7e0]', text: 'text-[#b06000]' },
     { label: 'Site Photos', href: '/mobile/site-photo', bg: 'bg-[#f3e8ff]', text: 'text-[#7e22ce]' },
     { label: 'Daily Report', href: '/mobile/dpr', bg: 'bg-[#e0e7ff]', text: 'text-[#4338ca]' },
+    { label: 'Site Checklist', href: '/mobile/checklists', bg: 'bg-sky-50', text: 'text-sky-600' },
     { label: 'Material In', href: '/mobile/upload-bill?type=MATERIAL', bg: 'bg-[#d1fae5]', text: 'text-[#047857]' },
+    { label: 'Client Advance', href: '/mobile/add-client-advance', bg: 'bg-[#fef3c7]', text: 'text-[#b45309]' },
     { label: 'Raise Issue', href: '/mobile/notifications', bg: 'bg-[#ffe4e6]', text: 'text-[#be123c]' },
   ]
 
