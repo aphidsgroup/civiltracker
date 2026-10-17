@@ -12,7 +12,7 @@ export async function GET() {
     await prisma.$queryRaw`SELECT 1`
     dbLatencyMs = Date.now() - start
     dbStatus = 'ok'
-  } catch {
+  } catch (err: any) {
     dbStatus = 'error'
   }
 
