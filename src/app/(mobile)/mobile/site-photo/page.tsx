@@ -23,25 +23,37 @@ export default async function MobileSitePhotoPage({ searchParams }: { searchPara
     siteIds = member.siteIds || []
   }
 
-  const sites = companyId
+  const isSuperAdmin = user.role === 'SUPER_ADMIN'
+
+  const sites = isSuperAdmin
+    ? await prisma.site.findMany({
+        where: { deletedAt: null },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      })
+    : companyId
     ? siteIds.length > 0 
       ? await prisma.site.findMany({
           where: { id: { in: siteIds }, companyId, deletedAt: null },
           select: { id: true, name: true },
-          orderBy: { name: 'asc' }
+          orderBy: { name: 'asc' },
         })
       : await prisma.site.findMany({
           where: { companyId, deletedAt: null },
           select: { id: true, name: true },
-          orderBy: { name: 'asc' }
+          orderBy: { name: 'asc' },
         })
     : []
 
   const photos = await prisma.sitePhoto.findMany({
-    where: companyId ? { companyId } : { uploadedById: user.id },
+    where: isSuperAdmin
+      ? (siteId ? { siteId } : {})
+      : companyId
+      ? (siteId ? { companyId, siteId } : { companyId })
+      : { uploadedById: user.id },
     include: { site: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
-    take: 20
+    take: 50,
   })
 
   const mappedPhotos = photos.map(p => ({

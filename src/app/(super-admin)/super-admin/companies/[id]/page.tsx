@@ -184,10 +184,23 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
               <div className="divide-y divide-gray-100">
                 {company.sites.map(s => (
                   <div key={s.id} className="flex justify-between items-center py-2.5 text-sm">
-                    <span className="text-sm font-semibold text-gray-900">{s.name}</span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border ${siteStatusColor[s.status] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}>
-                      {s.status}
-                    </span>
+                    <Link
+                      href={`/sites/${s.id}/photos`}
+                      className="text-sm font-semibold text-gray-900 hover:text-[#fc6e20] transition-colors"
+                    >
+                      {s.name}
+                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/sites/${s.id}/photos`}
+                        className="text-[11px] font-bold text-[#fc6e20] hover:underline"
+                      >
+                        Photos &rarr;
+                      </Link>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border ${siteStatusColor[s.status] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+                        {s.status}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>

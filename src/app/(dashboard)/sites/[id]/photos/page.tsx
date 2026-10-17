@@ -23,7 +23,18 @@ type PhotoApprovalItem = Prisma.SitePhotoGetPayload<{
 
 export default async function SitePhotosPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  if (!session?.user) redirect('/login')
+
+  let companyId = session.user.companyId
+  if (!companyId && session.user.role !== 'SUPER_ADMIN') {
+    const member = await prisma.companyMember.findFirst({
+      where: { userId: session.user.id, isActive: true },
+      select: { companyId: true },
+    })
+    companyId = member?.companyId
+  }
+  if (!companyId && session.user.role !== 'SUPER_ADMIN') redirect('/login')
+
   const { id: siteId } = await params
 
   // Tasks that have been completed but have NO photo yet

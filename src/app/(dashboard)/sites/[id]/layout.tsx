@@ -14,12 +14,26 @@ export default async function SiteLayout({
   params: Promise<{ id: string }>
 }) {
   const session = await auth()
-  if (!session?.user?.companyId) redirect('/login')
+  if (!session?.user) redirect('/login')
+
+  let companyId = session.user.companyId
+  if (!companyId && session.user.role !== 'SUPER_ADMIN') {
+    const member = await prisma.companyMember.findFirst({
+      where: { userId: session.user.id, isActive: true },
+      select: { companyId: true },
+    })
+    companyId = member?.companyId
+  }
+  if (!companyId && session.user.role !== 'SUPER_ADMIN') redirect('/login')
   
   const { id } = await params
 
   const site = await prisma.site.findUnique({
-    where: { id, companyId: session.user.companyId, deletedAt: null },
+    where: {
+      id,
+      deletedAt: null,
+      ...(session.user.role === 'SUPER_ADMIN' ? {} : { companyId }),
+    },
   })
   const now = new Date()
 
