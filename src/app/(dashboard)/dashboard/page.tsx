@@ -54,7 +54,7 @@ async function getCachedDashboardData(companyId: string) {
     prisma.labourAttendance.findMany({ where: { siteId: { in: siteIds } }, select: { advance: true, status: true, overtimeHours: true, labour: { select: { dailyWage: true } } } }),
     prisma.vendor.aggregate({ where: { companyId, isActive: true, OR: [{ siteId: null }, { site: { deletedAt: null } }] }, _sum: { amountPayable: true } }),
     prisma.subcontractor.aggregate({ where: { companyId, isActive: true, OR: [{ siteId: null }, { site: { deletedAt: null } }] }, _sum: { raBilled: true, advance: true, retention: true } }),
-    prisma.companyAsset.count({ where: { companyId, deletedAt: null, isActive: true } }),
+    prisma.companyAsset.count({ where: { companyId, deletedAt: null, isActive: true } }).catch(() => 0),
   ])
 }
 

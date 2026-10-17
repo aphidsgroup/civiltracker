@@ -53,6 +53,9 @@ export default async function InventoryPage() {
         site: { select: { id: true, name: true } },
       },
       orderBy: [{ updatedAt: 'desc' }],
+    }).catch((err) => {
+      console.error('Error fetching assets:', err)
+      return []
     }),
   ])
 

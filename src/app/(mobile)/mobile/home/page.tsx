@@ -169,7 +169,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
     // Count tools and equipment on site
     siteId ? prisma.companyAsset.count({
       where: { siteId, deletedAt: null, isActive: true },
-    }) : Promise.resolve(0),
+    }).catch(() => 0) : Promise.resolve(0),
 
     // Recent site tools
     siteId ? prisma.companyAsset.findMany({
@@ -177,7 +177,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
       take: 4,
       orderBy: { updatedAt: 'desc' },
       select: { id: true, name: true, brand: true, quantity: true, unit: true, status: true, assignedTo: true }
-    }) : Promise.resolve([]),
+    }).catch(() => []) : Promise.resolve([]),
   ])
 
   const todaySpend = Number(todayExpenseAgg._sum.amount ?? 0)

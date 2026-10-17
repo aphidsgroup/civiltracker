@@ -87,5 +87,29 @@ export async function GET() {
     results.findManyFull = { error: String(e) }
   }
 
+  // Test 9: companyAsset count & findMany
+  try {
+    results.assetCount = await prisma.companyAsset.count()
+  } catch (e: any) {
+    results.assetCount = { error: e?.message || String(e), code: e?.code }
+  }
+
+  try {
+    const assets = await prisma.companyAsset.findMany({ take: 2, include: { site: true } })
+    results.assetsSample = assets.length
+  } catch (e: any) {
+    results.assetsSample = { error: e?.message || String(e), code: e?.code }
+  }
+
+  // Test 10: Check sites & users in DB
+  try {
+    const allUsers = await prisma.user.findMany({ select: { id: true, email: true, role: true } })
+    results.allUsers = allUsers
+    const allSites = await prisma.site.findMany({ select: { id: true, name: true, companyId: true, budget: true, spent: true } })
+    results.allSites = allSites
+  } catch (e: any) {
+    results.allSitesError = e?.message || String(e)
+  }
+
   return NextResponse.json(results)
 }

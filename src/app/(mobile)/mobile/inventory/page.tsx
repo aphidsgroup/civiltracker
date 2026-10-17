@@ -79,6 +79,9 @@ export default async function MobileInventoryPage({
       site: { select: { id: true, name: true } },
     },
     orderBy: [{ updatedAt: 'desc' }],
+  }).catch((err) => {
+    console.error('Error fetching mobile inventory assets:', err)
+    return []
   })
 
   const serializedAssets: SerializedAsset[] = rawAssets.map((a) => ({
