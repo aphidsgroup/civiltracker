@@ -6,7 +6,7 @@ import { getApprovalByIdAction } from '@/actions/approvals'
 import ApprovalDetailActions from '@/components/approvals/ApprovalDetailActions'
 import { hasPermission } from '@/lib/permissions'
 import type { Role } from '@prisma/client'
-import { ArrowLeft, Paperclip, MessageSquare, History, MapPin, Package } from 'lucide-react'
+import { ArrowLeft, Paperclip, MessageSquare, History, MapPin, Package, Wrench } from 'lucide-react'
 
 export default async function ApprovalDetailPage({
   params,
@@ -110,8 +110,69 @@ export default async function ApprovalDetailPage({
           </div>
         )}
 
-        {/* Display Material Requisition Breakdown */}
-        {approval.entityType === 'MATERIAL_REQUEST' && (
+        {/* Display Equipment Requisition Breakdown */}
+        {(approval.approvalType === 'EQUIPMENT_REQUEST' || Boolean((approval.metadataJson as Record<string, unknown>)?.isEquipment)) ? (
+          <div className="mt-5 border-t border-slate-200 pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-extrabold m-0 uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <Wrench className="w-3.5 h-3.5 text-[#059669]" /> Tool & Equipment Requisition Details
+              </h4>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
+                Machinery Allocation
+              </span>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase">Tool / Equipment</div>
+                  <div className="text-sm font-extrabold text-slate-900 mt-0.5">
+                    {String((approval.metadataJson as Record<string, unknown>)?.toolName || approval.title)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase">Quantity</div>
+                  <div className="text-sm font-extrabold text-[#059669] mt-0.5">
+                    {String((approval.metadataJson as Record<string, unknown>)?.quantity || 1)} {String((approval.metadataJson as Record<string, unknown>)?.unit || 'Nos')}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase">Category</div>
+                  <div className="text-sm font-semibold text-slate-800 mt-0.5">
+                    {String((approval.metadataJson as Record<string, unknown>)?.category || 'General Equipment')}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase">Brand / Make</div>
+                  <div className="text-sm font-semibold text-slate-800 mt-0.5">
+                    {String((approval.metadataJson as Record<string, unknown>)?.brand || 'Any Standard')}
+                  </div>
+                </div>
+              </div>
+
+              {Boolean((approval.metadataJson as Record<string, unknown>)?.neededFrom || (approval.metadataJson as Record<string, unknown>)?.neededUntil) && (
+                <div className="pt-2 border-t border-slate-200/60 flex items-center gap-4 flex-wrap text-slate-600">
+                  {Boolean((approval.metadataJson as Record<string, unknown>)?.neededFrom) && (
+                    <div>
+                      <span className="font-bold text-slate-700">Needed From:</span> {String((approval.metadataJson as Record<string, unknown>).neededFrom)}
+                    </div>
+                  )}
+                  {Boolean((approval.metadataJson as Record<string, unknown>)?.neededUntil) && (
+                    <div>
+                      <span className="font-bold text-slate-700">Duration:</span> {String((approval.metadataJson as Record<string, unknown>).neededUntil)}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {Boolean((approval.metadataJson as Record<string, unknown>)?.purpose) && (
+                <div className="pt-2 border-t border-slate-200/60 text-slate-600">
+                  <span className="font-bold text-slate-700">Work Purpose:</span> {String((approval.metadataJson as Record<string, unknown>).purpose)}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : approval.entityType === 'MATERIAL_REQUEST' && (
           <div className="mt-5 border-t border-slate-200 pt-4 space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-extrabold m-0 uppercase tracking-wider text-slate-500 flex items-center gap-1.5">

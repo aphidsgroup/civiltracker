@@ -468,3 +468,155 @@ export async function updatePurchaseRequestStatusAction(
   return updatedPR
 }
 
+export async function createEquipmentRequestAction(data: {
+  siteId: string
+  toolName: string
+  category?: string
+  brand?: string
+  quantity: number
+  unit?: string
+  urgency?: 'Normal' | 'High' | 'Urgent'
+  neededFrom?: string
+  neededUntil?: string
+  purpose?: string
+  notes?: string
+}) {
+  const user = await requireUser()
+  if (!user.companyId && user.role !== 'SUPER_ADMIN') {
+    throw new Error('Unauthorized: No active company context')
+  }
+
+  if (!data.siteId) {
+    throw new Error('Site is required')
+  }
+
+  const toolName = data.toolName?.trim()
+  if (!toolName) {
+    throw new Error('Tool or equipment name is required')
+  }
+
+  const numQuantity = Number(data.quantity)
+  if (isNaN(numQuantity) || numQuantity <= 0) {
+    throw new Error('Valid positive quantity is required')
+  }
+
+  await assertCanAccessSite(data.siteId)
+
+  const site = await prisma.site.findUnique({
+    where: { id: data.siteId },
+    select: { id: true, companyId: true, name: true },
+  })
+  if (!site) throw new Error('Site not found')
+
+  const companyId = site.companyId || user.companyId!
+  const urgency = data.urgency || 'Normal'
+  const unit = data.unit?.trim() || 'Nos'
+  const category = data.category?.trim() || 'General Equipment'
+  const purpose = data.purpose?.trim() || 'Site operational requirement'
+
+  const priority: ApprovalPriority =
+    urgency === 'Urgent' ? 'URGENT' : urgency === 'High' ? 'HIGH' : 'NORMAL'
+
+  const fullDescription = `[EQUIPMENT REQUEST] ${numQuantity} ${unit} - ${toolName}${data.brand ? ` (${data.brand})` : ''}`
+
+  const timelineNote = [
+    data.neededFrom ? `Needed from: ${data.neededFrom}` : null,
+    data.neededUntil ? `Until: ${data.neededUntil}` : null,
+    purpose ? `Purpose: ${purpose}` : null,
+    data.notes?.trim() ? `Notes: ${data.notes.trim()}` : null,
+  ].filter(Boolean).join(' • ')
+
+  // 1. Create PurchaseRequest record
+  const pr = await prisma.purchaseRequest.create({
+    data: {
+      companyId,
+      siteId: site.id,
+      description: fullDescription,
+      quantity: numQuantity,
+      unit,
+      urgency,
+      workLocation: purpose,
+      brand: data.brand?.trim() || null,
+      neededBy: data.neededFrom ? new Date(data.neededFrom) : null,
+      notes: timelineNote || null,
+      specsJson: {
+        isEquipment: true,
+        toolName,
+        category,
+        brand: data.brand?.trim() || null,
+        neededFrom: data.neededFrom || null,
+        neededUntil: data.neededUntil || null,
+        purpose,
+        notes: data.notes?.trim() || null,
+      },
+      status: 'PENDING' as PurchaseRequestStatus,
+      requestedById: user.id,
+    },
+  })
+
+  // 2. Create linked Approval entry
+  const title = `Tool Req: ${numQuantity} ${unit} ${toolName}`
+  const approval = await prisma.approval.create({
+    data: {
+      companyId,
+      siteId: site.id,
+      entityType: 'MATERIAL_REQUEST',
+      entityId: pr.id,
+      title,
+      description: timelineNote || `Tool & equipment requisition by ${user.name || user.email}`,
+      priority,
+      approvalType: 'EQUIPMENT_REQUEST',
+      requestedById: user.id,
+      currentStatus: 'PENDING',
+      submittedAt: new Date(),
+      metadataJson: {
+        isEquipment: true,
+        type: 'EQUIPMENT_REQUEST',
+        toolName,
+        category,
+        brand: data.brand?.trim() || null,
+        quantity: numQuantity,
+        unit,
+        urgency,
+        neededFrom: data.neededFrom || null,
+        neededUntil: data.neededUntil || null,
+        purpose,
+        notes: data.notes?.trim() || null,
+      } as Prisma.InputJsonValue,
+    },
+  })
+
+  // 3. Create Timeline
+  await prisma.approvalTimeline.create({
+    data: {
+      companyId,
+      approvalId: approval.id,
+      actorUserId: user.id,
+      action: 'SUBMITTED',
+      toStatus: 'PENDING',
+      note: `Tool & equipment request for ${numQuantity} ${unit} ${toolName} submitted on ${site.name}`,
+    },
+  })
+
+  // 4. Audit Log
+  await logActivity({
+    userId: user.id,
+    companyId,
+    action: 'CREATE',
+    module: 'MATERIAL_REQUEST',
+    recordId: pr.id,
+    description: `${user.name ?? user.email} requested ${numQuantity} ${unit} ${toolName} on site ${site.name}`,
+    after: { toolName, category, quantity: numQuantity, unit, site: site.name, urgency },
+  })
+
+  revalidatePath('/mobile/home')
+  revalidatePath('/mobile/approvals')
+  revalidatePath('/dashboard')
+  revalidatePath('/approvals')
+  revalidatePath('/inventory')
+  revalidatePath('/mobile/inventory')
+
+  return { success: true, id: pr.id, approvalId: approval.id }
+}
+
+

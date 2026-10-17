@@ -84,6 +84,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
     todayDpr,
     myRecentRequests,
     pendingMaterialRequestsCount,
+    pendingEquipmentRequestsCount,
     pendingPettyCashRequestsCount,
     siteEquipmentCount,
     siteTools,
@@ -144,13 +145,25 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
       take: 6,
     }),
 
-    // Count pending material requests
+    // Count pending material requests (excluding equipment requests)
     prisma.approval.count({
       where: {
         companyId: companyId || undefined,
         deletedAt: null,
         ...(siteId ? { siteId } : {}),
         entityType: 'MATERIAL_REQUEST',
+        approvalType: { not: 'EQUIPMENT_REQUEST' },
+        currentStatus: { in: ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'] },
+      },
+    }),
+
+    // Count pending tool/equipment requests
+    prisma.approval.count({
+      where: {
+        companyId: companyId || undefined,
+        deletedAt: null,
+        ...(siteId ? { siteId } : {}),
+        approvalType: 'EQUIPMENT_REQUEST',
         currentStatus: { in: ['PENDING', 'SUBMITTED', 'PENDING_REVIEW'] },
       },
     }),
@@ -367,20 +380,39 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
             </div>
           </Link>
 
+          {/* Request Tools & Equipments */}
+          <Link
+            href={siteId ? `/mobile/request-equipment?siteId=${siteId}` : "/mobile/request-equipment"}
+            className="p-4 rounded-[20px] bg-white border border-slate-100 shadow-sm active:scale-95 transition-all no-underline relative"
+          >
+            {pendingEquipmentRequestsCount > 0 && (
+              <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white shadow-sm z-10">
+                {pendingEquipmentRequestsCount}
+              </span>
+            )}
+            <div className="w-10 h-10 rounded-[12px] bg-[#ecfdf5] text-[#059669] flex items-center justify-center mb-3">
+              <Wrench size={20} strokeWidth={2.2} />
+            </div>
+            <div className="text-[14px] font-extrabold text-slate-900 leading-tight mb-1">Request Tools & Equipments</div>
+            <div className="text-[11.5px] font-medium text-slate-500">
+              {pendingEquipmentRequestsCount > 0 ? `${pendingEquipmentRequestsCount} pending approval` : 'Request tools & machinery'}
+            </div>
+          </Link>
+
           {/* Company Inventory / Tools & Equipment */}
           <Link
             href={siteId ? `/mobile/inventory?siteId=${siteId}` : "/mobile/inventory"}
             className="p-4 rounded-[20px] bg-white border border-slate-100 shadow-sm active:scale-95 transition-all no-underline relative"
           >
             {siteEquipmentCount > 0 && (
-              <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white shadow-sm z-10">
+              <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-teal-600 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white shadow-sm z-10">
                 {siteEquipmentCount} on site
               </span>
             )}
-            <div className="w-10 h-10 rounded-[12px] bg-[#ecfdf5] text-[#059669] flex items-center justify-center mb-3">
-              <Wrench size={20} strokeWidth={2.2} />
+            <div className="w-10 h-10 rounded-[12px] bg-[#f0fdf4] text-[#16a34a] flex items-center justify-center mb-3">
+              <Building2 size={20} strokeWidth={2.2} />
             </div>
-            <div className="text-[14px] font-extrabold text-slate-900 leading-tight mb-1">Tools & Equipment</div>
+            <div className="text-[14px] font-extrabold text-slate-900 leading-tight mb-1">Company Tools</div>
             <div className="text-[11.5px] font-medium text-slate-500">
               {siteEquipmentCount > 0 ? `${siteEquipmentCount} tools on this site` : 'Company tools & yard'}
             </div>
@@ -591,12 +623,13 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
               </div>
               <div className="text-[13px] font-bold text-slate-700">No requests submitted yet</div>
               <p className="text-[11.5px] text-slate-400 m-0">
-                Use the Quick Actions above to request materials or petty cash from Company Admin.
+                Use the Quick Actions above to request materials, petty cash, or tools & equipments from Company Admin.
               </p>
             </div>
           ) : (
             myRecentRequests.map((req) => {
-              const isMaterial = req.entityType === 'MATERIAL_REQUEST'
+              const isEquipment = req.approvalType === 'EQUIPMENT_REQUEST' || Boolean((req.metadataJson as Record<string, unknown>)?.isEquipment)
+              const isMaterial = req.entityType === 'MATERIAL_REQUEST' && !isEquipment
               const status = req.currentStatus
 
               const statusBadgeConfig: Record<string, { label: string; bg: string; text: string; dot: string }> = {
@@ -612,6 +645,8 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
               }
               const currentBadge = statusBadgeConfig[status] || { label: status, bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' }
 
+              const typeBadge = isEquipment ? 'Tool Req' : isMaterial ? 'Material Indent' : 'Petty Cash'
+
               return (
                 <Link
                   key={req.id}
@@ -621,16 +656,17 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={`w-10 h-10 rounded-[12px] flex items-center justify-center flex-shrink-0 ${
+                        isEquipment ? 'bg-[#ecfdf5] text-[#059669]' :
                         isMaterial ? 'bg-[#e0f2fe] text-[#0284c7]' : 'bg-[#fef3c7] text-[#d97706]'
                       }`}>
-                        {isMaterial ? <Package size={20} /> : <IndianRupee size={20} />}
+                        {isEquipment ? <Wrench size={20} /> : isMaterial ? <Package size={20} /> : <IndianRupee size={20} />}
                       </div>
                       <div className="min-w-0">
                         <div className="text-[13.5px] font-extrabold text-slate-900 truncate">
                           {req.title}
                         </div>
                         <div className="text-[11px] text-slate-500 font-semibold truncate mt-0.5">
-                          {req.site?.name || 'Site'} · {new Date(req.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                          {req.site?.name || 'Site'} · <span className={isEquipment ? 'text-[#059669] font-bold' : isMaterial ? 'text-sky-600 font-bold' : 'text-amber-600 font-bold'}>{typeBadge}</span> · {new Date(req.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                         </div>
                       </div>
                     </div>

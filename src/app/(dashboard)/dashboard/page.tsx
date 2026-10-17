@@ -263,9 +263,10 @@ export default async function CompanyDashboard() {
                 <div key={e.id} className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[#e4eaf0] last:border-0 hover:bg-slate-50/50 transition-colors">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-9 h-9 rounded-[10px] text-[11px] font-extrabold flex items-center justify-center flex-shrink-0 ${
+                      e.approvalType === 'EQUIPMENT_REQUEST' ? 'bg-[#ecfdf5] text-[#059669]' :
                       e.entityType === 'MATERIAL_REQUEST' ? 'bg-[#e0f2fe] text-[#0284c7]' : 'bg-[#fff3e0] text-[#e07a1f]'
                     }`}>
-                      {e.entityType === 'MATERIAL_REQUEST' ? 'MR' : 'PC'}
+                      {e.approvalType === 'EQUIPMENT_REQUEST' ? 'EQ' : e.entityType === 'MATERIAL_REQUEST' ? 'MR' : 'PC'}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-[13px] font-bold text-[#16273a] truncate">{e.title}</div>
