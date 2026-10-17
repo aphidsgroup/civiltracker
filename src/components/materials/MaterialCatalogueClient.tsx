@@ -32,7 +32,7 @@ interface CompanyCustomItem {
   isDecimalAllowed: boolean
   packSize?: string | null
   notes?: string | null
-  createdAt: Date
+  createdAt: string | Date
 }
 
 export default function MaterialCatalogueClient({
@@ -91,17 +91,20 @@ export default function MaterialCatalogueClient({
   // Filtered company custom items
   const filteredCustom = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
-    return customItems.filter((ci) => {
+    return (customItems || []).filter((ci) => {
+      if (!ci) return false
       if (selectedCategory !== 'ALL') {
         const cat = MATERIAL_CATALOGUE.find((c) => c.id === selectedCategory)
-        if (cat && !ci.category.toLowerCase().includes(cat.name.toLowerCase().split('.')[1]?.trim().toLowerCase() || '')) {
+        const catNamePart = cat?.name?.split('.')[1]?.trim()?.toLowerCase() || ''
+        const itemCat = (ci.category || '').toLowerCase()
+        if (catNamePart && !itemCat.includes(catNamePart) && !catNamePart.includes(itemCat)) {
           return false
         }
       }
       if (!q) return true
       return (
-        ci.materialName.toLowerCase().includes(q) ||
-        ci.specification.toLowerCase().includes(q) ||
+        (ci.materialName || '').toLowerCase().includes(q) ||
+        (ci.specification || '').toLowerCase().includes(q) ||
         (ci.brand && ci.brand.toLowerCase().includes(q))
       )
     })

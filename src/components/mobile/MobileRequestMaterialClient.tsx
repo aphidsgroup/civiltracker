@@ -129,31 +129,37 @@ export default function MobileRequestMaterialClient({
     const masterResults = searchCatalogueMaterials(searchQuery, selectedCategory)
 
     // Convert custom items to MaterialVariant format
-    const customVariants: MaterialVariant[] = customCatalogueItems
+    const customVariants: MaterialVariant[] = (customCatalogueItems || [])
       .filter((ci) => {
-        if (selectedCategory !== 'ALL' && !ci.category.toLowerCase().includes(selectedCategory.toLowerCase())) {
-          return false
+        if (!ci) return false
+        if (selectedCategory !== 'ALL') {
+          const cat = MATERIAL_CATALOGUE.find((c) => c.id === selectedCategory)
+          const catNamePart = cat?.name?.split('.')[1]?.trim()?.toLowerCase() || ''
+          const itemCat = (ci.category || '').toLowerCase()
+          if (catNamePart && !itemCat.includes(catNamePart) && !catNamePart.includes(itemCat)) {
+            return false
+          }
         }
         if (!searchQuery.trim()) return true
         const q = searchQuery.toLowerCase()
         return (
-          ci.materialName.toLowerCase().includes(q) ||
-          ci.specification.toLowerCase().includes(q) ||
+          (ci.materialName || '').toLowerCase().includes(q) ||
+          (ci.specification || '').toLowerCase().includes(q) ||
           (ci.brand && ci.brand.toLowerCase().includes(q))
         )
       })
       .map((ci) => ({
         id: ci.variantId || ci.id,
-        name: ci.materialName,
-        category: ci.category,
+        name: ci.materialName || 'Custom Material',
+        category: ci.category || 'General',
         categoryId: 'CUSTOM',
-        aliases: ['custom', ci.materialName.toLowerCase()],
+        aliases: ['custom', (ci.materialName || '').toLowerCase()],
         specificationFields: [
-          { key: 'specification', label: 'Specification', options: [ci.specification] },
+          { key: 'specification', label: 'Specification', options: [ci.specification || 'Standard'] },
         ],
-        defaultUnit: ci.defaultUnit,
-        allowedUnits: ci.allowedUnits,
-        isDecimalAllowed: ci.isDecimalAllowed,
+        defaultUnit: ci.defaultUnit || 'Nos',
+        allowedUnits: ci.allowedUnits && ci.allowedUnits.length > 0 ? ci.allowedUnits : [ci.defaultUnit || 'Nos'],
+        isDecimalAllowed: Boolean(ci.isDecimalAllowed),
         packSize: ci.packSize,
         conversionNote: ci.conversionNote,
         approvedBrands: ci.brand ? [ci.brand] : undefined,

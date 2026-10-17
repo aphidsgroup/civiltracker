@@ -1,4 +1,5 @@
-import { requireUser } from '@/lib/auth/require-user'
+import { auth } from '@/lib/auth'
+import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { AlertCircle, Plus, MapPin, Calendar, Tag, Package, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
@@ -14,31 +15,83 @@ interface MaterialItem {
 }
 
 export default async function MaterialsRequestsPage() {
-  const user = await requireUser()
-  const companyFilter = user.role === 'SUPER_ADMIN' ? {} : { companyId: user.companyId! }
+  const session = await auth()
+  if (!session?.user) {
+    redirect('/login')
+  }
 
-  const requests = await prisma.purchaseRequest.findMany({
-    where: companyFilter,
-    include: {
-      site: { select: { id: true, name: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+  const user = session.user
+  const isSuperAdmin = user.role === 'SUPER_ADMIN'
+  const companyFilter = isSuperAdmin ? {} : { companyId: user.companyId || '' }
 
-  // Fetch linked approvals for direct review links
-  const approvals = await prisma.approval.findMany({
-    where: {
-      ...companyFilter,
-      entityType: 'MATERIAL_REQUEST',
-      entityId: { in: requests.map((r) => r.id) },
-    },
-    select: {
-      id: true,
-      entityId: true,
-      currentStatus: true,
-      requestedBy: { select: { name: true, email: true } },
-    },
-  })
+  let requests: Array<{
+    id: string
+    description: string
+    quantity: number
+    unit: string | null
+    status: 'PENDING' | 'PM_APPROVED' | 'PO_CREATED' | 'DELIVERED' | 'CANCELLED'
+    urgency: string
+    workLocation: string | null
+    brand: string | null
+    neededBy: Date | null
+    approvedQty: number | null
+    notes: string | null
+    itemsJson: unknown
+    site: { id: string; name: string } | null
+    createdAt: Date
+  }> = []
+
+  let approvals: Array<{
+    id: string
+    entityId: string
+    currentStatus: string
+    requestedBy: { name: string; email: string }
+  }> = []
+
+  try {
+    const rawRequests = await prisma.purchaseRequest.findMany({
+      where: companyFilter,
+      include: {
+        site: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    requests = rawRequests.map((r) => ({
+      id: r.id,
+      description: r.description,
+      quantity: Number(r.quantity),
+      unit: r.unit,
+      status: r.status,
+      urgency: r.urgency,
+      workLocation: r.workLocation,
+      brand: r.brand,
+      neededBy: r.neededBy,
+      approvedQty: r.approvedQty ? Number(r.approvedQty) : null,
+      notes: r.notes,
+      itemsJson: r.itemsJson,
+      site: r.site,
+      createdAt: r.createdAt,
+    }))
+
+    if (requests.length > 0) {
+      approvals = await prisma.approval.findMany({
+        where: {
+          ...companyFilter,
+          entityType: 'MATERIAL_REQUEST',
+          entityId: { in: requests.map((r) => r.id) },
+        },
+        select: {
+          id: true,
+          entityId: true,
+          currentStatus: true,
+          requestedBy: { select: { name: true, email: true } },
+        },
+      })
+    }
+  } catch (err) {
+    console.error('Error fetching purchase requests:', err)
+  }
 
   const approvalByEntityId = new Map(approvals.map((a) => [a.entityId, a]))
 
@@ -169,11 +222,11 @@ export default async function MaterialsRequestsPage() {
                     {/* Quantity & Unit */}
                     <td className="py-4 px-6 align-top">
                       <div className="font-black text-[15px] text-[#ea580c]">
-                        {Number(req.quantity)} {req.unit || 'Units'}
+                        {req.quantity} {req.unit || 'Units'}
                       </div>
-                      {req.approvedQty && (
+                      {req.approvedQty !== null && (
                         <div className="text-[11px] font-semibold text-emerald-600 mt-0.5">
-                          Approved: {Number(req.approvedQty)} {req.unit}
+                          Approved: {req.approvedQty} {req.unit}
                         </div>
                       )}
                     </td>
