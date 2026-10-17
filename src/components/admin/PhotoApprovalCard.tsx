@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import { CheckCircle2, XCircle, Loader2, Check, Clock, Trash2 } from 'lucide-react'
+import { CheckCircle2, XCircle, Loader2, Check, Clock, Trash2, Maximize2 } from 'lucide-react'
 import { approvePhotoAction, rejectPhotoAction } from '@/actions/checklists'
 import { deleteSitePhotoAction } from '@/actions/site-photos'
+import PhotoLightboxModal, { LightboxPhoto } from '@/components/ui/PhotoLightboxModal'
 
 interface Photo {
   id: string
@@ -27,15 +28,18 @@ interface Photo {
 interface Props {
   photo: Photo
   mode: 'pending' | 'approved'
+  allPhotos?: Photo[]
+  photoIndex?: number
 }
 
 function getPhotoDeleteLabel(photo: Photo) {
   return photo.caption || photo.task?.name || photo.category || photo.id
 }
 
-export function PhotoApprovalCard({ photo, mode }: Props) {
+export function PhotoApprovalCard({ photo, mode, allPhotos, photoIndex }: Props) {
   const [loading, setLoading] = useState<'approve' | 'reject' | 'delete' | null>(null)
   const [done, setDone] = useState<'approved' | 'rejected' | 'deleted' | null>(null)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
 
   const handleApprove = async () => {
     setLoading('approve')
@@ -72,20 +76,62 @@ export function PhotoApprovalCard({ photo, mode }: Props) {
 
   if (done === 'rejected' || done === 'deleted') return null
 
+  const photosList = allPhotos && allPhotos.length > 0 ? allPhotos : [photo]
+  const lightboxPhotos: LightboxPhoto[] = photosList.map((p) => {
+    const isApproved = p.approvedForClient || (p.id === photo.id && done === 'approved')
+    return {
+      id: p.id,
+      url: p.secureUrl,
+      title: p.task?.name || p.caption || 'Site Photo',
+      subtitle: p.task?.category?.stage?.name
+        ? `${p.task.category.stage.name} · ${p.task.category.name || ''}`
+        : p.category || 'Site Update',
+      date: p.approvedAt || p.createdAt,
+      category: p.category || undefined,
+      status: isApproved ? 'Approved for Client' : 'Pending Approval',
+      statusType: isApproved ? 'approved' : 'pending',
+      task: p.task
+        ? {
+            id: p.task.id,
+            name: p.task.name,
+            stageName: p.task.category?.stage?.name,
+            categoryName: p.task.category?.name,
+          }
+        : null,
+    }
+  })
+
   return (
     <div className={`rounded-2xl overflow-hidden border shadow-sm bg-white flex flex-col ${mode === 'pending' ? 'border-amber-200' : 'border-emerald-200'}`}>
-      {/* Photo */}
-      <div className="relative aspect-[4/3] bg-slate-100">
-        <Image src={photo.secureUrl} alt={photo.caption || 'Site photo'} fill className="object-cover" />
+      {/* Photo with Click-to-View Gallery Overlay */}
+      <div
+        onClick={() => setLightboxOpen(true)}
+        className="relative aspect-[4/3] bg-slate-100 cursor-pointer group/photo overflow-hidden"
+      >
+        <Image
+          src={photo.secureUrl}
+          alt={photo.caption || 'Site photo'}
+          fill
+          className="object-cover group-hover/photo:scale-105 transition-transform duration-300"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+        />
+
+        {/* Hover / Tap Prompt */}
+        <div className="absolute inset-0 bg-black/35 opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white font-bold text-xs backdrop-blur-[2px] z-10">
+          <div className="px-2.5 py-1 rounded-full bg-white/25 backdrop-blur-md flex items-center gap-1.5 shadow-lg border border-white/20">
+            <Maximize2 size={13} />
+            <span>View Full Picture</span>
+          </div>
+        </div>
 
         {/* Status badge */}
-        <div className={`absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${mode === 'pending' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'}`}>
+        <div className={`absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold z-10 shadow-xs ${mode === 'pending' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'}`}>
           {mode === 'pending' ? <Clock className="w-2.5 h-2.5" /> : <Check className="w-2.5 h-2.5 stroke-[3]" />}
           {mode === 'pending' ? 'Pending' : 'Approved'}
         </div>
 
         {done === 'approved' && (
-          <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
+          <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center z-10">
             <div className="bg-white rounded-full p-2 shadow-lg">
               <CheckCircle2 className="w-8 h-8 text-emerald-500" />
             </div>
@@ -118,7 +164,7 @@ export function PhotoApprovalCard({ photo, mode }: Props) {
             <button
               onClick={handleDelete}
               disabled={!!loading}
-              className="flex items-center justify-center p-2 border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 rounded-xl transition-colors disabled:opacity-50"
+              className="flex items-center justify-center p-2 border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
               title="Delete Permanently"
             >
               {loading === 'delete' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
@@ -126,7 +172,7 @@ export function PhotoApprovalCard({ photo, mode }: Props) {
             <button
               onClick={handleReject}
               disabled={!!loading}
-              className="flex-1 flex items-center justify-center gap-1 py-2 border border-amber-200 text-amber-600 hover:bg-amber-50 rounded-xl text-xs font-bold transition-colors disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-1 py-2 border border-amber-200 text-amber-600 hover:bg-amber-50 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
             >
               {loading === 'reject' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
               Reject
@@ -134,7 +180,7 @@ export function PhotoApprovalCard({ photo, mode }: Props) {
             <button
               onClick={handleApprove}
               disabled={!!loading}
-              className="flex-1 flex items-center justify-center gap-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
             >
               {loading === 'approve' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
               Approve
@@ -151,7 +197,7 @@ export function PhotoApprovalCard({ photo, mode }: Props) {
               <button
                 onClick={handleReject}
                 disabled={!!loading}
-                className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors disabled:opacity-50"
+                className="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition-colors disabled:opacity-50 cursor-pointer border-none bg-transparent"
               >
                 {loading === 'reject' ? '...' : 'Revoke'}
               </button>
@@ -159,7 +205,7 @@ export function PhotoApprovalCard({ photo, mode }: Props) {
               <button
                 onClick={handleDelete}
                 disabled={!!loading}
-                className="text-[10px] text-red-400 hover:text-red-600 font-bold transition-colors disabled:opacity-50 flex items-center gap-1"
+                className="text-[10px] text-red-400 hover:text-red-600 font-bold transition-colors disabled:opacity-50 flex items-center gap-1 cursor-pointer border-none bg-transparent"
               >
                 {loading === 'delete' ? '...' : <><Trash2 className="w-3 h-3" /> Delete</>}
               </button>
@@ -167,6 +213,18 @@ export function PhotoApprovalCard({ photo, mode }: Props) {
           </div>
         )}
       </div>
+
+      {/* Lightbox Gallery Modal */}
+      {lightboxOpen && (
+        <PhotoLightboxModal
+          photos={lightboxPhotos}
+          initialIndex={photoIndex ?? 0}
+          isOpen={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+          onApprove={mode === 'pending' && !done ? handleApprove : undefined}
+          onReject={handleReject}
+        />
+      )}
     </div>
   )
 }

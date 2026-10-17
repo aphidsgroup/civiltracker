@@ -97,8 +97,14 @@ export default async function SitePhotosPage({ params }: { params: Promise<{ id:
             <span className="text-[10px] text-slate-500 font-medium">— Approve to share with client</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {pendingApprovalPhotos.map(photo => (
-              <PhotoApprovalCard key={photo.id} photo={photo} mode="pending" />
+            {pendingApprovalPhotos.map((photo, idx) => (
+              <PhotoApprovalCard
+                key={photo.id}
+                photo={photo}
+                mode="pending"
+                allPhotos={pendingApprovalPhotos}
+                photoIndex={idx}
+              />
             ))}
           </div>
         </div>
@@ -110,12 +116,18 @@ export default async function SitePhotosPage({ params }: { params: Promise<{ id:
           <div className="flex items-center gap-2 mb-4">
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             <h3 className="text-sm font-extrabold text-slate-800">
-              Approved & Shared with Client ({approvedPhotos.length})
+              Approved &amp; Shared with Client ({approvedPhotos.length})
             </h3>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {approvedPhotos.map(photo => (
-              <PhotoApprovalCard key={photo.id} photo={photo} mode="approved" />
+            {approvedPhotos.map((photo, idx) => (
+              <PhotoApprovalCard
+                key={photo.id}
+                photo={photo}
+                mode="approved"
+                allPhotos={approvedPhotos}
+                photoIndex={idx}
+              />
             ))}
           </div>
         </div>

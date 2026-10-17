@@ -4,8 +4,9 @@ import { useState, useRef } from 'react'
 import { uploadMobileSitePhotoAction } from '@/actions/mobile-photo'
 import { deleteSitePhotoAction } from '@/actions/site-photos'
 import { compressImage } from '@/lib/compress-image'
-import { Camera, MapPin, ArrowLeft, Loader2, X, Send, Trash2, RefreshCw } from 'lucide-react'
+import { Camera, MapPin, ArrowLeft, Loader2, X, Send, Trash2, RefreshCw, Maximize2 } from 'lucide-react'
 import Link from 'next/link'
+import PhotoLightboxModal, { LightboxPhoto } from '@/components/ui/PhotoLightboxModal'
 
 type PhotoCard = {
   id: string
@@ -40,6 +41,8 @@ export default function MobilePhotoClient({
 
   const [selectedCat, setSelectedCat] = useState('All')
   const [showModal, setShowModal] = useState(false)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0)
 
   const [photos, setPhotos] = useState<PhotoCard[]>(initialPhotos)
   const retakeInputRef = useRef<HTMLInputElement>(null)
@@ -258,16 +261,24 @@ export default function MobilePhotoClient({
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3.5 mb-8">
-          {filteredList.map((item) => (
+          {filteredList.map((item, idx) => (
             <div
               key={item.id}
               className="bg-white rounded-[22px] border border-slate-200/80 shadow-2xs overflow-hidden flex flex-col group hover:shadow-md transition-shadow"
             >
               {/* Image Box */}
-              <div className="aspect-[4/3] bg-[#f1f5f9] relative flex items-center justify-center overflow-hidden">
+              <div
+                onClick={() => {
+                  if (item.imageUrl) {
+                    setSelectedPhotoIndex(idx)
+                    setLightboxOpen(true)
+                  }
+                }}
+                className="aspect-[4/3] bg-[#f1f5f9] relative flex items-center justify-center overflow-hidden cursor-pointer group/img"
+              >
                 {item.imageUrl ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300" />
                 ) : (
                   <>
                     <div className="absolute inset-0 opacity-40 bg-[linear-gradient(135deg,#e2e8f0_25%,transparent_25%,transparent_50%,#e2e8f0_50%,#e2e8f0_75%,transparent_75%,transparent)] bg-[length:20px_20px]" />
@@ -276,6 +287,17 @@ export default function MobilePhotoClient({
                     </span>
                   </>
                 )}
+
+                {/* Hover / Tap overlay prompt */}
+                {item.imageUrl && (
+                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-1 text-white font-bold text-[10px] backdrop-blur-[1px] z-10">
+                    <div className="px-2 py-1 rounded-full bg-white/20 backdrop-blur-md flex items-center gap-1 shadow-xs border border-white/20">
+                      <Maximize2 size={11} />
+                      <span>Full View</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Tag Pill Badge */}
                 <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-slate-800/85 text-white font-black text-[9.5px] tracking-wide backdrop-blur-xs shadow-xs z-20">
                   {item.tag}
@@ -420,6 +442,26 @@ export default function MobilePhotoClient({
           <span>Capture site photo</span>
         </button>
       </div>
+
+      {/* Lightbox Gallery Modal */}
+      {lightboxOpen && (
+        <PhotoLightboxModal
+          photos={filteredList.filter(p => !!p.imageUrl).map(p => ({
+            id: p.id,
+            url: p.imageUrl!,
+            title: p.title,
+            subtitle: `${matchedSite?.name || 'Project Site'} · ${p.tag}`,
+            caption: p.title,
+            category: p.tag,
+            date: p.meta,
+            status: p.tag,
+            statusType: 'default',
+          }))}
+          initialIndex={selectedPhotoIndex}
+          isOpen={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </div>
   )
 }

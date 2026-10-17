@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { MapPin, Check, ImageIcon, CreditCard, ChevronRight, FolderX, Sparkles, AlertCircle, Clock } from 'lucide-react'
 import Link from 'next/link'
+import ClientLatestPhotosGallery from '@/components/client/ClientLatestPhotosGallery'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +40,15 @@ export default async function ClientPortal() {
         where: { approvedForClient: true },
         orderBy: { createdAt: 'desc' },
         take: 6,
-        include: { task: true }
+        include: {
+          task: {
+            include: {
+              category: {
+                include: { stage: true }
+              }
+            }
+          }
+        }
       }
     }
   })
@@ -219,54 +228,8 @@ export default async function ClientPortal() {
             </div>
           </div>
 
-          {/* Approved Site Photos */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">Latest approved photos</h2>
-                <p className="text-xs text-gray-500">Shared by your site team · {site.photos.length} photo{site.photos.length !== 1 ? 's' : ''}</p>
-              </div>
-              <Link href="/client-portal/photos" className="text-xs font-bold text-amber-600 hover:text-amber-700 inline-flex items-center gap-1">
-                <span>View all</span>
-                <ChevronRight className="w-4 h-4" />
-              </Link>
-            </div>
-            {site.photos.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {site.photos.slice(0, 3).map(p => (
-                  <div key={p.id} className="group rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-gray-50 flex flex-col">
-                    <div
-                      className="h-40 w-full bg-cover bg-center relative"
-                      style={{ backgroundImage: `url(${p.secureUrl})` }}
-                    >
-                      <div className="absolute top-2.5 left-2.5 bg-black/60 backdrop-blur-md text-white px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1">
-                        <Check className="w-3 h-3 text-green-400 stroke-[3]" />
-                        <span>Approved</span>
-                      </div>
-                    </div>
-                    <div className="p-3 bg-white flex-1">
-                      {p.task ? (
-                        <>
-                          <div className="text-xs font-bold text-gray-800 line-clamp-1">{p.task.name}</div>
-                          <div className="text-[10px] text-gray-400 mt-1">{new Date(p.createdAt).toLocaleDateString()} · Task completed</div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="text-xs font-bold text-gray-800 line-clamp-1">{p.caption || p.category || 'Site update'}</div>
-                          <div className="text-[10px] text-gray-400 mt-1">{new Date(p.createdAt).toLocaleDateString()}</div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="py-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200 flex flex-col items-center justify-center gap-2">
-                <ImageIcon className="w-8 h-8 text-gray-400" />
-                <span className="text-xs text-gray-500 font-medium">No approved photos yet. Your site team will share updates soon.</span>
-              </div>
-            )}
-          </div>
+          {/* Approved Site Photos Interactive Gallery */}
+          <ClientLatestPhotosGallery photos={site.photos} totalCount={site.photos.length} />
         </div>
 
         {/* Payment Summary */}
