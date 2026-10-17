@@ -114,16 +114,23 @@ export default async function MaterialsRequestsPage() {
         <div className="flex items-center gap-2.5 flex-wrap">
           <Link
             href="/materials/catalogue"
+            className="px-4 py-2.5 bg-gradient-to-r from-[#ea580c] to-[#fc6e20] hover:brightness-105 text-white font-extrabold text-xs rounded-xl shadow-md shadow-[#fc6e20]/20 flex items-center gap-1.5 no-underline transition-all"
+          >
+            <Plus size={15} />
+            <span>+ Add New Material</span>
+          </Link>
+          <Link
+            href="/materials/catalogue"
             className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl no-underline transition-all flex items-center gap-1.5"
           >
             <Package size={15} />
-            <span>Master Catalogue</span>
+            <span>View Catalogue</span>
           </Link>
           <Link
             href="/materials"
             className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl no-underline transition-all"
           >
-            View Stock Inventory
+            Stock Inventory
           </Link>
         </div>
       </div>

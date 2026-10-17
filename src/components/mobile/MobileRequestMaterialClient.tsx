@@ -22,7 +22,8 @@ import {
   Building2,
   X,
   Check,
-  Tag
+  Tag,
+  Globe2,
 } from 'lucide-react'
 import {
   MATERIAL_CATALOGUE,
@@ -72,6 +73,37 @@ const WORK_LOCATION_SUGGESTIONS = [
   'Compound Wall',
 ]
 
+const CATEGORY_OPTIONS = [
+  '1. Cement, sand, aggregates & concrete',
+  '2. Reinforcement and structural steel',
+  '3. Bricks and blocks',
+  '4. Shuttering and curing materials',
+  '5. Waterproofing and construction chemicals',
+  '6. Plumbing and drainage',
+  '7. Electrical materials',
+  '8. Flooring, finishes and painting',
+  '9. Doors, windows, hardware & sanitaryware',
+  '10. Site consumables & safety equipment',
+]
+
+const UNIT_OPTIONS = [
+  'Bags',
+  'kg',
+  'Tonne',
+  'cft',
+  'm³',
+  'Nos',
+  'm',
+  'm²',
+  'Sheet',
+  'Roll',
+  'L',
+  'Box',
+  'Set',
+  'Kit',
+  'Bundle',
+]
+
 export default function MobileRequestMaterialClient({
   sites,
   customCatalogueItems = [],
@@ -93,6 +125,10 @@ export default function MobileRequestMaterialClient({
   const [neededBy, setNeededBy] = useState('')
   const [generalNotes, setGeneralNotes] = useState('')
 
+  // State for dynamic company catalogue additions
+  const [localCustomItems, setLocalCustomItems] = useState<CustomCatalogueItemProp[]>(customCatalogueItems)
+  const [successToast, setSuccessToast] = useState('')
+
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL')
@@ -109,15 +145,18 @@ export default function MobileRequestMaterialClient({
   // Multi-Item Indent Cart
   const [cartItems, setCartItems] = useState<MaterialRequestItemInput[]>([])
 
-  // Modal: Add Custom / Unlisted Material
+  // Modal: Add New Material
   const [showCustomModal, setShowCustomModal] = useState(false)
   const [customMatName, setCustomMatName] = useState('')
-  const [customMatCategory, setCustomMatCategory] = useState('Cement, sand, aggregates & concrete')
+  const [customMatCategory, setCustomMatCategory] = useState('1. Cement, sand, aggregates & concrete')
   const [customMatSpec, setCustomMatSpec] = useState('')
   const [customMatBrand, setCustomMatBrand] = useState('')
   const [customMatQty, setCustomMatQty] = useState('')
-  const [customMatUnit, setCustomMatUnit] = useState('Nos')
-  const [saveToCompanyCatalogue, setSaveToCompanyCatalogue] = useState(true)
+  const [customMatUnit, setCustomMatUnit] = useState('Bags')
+  const [customMatPackSize, setCustomMatPackSize] = useState('')
+  const [customMatNotes, setCustomMatNotes] = useState('')
+  const [customModalError, setCustomModalError] = useState('')
+  const [isSavingCustom, setIsSavingCustom] = useState(false)
 
   // Status
   const [loading, setLoading] = useState(false)
@@ -129,7 +168,7 @@ export default function MobileRequestMaterialClient({
     const masterResults = searchCatalogueMaterials(searchQuery, selectedCategory)
 
     // Convert custom items to MaterialVariant format
-    const customVariants: MaterialVariant[] = (customCatalogueItems || [])
+    const customVariants: MaterialVariant[] = (localCustomItems || [])
       .filter((ci) => {
         if (!ci) return false
         if (selectedCategory !== 'ALL') {
@@ -166,7 +205,7 @@ export default function MobileRequestMaterialClient({
       }))
 
     return [...customVariants, ...masterResults]
-  }, [searchQuery, selectedCategory, customCatalogueItems])
+  }, [searchQuery, selectedCategory, localCustomItems])
 
   // When a material is picked from the catalogue
   const handleSelectMaterial = (mat: MaterialVariant) => {
@@ -204,7 +243,7 @@ export default function MobileRequestMaterialClient({
 
     // Build specification string summary (e.g. "Fe500D • 12 mm")
     const specSummary = Object.entries(selectedSpecs)
-      .map(([key, val]) => val)
+      .map(([_, val]) => val)
       .filter(Boolean)
       .join(' • ')
 
@@ -232,51 +271,73 @@ export default function MobileRequestMaterialClient({
     setCartItems((prev) => prev.filter((_, i) => i !== index))
   }
 
-  // Add custom unlisted item
+  // Add New Material (Permanently saved to company catalogue for all sites and projects)
   const handleAddCustomMaterial = async () => {
     if (!customMatName.trim()) {
-      setError('Custom material name is required.')
+      setCustomModalError('Material name is required.')
       return
     }
-    const numQty = Number(customMatQty)
-    if (!customMatQty || isNaN(numQty) || numQty <= 0) {
-      setError('Please specify a valid quantity for custom item.')
+    if (!customMatSpec.trim()) {
+      setCustomModalError('Specification / Size / Grade is required.')
       return
     }
 
-    const newItem: MaterialRequestItemInput = {
-      materialName: customMatName.trim(),
-      specification: customMatSpec.trim() || undefined,
-      brand: customMatBrand.trim() || undefined,
-      quantity: numQty,
-      unit: customMatUnit.trim() || 'Nos',
+    const numQty = customMatQty ? Number(customMatQty) : 0
+    if (customMatQty && (isNaN(numQty) || numQty <= 0)) {
+      setCustomModalError('Please enter a valid positive quantity or leave blank.')
+      return
     }
 
-    setCartItems((prev) => [...prev, newItem])
+    setIsSavingCustom(true)
+    setCustomModalError('')
 
-    // Optionally persist in CompanyCatalogueItem
-    if (saveToCompanyCatalogue) {
-      try {
-        await addCompanyCatalogueItemAction({
-          category: customMatCategory,
-          materialName: customMatName.trim(),
-          specification: customMatSpec.trim() || 'Standard Site Requirement',
-          brand: customMatBrand.trim() || undefined,
-          defaultUnit: customMatUnit.trim() || 'Nos',
-          allowedUnits: customMatUnit.trim() || 'Nos',
-          isDecimalAllowed: true,
-        })
-      } catch (e) {
-        console.error('Failed to save to company catalogue:', e)
+    try {
+      // 1. Permanently save to CompanyCatalogueItem in database so it is available across all sites and future projects
+      const savedItem = await addCompanyCatalogueItemAction({
+        category: customMatCategory,
+        materialName: customMatName.trim(),
+        specification: customMatSpec.trim(),
+        brand: customMatBrand.trim() || undefined,
+        defaultUnit: customMatUnit.trim() || 'Nos',
+        allowedUnits: customMatUnit.trim() || 'Nos',
+        isDecimalAllowed: !['Bags', 'Nos', 'Sheet', 'Roll', 'Box', 'Set', 'Kit'].includes(customMatUnit),
+        packSize: customMatPackSize.trim() || undefined,
+        notes: customMatNotes.trim() || undefined,
+      })
+
+      // 2. Add to local catalogue items so it appears immediately in catalogue list and search
+      setLocalCustomItems((prev) => [savedItem, ...prev])
+
+      // 3. If quantity > 0, immediately add to current Indent Cart
+      if (numQty > 0) {
+        setCartItems((prev) => [
+          ...prev,
+          {
+            materialName: savedItem.materialName,
+            variantId: savedItem.variantId,
+            specification: savedItem.specification,
+            brand: savedItem.brand || undefined,
+            quantity: numQty,
+            unit: savedItem.defaultUnit,
+          },
+        ])
       }
-    }
 
-    setShowCustomModal(false)
-    setCustomMatName('')
-    setCustomMatSpec('')
-    setCustomMatBrand('')
-    setCustomMatQty('')
-    setError('')
+      // 4. Close modal and show confirmation toast
+      setShowCustomModal(false)
+      setCustomMatName('')
+      setCustomMatSpec('')
+      setCustomMatBrand('')
+      setCustomMatQty('')
+      setCustomMatPackSize('')
+      setCustomMatNotes('')
+      setSuccessToast(`"${savedItem.materialName}" permanently added to company catalogue and available across all sites!`)
+      setTimeout(() => setSuccessToast(''), 4500)
+    } catch (err: unknown) {
+      setCustomModalError((err as Error)?.message || 'Failed to save material to catalogue')
+    } finally {
+      setIsSavingCustom(false)
+    }
   }
 
   // Submit full requisition indent
@@ -383,16 +444,42 @@ export default function MobileRequestMaterialClient({
           </div>
         </div>
 
-        {/* Cart Item Counter Badge */}
+        {/* Header Actions */}
         <div className="flex items-center gap-2">
+          {/* Prominent + Add New Material Button in header */}
+          <button
+            type="button"
+            onClick={() => setShowCustomModal(true)}
+            className="px-2.5 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#ea580c] font-black text-xs border border-orange-200 flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95 transition-all"
+          >
+            <Plus size={14} className="text-[#fc6e20]" />
+            <span>New Material</span>
+          </button>
+
+          {/* Cart Item Counter Badge */}
           {cartItems.length > 0 && (
-            <span className="px-2.5 py-1 rounded-full bg-[#fc6e20] text-white text-[11px] font-extrabold flex items-center gap-1 shadow-sm animate-in zoom-in">
+            <span className="px-2.5 py-1.5 rounded-xl bg-[#fc6e20] text-white text-[11px] font-extrabold flex items-center gap-1 shadow-xs animate-in zoom-in">
               <Package size={13} />
-              <span>{cartItems.length} in indent</span>
+              <span>{cartItems.length}</span>
             </span>
           )}
         </div>
       </header>
+
+      {/* Floating Success Toast */}
+      {successToast && (
+        <div className="fixed top-16 left-4 right-4 z-50 p-3.5 bg-emerald-600 text-white rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-bold animate-in slide-in-from-top-4">
+          <CheckCircle2 size={18} className="flex-shrink-0" />
+          <span className="flex-1">{successToast}</span>
+          <button
+            type="button"
+            onClick={() => setSuccessToast('')}
+            className="text-white/80 hover:text-white p-1"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmitRequisition} className="p-4 space-y-4 max-w-[500px] mx-auto">
         {error && (
@@ -473,17 +560,19 @@ export default function MobileRequestMaterialClient({
           <div className="flex items-center justify-between">
             <label className="text-[11.5px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <Layers size={14} className="text-sky-500" />
-              <span>Material Catalogue Search</span>
+              <span>Select Material from Catalogue</span>
             </label>
-            <button
-              type="button"
-              onClick={() => setShowCustomModal(true)}
-              className="text-[11px] font-extrabold text-[#fc6e20] hover:text-[#e85b0d] flex items-center gap-1 cursor-pointer bg-orange-50 px-2 py-1 rounded-lg border border-orange-100"
-            >
-              <Plus size={13} />
-              <span>Request Unlisted Item</span>
-            </button>
           </div>
+
+          {/* Prominent "+ Add New Material" Action Banner */}
+          <button
+            type="button"
+            onClick={() => setShowCustomModal(true)}
+            className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border-2 border-dashed border-[#fc6e20]/40 hover:border-[#fc6e20] text-[#ea580c] font-black text-xs flex items-center justify-center gap-2 hover:bg-orange-50 active:scale-98 transition-all cursor-pointer shadow-2xs"
+          >
+            <Plus size={16} className="text-[#fc6e20]" />
+            <span>+ Add New Material (Not in Catalogue)</span>
+          </button>
 
           {/* Search bar */}
           <div className="relative">
@@ -528,8 +617,9 @@ export default function MobileRequestMaterialClient({
 
           {/* Materials List Carousel / Grid */}
           <div className="max-h-[260px] overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-100">
-            {filteredMaterials.slice(0, 25).map((mat) => {
+            {filteredMaterials.slice(0, 30).map((mat) => {
               const isSelected = selectedMaterial?.id === mat.id
+              const isCustomItem = mat.categoryId === 'CUSTOM'
               return (
                 <div
                   key={mat.id}
@@ -543,6 +633,11 @@ export default function MobileRequestMaterialClient({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-[13px] font-black truncate">{mat.name}</span>
+                      {isCustomItem && (
+                        <span className="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                          Saved
+                        </span>
+                      )}
                       {isSelected && (
                         <span className="w-4 h-4 rounded-full bg-[#fc6e20] text-white flex items-center justify-center">
                           <Check size={10} strokeWidth={3} />
@@ -570,17 +665,19 @@ export default function MobileRequestMaterialClient({
             })}
 
             {filteredMaterials.length === 0 && (
-              <div className="text-center py-6 text-slate-400 space-y-2">
-                <p className="text-xs font-bold">No catalogue items matching &ldquo;{searchQuery}&rdquo;</p>
+              <div className="text-center py-6 text-slate-400 space-y-3">
+                <Package size={28} className="mx-auto text-slate-300" />
+                <p className="text-xs font-bold text-slate-600 m-0">No catalogue items matching &ldquo;{searchQuery}&rdquo;</p>
+                <p className="text-[11px] text-slate-400 m-0">Add it now to save for all sites in your company.</p>
                 <button
                   type="button"
                   onClick={() => {
                     setCustomMatName(searchQuery)
                     setShowCustomModal(true)
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-orange-50 text-[#fc6e20] text-xs font-bold border border-orange-200"
+                  className="px-4 py-2 rounded-xl bg-[#fc6e20] text-white text-xs font-black shadow-md shadow-[#fc6e20]/25 cursor-pointer border-none"
                 >
-                  + Add &ldquo;{searchQuery}&rdquo; as Custom Material
+                  + Add &ldquo;{searchQuery}&rdquo; as New Material
                 </button>
               </div>
             )}
@@ -888,23 +985,36 @@ export default function MobileRequestMaterialClient({
         </button>
       </form>
 
-      {/* ================= MODAL: REQUEST UNLISTED / CUSTOM MATERIAL ================= */}
+      {/* ================= MODAL: ADD NEW MATERIAL (PERMANENT CATALOGUE SAVE) ================= */}
       {showCustomModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-base font-black text-slate-900 m-0">Request Custom Material</h3>
-                <p className="text-[11px] text-slate-400 m-0 font-medium">Add unlisted product or size</p>
+                <div className="flex items-center gap-1.5 text-[10.5px] font-black text-[#ea580c] uppercase tracking-wider">
+                  <Globe2 size={13} />
+                  <span>Company-Wide Catalogue</span>
+                </div>
+                <h3 className="text-base font-black text-slate-900 m-0 mt-0.5">Add New Material</h3>
+                <p className="text-[11px] text-slate-500 m-0 font-medium">
+                  Saves for this site & all upcoming projects
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowCustomModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center"
               >
                 <X size={16} />
               </button>
             </div>
+
+            {customModalError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700 flex items-center gap-2">
+                <AlertCircle size={16} />
+                <span>{customModalError}</span>
+              </div>
+            )}
 
             <div className="space-y-3">
               <div>
@@ -922,48 +1032,30 @@ export default function MobileRequestMaterialClient({
 
               <div>
                 <label className="text-[11.5px] font-extrabold uppercase tracking-wider text-slate-600">
-                  Category
+                  Category *
                 </label>
                 <select
                   value={customMatCategory}
                   onChange={(e) => setCustomMatCategory(e.target.value)}
                   className="w-full h-11 px-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-slate-50 focus:outline-none focus:border-[#fc6e20]"
                 >
-                  <option value="Cement, sand, aggregates & concrete">1. Cement, sand, aggregates & concrete</option>
-                  <option value="Reinforcement and structural steel">2. Reinforcement and structural steel</option>
-                  <option value="Bricks and blocks">3. Bricks and blocks</option>
-                  <option value="Shuttering and curing materials">4. Shuttering and curing materials</option>
-                  <option value="Waterproofing and construction chemicals">5. Waterproofing and construction chemicals</option>
-                  <option value="Plumbing and drainage">6. Plumbing and drainage</option>
-                  <option value="Electrical materials">7. Electrical materials</option>
-                  <option value="Flooring, finishes and painting">8. Flooring, finishes and painting</option>
-                  <option value="Doors, windows, hardware and sanitaryware">9. Doors, windows, hardware & sanitaryware</option>
-                  <option value="Site consumables & safety equipment">10. Site consumables & safety equipment</option>
+                  {CATEGORY_OPTIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
                 <label className="text-[11.5px] font-extrabold uppercase tracking-wider text-slate-600">
-                  Specification / Size / Grade
+                  Specification / Size / Grade *
                 </label>
                 <input
                   type="text"
                   value={customMatSpec}
                   onChange={(e) => setCustomMatSpec(e.target.value)}
-                  placeholder="e.g. 2.4m x 1.2m x 12mm thickness"
-                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#fc6e20]"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11.5px] font-extrabold uppercase tracking-wider text-slate-600">
-                  Preferred Brand (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={customMatBrand}
-                  onChange={(e) => setCustomMatBrand(e.target.value)}
-                  placeholder="e.g. Pidilite, Supreme, Tata"
+                  placeholder="e.g. 2.4m × 1.2m × 12mm thickness, Fe550D 36mm"
                   className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#fc6e20]"
                 />
               </div>
@@ -971,55 +1063,78 @@ export default function MobileRequestMaterialClient({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11.5px] font-extrabold uppercase tracking-wider text-slate-600">
-                    Quantity *
+                    Approved Brand (Optional)
                   </label>
                   <input
-                    type="number"
-                    min="0.1"
-                    step="any"
-                    value={customMatQty}
-                    onChange={(e) => setCustomMatQty(e.target.value)}
-                    placeholder="e.g. 20"
-                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#fc6e20]"
+                    type="text"
+                    value={customMatBrand}
+                    onChange={(e) => setCustomMatBrand(e.target.value)}
+                    placeholder="e.g. Pidilite, Tata, Astral"
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#fc6e20]"
                   />
                 </div>
                 <div>
                   <label className="text-[11.5px] font-extrabold uppercase tracking-wider text-slate-600">
-                    Unit *
+                    Default Unit *
                   </label>
                   <select
                     value={customMatUnit}
                     onChange={(e) => setCustomMatUnit(e.target.value)}
-                    className="w-full h-11 px-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-slate-50 focus:outline-none focus:border-[#fc6e20]"
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 text-xs font-black text-slate-800 bg-slate-50 focus:outline-none focus:border-[#fc6e20]"
                   >
-                    <option value="Nos">Nos</option>
-                    <option value="Bags">Bags</option>
-                    <option value="kg">kg</option>
-                    <option value="Tonne">Tonne</option>
-                    <option value="cft">cft</option>
-                    <option value="m³">m³</option>
-                    <option value="m²">m²</option>
-                    <option value="m">m</option>
-                    <option value="Roll">Roll</option>
-                    <option value="Sheet">Sheet</option>
-                    <option value="L">L</option>
-                    <option value="Box">Box</option>
+                    {UNIT_OPTIONS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
-              {/* Checkbox: Save to Company Catalogue */}
-              <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
+              <div>
+                <label className="text-[11.5px] font-extrabold uppercase tracking-wider text-slate-600">
+                  Pack Size / Conversion (Optional)
+                </label>
                 <input
-                  type="checkbox"
-                  checked={saveToCompanyCatalogue}
-                  onChange={(e) => setSaveToCompanyCatalogue(e.target.checked)}
-                  className="rounded text-[#fc6e20] focus:ring-[#fc6e20]"
+                  type="text"
+                  value={customMatPackSize}
+                  onChange={(e) => setCustomMatPackSize(e.target.value)}
+                  placeholder="e.g. 50 kg bag, 1 Roll = 20 m², 1 Box = 10 pcs"
+                  className="w-full h-10 px-3.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#fc6e20]"
                 />
-                <div className="text-[11.5px] font-bold text-slate-700">
-                  Add this material to company catalogue for future site indents
+              </div>
+
+              {/* Immediate Indent Request Quantity */}
+              <div className="p-3 bg-orange-50/70 border border-orange-200/80 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11.5px] font-black text-[#ea580c] uppercase tracking-wider">
+                    Quantity to Request Now on Site
+                  </label>
+                  <span className="text-[10px] font-bold text-slate-400">Optional</span>
                 </div>
-              </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    value={customMatQty}
+                    onChange={(e) => setCustomMatQty(e.target.value)}
+                    placeholder="e.g. 25"
+                    className="flex-1 h-11 px-3 rounded-xl border-2 border-orange-200 text-sm font-black text-slate-900 bg-white focus:outline-none focus:border-[#fc6e20]"
+                  />
+                  <div className="px-3 h-11 rounded-xl bg-orange-100 text-[#ea580c] font-black text-xs flex items-center justify-center border border-orange-200">
+                    {customMatUnit}
+                  </div>
+                </div>
+              </div>
+
+              {/* Company-wide notice */}
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-2 text-emerald-800 text-[11px] font-medium leading-relaxed">
+                <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-black">Permanent Company-Wide Save:</span> This material will be saved to your company&apos;s material catalogue. It will be available for selection on any other sites in all upcoming projects.
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-2 pt-2">
@@ -1032,10 +1147,21 @@ export default function MobileRequestMaterialClient({
               </button>
               <button
                 type="button"
+                disabled={isSavingCustom}
                 onClick={handleAddCustomMaterial}
-                className="flex-1 h-11 rounded-xl bg-[#fc6e20] text-white text-xs font-black shadow-md shadow-[#fc6e20]/25"
+                className="flex-1 h-11 rounded-xl bg-gradient-to-r from-[#ea580c] to-[#fc6e20] text-white text-xs font-black shadow-md shadow-[#fc6e20]/25 flex items-center justify-center gap-2 cursor-pointer border-none disabled:opacity-50"
               >
-                Add to Indent
+                {isSavingCustom ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Saving to Catalogue...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus size={16} />
+                    <span>Save to Catalogue</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

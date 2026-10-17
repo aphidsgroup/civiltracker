@@ -314,10 +314,14 @@ export async function addCompanyCatalogueItemAction(data: {
   notes?: string
 }) {
   const user = await requireUser()
-  if (!user.companyId && user.role !== 'SUPER_ADMIN') {
-    throw new Error('Unauthorized')
+  let companyId: string | undefined = user.companyId || undefined
+  if (!companyId && user.role === 'SUPER_ADMIN') {
+    const firstCompany = await prisma.company.findFirst({ select: { id: true } })
+    companyId = firstCompany?.id
   }
-  const companyId = user.companyId!
+  if (!companyId) {
+    throw new Error('Unauthorized: No active company context found')
+  }
 
   const cleanName = data.materialName.trim()
   const cleanSpec = data.specification.trim()
@@ -345,8 +349,22 @@ export async function addCompanyCatalogueItemAction(data: {
 
   revalidatePath('/materials')
   revalidatePath('/materials/requests')
+  revalidatePath('/materials/catalogue')
   revalidatePath('/mobile/request-material')
-  return created
+
+  return {
+    id: created.id,
+    category: created.category,
+    materialName: created.materialName,
+    variantId: created.variantId,
+    specification: created.specification,
+    brand: created.brand,
+    defaultUnit: created.defaultUnit,
+    allowedUnits: created.allowedUnits ? created.allowedUnits.split(',').map((u) => u.trim()) : [created.defaultUnit],
+    isDecimalAllowed: created.isDecimalAllowed,
+    packSize: created.packSize || undefined,
+    conversionNote: created.notes || undefined,
+  }
 }
 
 export async function getCompanyCatalogueItemsAction() {
