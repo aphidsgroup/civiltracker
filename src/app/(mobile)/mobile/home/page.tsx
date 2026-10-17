@@ -211,6 +211,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
 
   const firstName = session?.user?.name?.split(' ')[0] ?? 'Engineer'
   const roleTitle = session?.user?.role?.replace(/_/g, ' ') ?? 'Site Engineer'
+  const canMonitorMultiSites = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'PROJECT_MANAGER', 'ACCOUNTANT'].includes(session?.user?.role || '')
 
 
   return (
@@ -559,7 +560,7 @@ export default async function MobileHome({ searchParams }: { searchParams: Promi
       <div className="space-y-3 pt-3">
         <div className="flex justify-between items-center px-1">
           <h2 className="text-[15px] font-extrabold text-slate-900 m-0">Recent bill uploads</h2>
-          <Link href="/mobile/reports" className="text-[12px] font-bold text-[#fc6e20] no-underline">View all</Link>
+          <Link href={canMonitorMultiSites ? "/mobile/reports" : "/mobile/approvals"} className="text-[12px] font-bold text-[#fc6e20] no-underline">View all</Link>
         </div>
 
         <div className="bg-[#f8fafc] space-y-2.5">

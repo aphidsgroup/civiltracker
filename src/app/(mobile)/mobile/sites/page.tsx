@@ -1,10 +1,16 @@
 import { requireUser } from '@/lib/auth/require-user'
 import prisma from '@/lib/prisma'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { Building2, MapPin, Calendar, ArrowRight, Layers, AlertTriangle, HardHat } from 'lucide-react'
 
 export default async function MobileSitesPage() {
   const user = await requireUser()
+
+  const isSiteEngineer = user.role === 'SITE_ENGINEER' || user.role === 'SUPERVISOR'
+  if (isSiteEngineer) {
+    redirect('/mobile/home')
+  }
 
   if (!user.companyId) {
     return (
@@ -18,20 +24,10 @@ export default async function MobileSitesPage() {
     )
   }
 
-  const isSiteEngineer = user.role === 'SITE_ENGINEER' || user.role === 'SUPERVISOR'
-
   let sites = await prisma.site.findMany({
     where: { companyId: user.companyId, deletedAt: null },
     orderBy: { createdAt: 'desc' }
   })
-
-  if (isSiteEngineer) {
-    const member = await prisma.companyMember.findFirst({
-      where: { userId: user.id, companyId: user.companyId }
-    })
-    const assignedIds = new Set(member?.siteIds || [])
-    sites = sites.filter(s => s.assignedEngineerId === user.id || s.engineerId === user.id || assignedIds.has(s.id))
-  }
 
   function fmtAmt(n: number) {
     if (n >= 10000000) return '₹' + (n / 10000000).toFixed(2) + 'Cr'

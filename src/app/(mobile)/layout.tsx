@@ -40,7 +40,7 @@ export default async function MobileLayout({ children }: { children: React.React
         {children}
         <ChecklistPhotoNag />
       </main>
-      <MobileTabbar />
+      <MobileTabbar userRole={session.user.role} />
     </div>
   )
 }

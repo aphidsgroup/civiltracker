@@ -1,10 +1,18 @@
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { FileText, Download, BarChart2 } from 'lucide-react'
 
 export default async function MobileReports() {
   const session = await auth()
+  if (!session?.user) redirect('/login')
+
+  const isSiteEngineer = session.user.role === 'SITE_ENGINEER' || session.user.role === 'SUPERVISOR'
+  if (isSiteEngineer) {
+    redirect('/mobile/home')
+  }
+
   const companyId = session?.user?.companyId
   const userId = session?.user?.id
 

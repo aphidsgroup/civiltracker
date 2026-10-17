@@ -3,11 +3,21 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, FileText, Building2, UserCircle, Plus, X, ClipboardList, BarChart2, Activity } from 'lucide-react'
+import {
+  Home, FileText, Building2, UserCircle, Plus, X,
+  ClipboardList, BarChart2, Activity, Wrench, CheckSquare
+} from 'lucide-react'
 
-export default function MobileTabbar() {
+interface MobileTabbarProps {
+  userRole?: string
+}
+
+export default function MobileTabbar({ userRole }: MobileTabbarProps) {
   const pathname = usePathname()
   const [showQuickAdd, setShowQuickAdd] = useState(false)
+
+  // Roles that monitor multiple sites and multi-site reports
+  const canMonitorMultiSites = ['SUPER_ADMIN', 'COMPANY_ADMIN', 'PROJECT_MANAGER', 'ACCOUNTANT'].includes(userRole || '')
 
   const hideTabbarRoutes = [
     '/upload-bill',
@@ -113,7 +123,12 @@ export default function MobileTabbar() {
       {/* Bottom Navigation Bar */}
       <div className="fixed bottom-0 left-0 right-0 max-w-[440px] mx-auto bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-[0_-10px_25px_rgba(0,0,0,0.06)] z-40 h-[76px] px-2 flex items-center justify-between select-none">
         {tab('/mobile/home', 'Home', <Home size={22} strokeWidth={isOn('/home') ? 2.6 : 2} />, '/home')}
-        {tab('/mobile/sites', 'Sites', <ClipboardList size={22} strokeWidth={isOn('/sites') ? 2.6 : 2} />, '/sites')}
+
+        {canMonitorMultiSites ? (
+          tab('/mobile/sites', 'Sites', <ClipboardList size={22} strokeWidth={isOn('/sites') ? 2.6 : 2} />, '/sites')
+        ) : (
+          tab('/mobile/inventory', 'Tools', <Wrench size={22} strokeWidth={isOn('/inventory') ? 2.6 : 2} />, '/inventory')
+        )}
 
         {/* Elevated Center FAB Trigger */}
         <div className="flex-1 flex justify-center relative -top-6">
@@ -126,7 +141,12 @@ export default function MobileTabbar() {
           </button>
         </div>
 
-        {tab('/mobile/reports', 'Reports', <BarChart2 size={22} strokeWidth={isOn('/reports') ? 2.6 : 2} />, '/reports')}
+        {canMonitorMultiSites ? (
+          tab('/mobile/reports', 'Reports', <BarChart2 size={22} strokeWidth={isOn('/reports') ? 2.6 : 2} />, '/reports')
+        ) : (
+          tab('/mobile/approvals', 'Requests', <CheckSquare size={22} strokeWidth={isOn('/approvals') ? 2.6 : 2} />, '/approvals')
+        )}
+
         {tab('/mobile/activity', 'Activity', <Activity size={22} strokeWidth={isOn('/activity') ? 2.6 : 2} />, '/activity')}
       </div>
     </>
